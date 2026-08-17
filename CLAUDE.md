@@ -4,8 +4,11 @@
 
 Suburban alien-gaslighting stealth game. Single self-contained HTML file, Three.js
 r128, offline, served over http. Separate project from the Chameleon game in
-`..\Claude\` — do not mix them, but *do* reuse Chameleon's proven code (OTS camera,
+`..\Chameleon\` — do not mix them, but *do* reuse Chameleon's proven code (OTS camera,
 AABB colliders, canvas-texture materials, WebAudio SFX, crash banner). See GDD §9.
+
+**Before writing any non-trivial system, check [`..\INDEX.md`](../INDEX.md)** — the
+Dev-wide catalog of what already exists and where to copy it from.
 
 ## Status
 - 2026-08-06 — GDD v0.1 written.
