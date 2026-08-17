@@ -217,7 +217,12 @@ try{
   var specSnap=JSON.stringify(keys.spec);
   var savedOk=SD.saveGame();
   ok('the game saves',savedOk===true);
-  ok('...under a versioned key',SD.SAVE_KEY==='sd_save_v1'&&SD.hasSave()===true);
+  /* The claim is that the key CARRIES a version, not that the version is 1. M17
+     bumped it to v2: adding forty possessions renumbers every object id after the
+     first new one, and the save file is keyed by id, so an old save would have
+     restored the wrong spec onto the wrong object in silence. Assert the shape. */
+  ok('...under a versioned key',/^sd_save_v\d+$/.test(SD.SAVE_KEY)&&SD.hasSave()===true,
+     SD.SAVE_KEY);
 
   // wreck everything, then load
   SD.startHouse();SD.S.menuOpen=false;

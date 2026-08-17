@@ -1167,6 +1167,65 @@ previous one runs in a browser.**
     is exactly what §5.8 promised and what his credibility number was always for.
     One hop only; a cascade would turn a single loud night into a street-wide loss.
 
+17. ~~**The inhabited street.**~~ **DONE 2026-08-17.** Answering one playtest note:
+    *"the world is still mostly empty feeling — there is still nothing interactable,
+    should be observable and replaceable items, per the game design."*
+    *Verified: 44 assertions + [docs/m17-court.png](docs/m17-court.png).*
+
+    **Measured first.** 694 meshes and 17,438 triangles for the entire world; the
+    outdoors was ONE mesh (a road plane) stamped over five identical lots; a 145 m²
+    house held 21 furniture boxes and 10 swappable things; and 7 finished prop kinds
+    had never been placed anywhere.
+
+    **Four things were broken, not merely thin.**
+    - **The road ran through the front gardens.** `road.position.z=-10.4` was in raw
+      metres while the yards were in layout units scaled by `ROOM_SCALE` — 3 m of
+      lawn, a 4 m concrete band, more lawn, then the fence. The object format now
+      says which unit it is in: `at:` is layout, `m:` is metres.
+    - **The garden gate was a picture.** The pickets have skipped the path since M8,
+      but the rail beneath was one collider across the whole frontage. You could only
+      enter a front garden by *jumping* it (apex 0.588 + step-up 0.30 clears 0.62),
+      which is why nobody noticed.
+    - **M13 detached every piece of furniture from its wall** — positions scaled,
+      depths did not: 0.26 m for the sideboard, 0.37 for the counter, 1.16 for the
+      shoebench. Fixtures are now placed *from a wall face* and cannot drift again.
+    - **The sleeper sat up into the mattress.** The torso is driven to negative
+      `rotation.x`, and with the head at −z, `y' = y·cosθ − z·sinθ` is negative. Head
+      at +z makes the same angles raise it — and puts it against the new headboard,
+      so *"on the nightstand beside her head"* is true for the first time.
+
+    **Then the content.** 40 → **80 possessions**, every one observable and
+    replaceable; all 30 prop kinds now in the world. A fixture pass (fridge, oven,
+    hob, sink, extractor, cabinets, TV, bookshelf, dresser, headboard, radiators,
+    mirrors) gives them surfaces to sit on and closes three fiction-vs-geometry
+    holes: the fridge the audio has hummed at since M9, the TV three remotes have
+    commanded since M12, the shelf the bookRows floated 0.40 m clear of.
+
+    **A cul-de-sac, not a corridor.** Ground everywhere, a road between real kerbs,
+    pavements, a turning circle west of Ray (the fiction has called him "at the dead
+    end" since M16), eight non-enterable facades, poles and wires, trees, bins,
+    driveways, back gardens, and a horizon for three draw calls.
+
+    **`def.wall` is finally read.** Authored on every lot since M8 and consumed by
+    nothing — five houses identical to the pixel. Five numbers each now, plus a
+    `keeper` whose `noticeFloor` dresses the place: Walt's hall is squared off, and
+    Grace's still has the post on the mat. **Readable, not decorative.**
+
+    **A scenery class** so nothing is dead to look at — offered only when no
+    possession is in reach, because the player's learned rule is "hand-sized thing on
+    a surface = swappable", and a fixture stealing **E** from the mug beside it would
+    be the worst bug in the milestone. Asserted over all 80 objects.
+
+    **Motion.** A seeded car whose headlights are a real light zone (`litAt` reads
+    them, so it is a difficulty change and tuned as one), and a dawn ramp — 05:29
+    used to look exactly like 23:00.
+
+    **Paid for up front.** Draw calls are 1:1 with meshes on r128 here, and `box()`
+    minted a new geometry and material per call: 694 meshes carried 614 materials and
+    694 geometries. One shared unit box and a material cache went in *before* the
+    content: **1,965 meshes now on 703 geometries and 691 materials.** Walkable floor
+    went *up*, 77.3 → 84.1 m².
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
@@ -1242,6 +1301,55 @@ Add content by filling these; none should require touching systems code.
 
 **Tuning log**
 
+- **2026-08-17 — A TEST THAT TELEPORTS AN ACTOR IS NOT TESTING WHETHER THE ACTOR
+  COULD GET THERE. Learned twice now, and the second time it hid a wall.** M13 found
+  two sealed rooms this way. M17 found that the front garden gate was a *picture*:
+  the pickets have skipped the path since M8, but the rail underneath was one
+  collider across the whole frontage, 0.62 m high against a 0.30 m step-up. Every
+  suite calls `startHouse()` and then teleports the player to the thing it wants to
+  test, so for nine milestones nobody walked in — and you *could* get in, by jumping
+  it, because apex 0.588 + step-up 0.30 clears 0.62. The bug was invisible precisely
+  because it was survivable. `m17-tests.js` now flood-fills the whole estate from
+  `HOME` at 0.25 m using the real collider set, **walking only**, and asserts every
+  front door and every spare-key planter is reachable without a jump.
+- **2026-08-17 — Two units in one file will eventually be added together.** The road
+  was authored in raw metres (`z=-10.4`) while the yards were in layout units scaled
+  by `ROOM_SCALE` (fence at `_p(-9.0)` = −13.95), so the carriageway was drawn
+  *inside the front gardens* and the path was painted across it. The same class of
+  mistake put a 7 m kitchen counter through the divider wall and out into the
+  bedroom. The object format now names its unit — `at:` layout, `m:` metres — and
+  fixtures are positioned from a wall face rather than from a scaled coordinate.
+- **2026-08-17 — Arithmetic found a bug that looking never did.** `updateSleepers`
+  drives the torso to negative `rotation.x` (−0.42 stirring, −1.15 awake). With the
+  head at −z, `y' = y·cosθ − z·sinθ` is **negative**: the sleeper sat up by driving
+  its head down through the mattress and out through the floor. Nobody had ever
+  watched a sleeper stir. Head at +z makes the same angles raise it, and puts it
+  against the headboard the bed had just grown.
+- **2026-08-17 — Pay for the content pass before taking it.** `box()` minted a new
+  `BoxGeometry` and a new material per call, so 694 meshes carried 694 geometries and
+  614 materials, and draw calls are 1:1 with meshes on r128 (no instancing, no
+  merging). A shared unit box plus a material cache keyed by colour went in *first*;
+  the world then grew to 1,965 meshes on 703 geometries and 691 materials. Also added
+  a draw-call readout to F3: `renderer.info` was read nowhere in the file, so an
+  expansion would have been flown blind.
+- **2026-08-17 — More possessions did not break the win bar, because Collapse is a
+  MEAN.** The street went 40 → 80 objects. Measured: four-a-night still reaches 43.0
+  (was 43.4), two-a-night 36.6 (unchanged), one-a-night 18.8 (unchanged) against a
+  threshold of 40. Doubling the objects bought *choice*, not an easier win. Swapping
+  all 80 in one night reaches 83.7 — and street Suspicion 54.0 with five people past
+  75, a near-loss. Greed is still punished. ⚠ `_balance.js` had `30` hard-coded as
+  the object count in both its cap and its header, so it silently sampled 30 of 80
+  and printed a number that had not been true for two milestones. **A diagnostic that
+  misreports its own inputs is worse than no diagnostic** — same lesson as the
+  M16 gossip figure.
+- **2026-08-17 — The kind has to suit the PERSON, not just the room.** Two new
+  objects failed the reachability gate's "2+ viable weeks" rule. Grace's vase:
+  plausibility 0.45 against her notice floor of 30 leaves an 11-point window, and
+  the shops stocked something inside it in one week out of six. A picture frame is
+  0.60 and it passes. Aaron's slippers failed the other way — attachment 0.8 against
+  a floor of 26 meant the perceived delta rarely cleared the floor at all; 1.1 fixed
+  it. Perceived delta scales *by attachment*, so low attachment helps against a low
+  ceiling (Ray) and hurts against a high floor (Aaron).
 - **2026-08-06 — GRAV 16 → 18, JUMP_V 6.0 → 4.6.** The inherited values gave a 1.13 m
   standing jump, which is superhuman and made every worktop trivially mountable. Now
   apex = 0.588 m, and `reach = apex + STEP_UP = 0.888 m` is the mount ceiling. The

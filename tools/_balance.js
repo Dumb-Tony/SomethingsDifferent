@@ -77,8 +77,14 @@ try{
   function GAMEWEEK(){ SD.GAME.weekday=(SD.GAME.weekday+1)%7;
                        if(SD.GAME.weekday===0)SD.GAME.week++; }
 
-  var rows=[run(30,'everything'),run(4,'four a night'),run(2,'two a night'),run(1,'one a night')];
-  info('=== '+C.SLICE_NIGHTS+' nights x '+30+' objects, playing only rungs the scanner calls DOUBT ===');
+  /* The cap and the header both read the ACTUAL object count. It was hard-coded to
+     30 and M17 took the street to 80, so 'everything' was quietly capped at 30 and
+     the header claimed a number that had not been true for two milestones. A
+     diagnostic that misreports its own inputs is worse than no diagnostic. */
+  SD.startHouse();                    // objects[] is empty until the street is built
+  var nObj=SD.objects.length;
+  var rows=[run(nObj,'everything'),run(4,'four a night'),run(2,'two a night'),run(1,'one a night')];
+  info('=== '+C.SLICE_NIGHTS+' nights x '+nObj+' objects, playing only rungs the scanner calls DOUBT ===');
   rows.forEach(function(r){
     info('  '+(r.label+'              ').slice(0,15)+
          'collapse '+('    '+r.ci.toFixed(1)).slice(-6)+

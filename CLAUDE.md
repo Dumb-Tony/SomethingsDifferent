@@ -96,7 +96,23 @@ Dev-wide catalog of what already exists and where to copy it from.
   street by measurement - 9.7% of shop rungs usable vs Walt's 23.0% - and five of his
   ten things are antique-only, which finally makes that shop load-bearing.
   36 assertions + `docs/m16-gossip.png`.
-  **715 assertions across sixteen suites.**
+- 2026-08-17 - **M17 DONE - THE INHABITED STREET.** Playtest note: "the world is still
+  mostly empty feeling - there is still nothing interactable, should be observable and
+  replaceable items". Measured first: 694 meshes for the whole world, the outdoors was
+  ONE mesh stamped over five identical lots, and 7 finished prop kinds had never been
+  placed. FIXED FOUR REAL BREAKS: the road ran through the front gardens (raw metres vs
+  layout units); the garden gate was a picture (one collider across the frontage - you
+  could only get in by jumping it); M13 had detached every fixture from its wall (up to
+  1.16m); and the sleeper sat up INTO the mattress (found by arithmetic - negative
+  rotation.x with the head at -z). THEN the content: 40 -> 80 possessions, all 30 kinds
+  in use, a fixture pass that finally builds the fridge/TV/shelf the fiction has claimed
+  since M9, a cul-de-sac with a far side and a horizon, per-house palettes driven by
+  `def.wall` (authored since M8, read by nothing), dressing keyed to the keeper's
+  noticeFloor, a scenery class that never steals E from a possession, a seeded passing
+  car whose headlights are a real light zone, and a dawn ramp. Paid for up front with a
+  shared unit box + material cache: 1,965 meshes on 703 geometries / 691 materials.
+  Walkable floor went UP, 77.3 -> 84.1 m2. 44 assertions + `docs/m17-court.png`.
+  **760 assertions across seventeen suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
@@ -168,6 +184,27 @@ Dev-wide catalog of what already exists and where to copy it from.
   authored in layout units and `_p()` converts inside `buildHouse`; `HOUSES` object
   `at` coordinates are converted at the placement call, which is why 30 placements
   needed no edits. Furniture sizes and Y heights are real-world and stay put.
+- **A TEST THAT TELEPORTS AN ACTOR IS NOT TESTING WHETHER THE ACTOR COULD GET THERE.**
+  Learned in M13 (two sealed rooms), and it hid a wall again in M17: the garden gate
+  was a PICTURE. The pickets skip the path, but the rail underneath was one collider
+  across the whole frontage - you could only enter a front garden by JUMPING it, and
+  jumping works, so it stayed invisible for nine milestones. `m17-tests.js` now
+  flood-fills the estate from HOME, WALKING ONLY, and asserts every front door and
+  every planter is reachable. Run it after touching any outdoor collider.
+- **`box()` applies OX; `ground`/`tree`/`parkedCar`/`wheelieBin` do not.**
+  Getting that backwards double-offsets a whole lot. `scenery()` applies OX too.
+- **Two units in one file will eventually be added together.** The road was authored
+  in raw metres while the yards were in ROOM_SCALE layout units, so it was drawn
+  inside the front gardens for four milestones. Object placements now declare which
+  they are: `at:` layout, `m:` metres. Fixtures are positioned from a WALL FACE.
+- **Decor rng must be its own generator.** The street rng is consumed in order by
+  `keyIn` and then every `randomSpec()`; one extra draw inside `buildHouse`
+  shifts every object spec on every later lot, silently, after the balance was tuned.
+  `dressInterior`/`dressLot` seed from `hashStr(def.id)`.
+- **Adding possessions renumbers object ids and therefore invalidates saves.** Ids
+  are `'o'+counter` in build order and the save is keyed by them. M17 bumped
+  SAVE_KEY to v2 rather than let an old file restore the wrong spec onto the wrong
+  object in silence.
 - **`HOUSES` order is an ID-STABILITY CONTRACT, not a spatial one.** Object ids are
   minted in array order and `shopStock` seeds its rng from them, so inserting a lot at
   the front renumbers everything and silently repoints every `filter(...)[0]` in the
@@ -192,7 +229,7 @@ the default. Mutating `CONST` would silently invalidate every suite that reads i
 ```
 play.bat                    # serves on http://localhost:8341/somethingsdifferent.html
 tools\test.ps1              # all suites (715 assertions), exit 0 = green
-tools\test.ps1 -Only m16    # one suite
+tools\test.ps1 -Only m17    # one suite
 
 # diagnostics (not suites — they measure, they don't gate):
 tools\smoketest.ps1 -Tests tools\_reach.js   # who is playable, per store, per week
@@ -275,6 +312,8 @@ can assert on real pixels via `readPixels`. Don't inherit the Chameleon project'
 
 Keep collider/Doubt/noise/spec math pure (plain objects, no live `THREE` scene) so it
 stays testable without a GL context.
+
+
 
 
 

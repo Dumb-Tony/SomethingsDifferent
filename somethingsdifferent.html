@@ -247,7 +247,7 @@ body.night #grade{opacity:1}
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M16 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M17 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -2920,13 +2920,28 @@ function buildHouse(def,rng){
 
   // ── the yard: picket fence, path, hedges, three planters, one streetlight ──
   const fy=YARD.minZ;
-  box(YARD.maxX-YARD.minX,0.10,0.09,'#c8bda6',0,0.50,fy,{collide:false,tag:'rail'});
-  box(YARD.maxX-YARD.minX,0.10,0.09,'#c8bda6',0,0.26,fy,{collide:false,tag:'rail'});
-  for(let px=YARD.minX+0.3;px<YARD.maxX-0.2;px+=0.62){
-    if(Math.abs(px)<_p(0.9))continue;                   // the gate gap, on the path
-    box(0.09,0.68,0.06,'#d6cbb4',px,0.34,fy,{collide:false,cast:true,tag:'picket'});
-  }
-  box(YARD.maxX-YARD.minX,0.62,0.10,'#5b4b34',0,0.31,fy,{tag:'fence'});
+  /* M17 — THE GATE IS NOW A HOLE, NOT A PICTURE. The pickets have skipped the path
+     since M8 so the yard LOOKED like it had a gate, but the fence rail underneath
+     was one solid collider across the whole frontage, 0.62 high against a STEP_UP
+     of 0.30. You could only enter a front garden by JUMPING it (apex 0.588 + 0.30
+     of step-up clears 0.62, which is why nobody noticed). Every test that visits a
+     house teleports the player in, so nothing caught it — the same blind spot that
+     hid the sealed lounge in M13. Segments now, with a gap on the path and another
+     where the driveway crosses. */
+  const GATE=_p(0.9), DVX=HW-1.9, DVW=1.6;
+  const runs=[[YARD.minX,-GATE],[GATE,DVX-DVW],[DVX+DVW,YARD.maxX]]
+    .filter(r=>r[1]-r[0]>0.05);
+  runs.forEach(r=>{
+    const w=r[1]-r[0],cx=(r[0]+r[1])/2;
+    box(w,0.10,0.09,'#c8bda6',cx,0.50,fy,{collide:false,tag:'rail'});
+    box(w,0.10,0.09,'#c8bda6',cx,0.26,fy,{collide:false,tag:'rail'});
+    box(w,0.62,0.10,'#5b4b34',cx,0.31,fy,{tag:'fence'});
+    for(let px=r[0]+0.31;px<r[1]-0.2;px+=0.62)
+      box(0.09,0.68,0.06,'#d6cbb4',px,0.34,fy,{collide:false,cast:true,tag:'picket'});
+  });
+  // the gate posts, so the gap reads as a gate rather than as missing fence
+  [-GATE,GATE].forEach(px=>
+    box(0.13,0.96,0.13,'#5b4b34',px,0.48,fy,{collide:false,cast:true,tag:'gatepost'}));
   box(0.10,0.62,YARD.maxZ-YARD.minZ-0.2,'#5b4b34',YARD.minX,0.31,(fy+YARD.maxZ)/2,{tag:'fence'});
   box(0.10,0.62,YARD.maxZ-YARD.minZ-0.2,'#5b4b34',YARD.maxX,0.31,(fy+YARD.maxZ)/2,{tag:'fence'});
   const pathM=new THREE.Mesh(new THREE.PlaneGeometry(_p(1.4),_p(5.4)),
@@ -2994,9 +3009,12 @@ function buildHouse(def,rng){
 
   // ── KITCHEN: two runs, the appliances the fiction already claimed, and clutter ──
   counter(XW+0.31,0.60,0.62,5.80);                     // west run, ON the west wall
-  counter(-1.30,ZN-0.31,7.00,0.62);                    // north run, ON the north wall
-  box(0.34,0.68,4.40,'#b8b146',XW+0.17,1.74,0.90,{collide:false,tag:'wallcab'});
-  box(0.34,0.68,2.60,'#b8b146',-2.40,1.74,ZN-0.17,{collide:false,tag:'wallcab'});
+  /* The north run STOPS at the fridge. Authored from a length rather than from the
+     two faces it spans, a 7m slab ran straight through the divider and came out in
+     the bedroom — which is the same class of mistake as the road in the gardens. */
+  counter(-3.59,ZN-0.31,5.40,0.62);
+  box(0.34,0.68,4.40,P.cab2||'#b8b146',XW+0.17,1.74,0.90,{collide:false,tag:'wallcab'});
+  box(2.60,0.68,0.34,P.cab2||'#b8b146',-3.60,1.74,ZN-0.17,{collide:false,tag:'wallcab'});
   /* The fridge. CONST has synthesized a per-house fridge hum since M9 and the audio
      comment says "a fridge in every kitchen humming" — there was no fridge, and the
      fridgeMagnet was placed standing on a countertop because there was no door to
@@ -3022,11 +3040,16 @@ function buildHouse(def,rng){
   });
 
   // ── LOUNGE: a sofa that faces something, and the shelf the books were floating by ──
-  box(2.20,0.44,0.90,'#5d5170',3.90,0.22,ZK+0.50,{tag:'sofa'});
-  box(2.20,0.52,0.22,'#655878',3.90,0.48,ZK+0.06,{collide:false,tag:'sofaback'});
-  box(0.24,0.46,0.86,'#655878',3.90-1.10,0.45,ZK+0.52,{collide:false,tag:'sofaarm'});
-  box(0.24,0.46,0.86,'#655878',3.90+1.10,0.45,ZK+0.52,{collide:false,tag:'sofaarm'});
-  box(1.10,0.42,0.62,'#7a6248',3.90,0.21,ZK+1.60,{tag:'coffeetable'});
+  /* The sofa sits NORTH of the doorway, not across it. Placed at ZK+0.50 it spanned
+     x 2.48..5.32 once inflated by PLAYER_R, and the lounge door gap is x 2.48..4.03
+     — so it sealed the lounge, and with it the bedroom behind it, exactly the fault
+     M13 was created to fix. m13-tests caught it on the first run; nothing else did,
+     because every other test teleports the player. */
+  box(2.20,0.44,0.90,'#5d5170',3.90,0.22,-0.65,{tag:'sofa'});
+  box(2.20,0.52,0.22,'#655878',3.90,0.48,-1.10,{collide:false,tag:'sofaback'});
+  box(0.24,0.46,0.86,'#655878',3.90-1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
+  box(0.24,0.46,0.86,'#655878',3.90+1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
+  box(1.10,0.42,0.62,'#7a6248',3.90,0.21,0.30,{tag:'coffeetable'});
   /* A television. Three houses have had a remote control on the coffee table since
      M12 and the day screen has offered "Watch television" since M6. */
   box(1.52,0.44,0.44,'#4a382e',3.90,0.22,ZLN-0.24,{tag:'tvstand'});
@@ -3034,15 +3057,18 @@ function buildHouse(def,rng){
   const tvS=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial({color:'#101724'}));
   tvS.scale.set(1.20,0.66,0.02);tvS.position.set(3.90+OX,0.84,ZLN-0.22);
   scene.add(tvS);envMeshes.push(tvS);
-  box(0.34,1.90,1.60,'#6d5238',XE-0.17,0.95,0.10,{tag:'bookshelf'});   // east wall
+  /* The bookshelf sits SOUTH of the east window (which spans z -1.165..0.235), not
+     across it. The bookRow objects have been labelled "the shelf" since M8 while
+     floating 0.40m clear of the sideboard with no shelf under them at all. */
+  box(0.34,1.90,1.20,'#6d5238',XE-0.17,0.95,-1.80,{tag:'bookshelf'});
   [0.42,0.80,1.18,1.56].forEach(sy=>
-    box(0.32,0.035,1.52,'#8a6a48',XE-0.18,sy,0.10,{collide:false,cast:false,tag:'shelf'}));
+    box(0.32,0.035,1.12,'#8a6a48',XE-0.18,sy,-1.80,{collide:false,cast:false,tag:'shelf'}));
   box(0.46,0.80,1.40,'#8a6a48',XD+0.23,0.40,ZK+1.30,{tag:'sideboard'});
-  box(0.86,0.55,0.10,'#c8bda6',3.20,0.42,ZK+0.06,{collide:false,tag:'radiator'});
+  box(0.86,0.55,0.10,'#c8bda6',1.20,0.42,ZK+0.06,{collide:false,tag:'radiator'});
 
   // ── HALL: it was 39 m2 holding a bench and a dish ──
-  box(1.20,0.45,0.36,'#7a6248',-4.60,0.225,ZS+0.18,{tag:'shoebench'});
-  box(1.00,0.05,0.34,'#6b5a44',-4.60,0.47,ZS+0.18,{collide:false,cast:false,tag:'benchtop'});
+  box(1.20,0.45,0.36,'#7a6248',-5.60,0.225,ZS+0.18,{tag:'shoebench'});
+  box(1.00,0.05,0.34,'#6b5a44',-5.60,0.47,ZS+0.18,{collide:false,cast:false,tag:'benchtop'});
   box(0.90,0.62,0.11,'#c8bda6',-4.03,0.44,ZS+0.06,{collide:false,tag:'radiator'});
   box(0.40,0.80,0.36,'#6d5238',4.60,0.40,ZHS-0.18,{tag:'console'});     // hall table
   box(0.09,1.80,0.09,'#4a382e',-6.10,0.90,ZHS-0.30,{tag:'coatrack'});
@@ -3064,10 +3090,11 @@ function buildHouse(def,rng){
     box(0.52,0.10,0.26,'#eef1f7',q[0],0.57,ZN-0.34,{collide:false,tag:'pillow'}));
   box(0.44,0.55,0.40,'#6d5238',2.86,0.275,ZN-0.22,{tag:'nightstand'});
   box(0.44,0.55,0.40,'#6d5238',5.20,0.275,ZN-0.22,{tag:'nightstand'});
-  box(1.10,0.86,0.46,'#6d5238',XE-0.25,0.43,2.30,{tag:'dresser'});      // east wall
+  box(0.46,0.86,1.10,'#6d5238',XE-0.23,0.43,2.30,{tag:'dresser'});      // east wall
   box(0.04,1.10,0.46,'#cfd4e2',XE-0.03,1.62,2.30,{collide:false,cast:false,tag:'mirror'});
   box(0.44,0.46,0.40,'#8a7a5c',XD+0.30,0.23,4.60,{tag:'basket'});       // laundry
   dressInterior(def,P);
+  dressLot(def,P);
 
   // ── THE OBJECTS ──────────────────────────────────────────────────────────
   /* Walt's keys, in the dish by the door. His fixation is `precision`; this is the
@@ -3076,7 +3103,7 @@ function buildHouse(def,rng){
      specs currently carry yaw only — hanging it vertically needs a pitch/roll axis,
      which would change the delta maths. The dish-by-the-door is the same beat and
      just as suburban. Revisit if placement gains a full orientation. */
-  box(0.26,0.04,0.20,'#9a8a72',_p(-3.6),0.47,_p(-2.6),{collide:false,cast:false,tag:'dish'});
+  box(0.26,0.04,0.20,'#9a8a72',-5.60,0.515,ZS+0.18,{collide:false,cast:false,tag:'dish'});
 
   /* ── THE OBJECTS. Data, not code (GDD 9) — extracted now that there are three
         houses to compare rather than guessed from a sample of one. The floorplan
@@ -3106,84 +3133,161 @@ function buildHouse(def,rng){
    Four lots. Yours, then the three you are working. Hoyt stays at x=0 so every
    coordinate the earlier milestones' tests assert against still holds. */
 const LOT_PITCH=16*CONST.ROOM_SCALE;   // the yards grew with the houses (M13)
+/* M17 — the palette per lot. `wall` was authored on every house back in M8 and read
+   by NOTHING; buildHouse hard-coded the colour and the texture hue, so all five were
+   identical to the pixel. `pal` is what buildHouse actually reads now, and `keeper`
+   is whose habits dress the place (dressInterior). */
 const HOUSES=[
-  {id:'marek',x:-LOT_PITCH,name:'14 Ardsley Ct',yours:true,wall:'#cfc3b0'},
-  {id:'hoyt', x:0,name:'12 Ardsley Ct',wall:'#c9bda6',
+  {id:'marek',x:-LOT_PITCH,name:'14 Ardsley Ct',yours:true,wall:'#cfc3b0',
+   pal:{wall:'#cfc3b0',wallHue:32,floor:26,ceil:34,tile:[40,34],roof:'#4a3228',
+        cab:'#c8bda6',cab2:'#b9ae94'}},
+  {id:'hoyt', x:0,name:'12 Ardsley Ct',wall:'#c9bda6',keeper:'walt',
+   pal:{wall:'#c9bda6',wallHue:34,floor:28,ceil:35,tile:[38,32],roof:'#3b2d26',
+        cab:'#c3b394',cab2:'#b8b146'},
    beds:[{who:'walt',x:2.15},{who:'june',x:3.05}],
+   /* M17: `m` is metres, `at` is layout units. Anything that sits ON a fixture is
+      now authored in metres from the fixture, because the fixtures are placed from
+      a wall face — the counter tops are y=0.92, the coffee table 0.42, the
+      nightstands 0.55, the sideboard 0.80, the bench 0.515, the shelf 0.82. */
    objects:[
-     {kind:'keyring',     at:[-3.60,0.49,-2.60],rot:10, owner:'walt',attach:1.7,label:"Walt's keys"},
-     {kind:'cerealBox',   at:[-3.75,0.92, 1.60],rot:-8, owner:'june',attach:0.9,label:'cereal'},
-     {kind:'coffeeMug',   at:[-3.70,0.92, 0.20],rot:25, owner:'walt',attach:1.5,label:"Walt's mug"},
-     {kind:'wallClock',   at:[ 2.90,1.58, 0.82],rot:180,owner:'walt',attach:1.3,label:'wall clock'},
-     {kind:'curtains',    at:[ 4.34,0.02,-0.30],rot:90, owner:'june',attach:0.8,label:'lounge curtains',
+     {kind:'keyring',     m:[-5.60,0.535,-5.185],rot:10,owner:'walt',attach:1.7,label:"Walt's keys"},
+     {kind:'cerealBox',   m:[-6.58,0.92, 2.60],rot:-8, owner:'june',attach:0.9,label:'cereal'},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.30],rot:25, owner:'walt',attach:1.5,label:"Walt's mug"},
+     {kind:'wallClock',   m:[ 5.60,1.72, 1.28],rot:180,owner:'walt',attach:1.3,label:'wall clock'},
+     {kind:'curtains',    m:[ 6.80,0.60,-0.465],rot:90,owner:'june',attach:0.8,label:'lounge curtains',
       spec:{length:1.5}},
      /* HER most-attached object, on the nightstand beside her head. Getting to it
-        means standing over two sleeping people. */
-     {kind:'pictureFrame',at:[ 3.85,0.55, 2.95],rot:188,owner:'june',attach:1.9,label:'family photo'},
+        means standing over two sleeping people. (M17: the bed's head end is against
+        the north wall now, so "beside her head" is finally where this is.) */
+     {kind:'pictureFrame',m:[ 5.20,0.55, 5.145],rot:188,owner:'june',attach:1.9,label:'family photo'},
      /* M12. Every y below is a real furniture top read out of the builder, not an
         eyeballed number: counter 0.92, coffee table 0.42, floor 0. */
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'june',attach:0.8,label:'the doormat'},
-     {kind:'spiceJar',    at:[-3.90,0.92, 1.40],rot:15, owner:'june',attach:0.7,label:'the paprika'},
-     {kind:'remoteControl',at:[2.00,0.42,-0.50],rot:-8, owner:'walt',attach:1.4,label:'the remote'},
-     {kind:'slippers',    at:[ 3.60,0.00, 1.60],rot:20, owner:'walt',attach:1.0,label:"Walt's slippers"},
+     {kind:'spiceJar',    m:[-6.60,0.92, 1.20],rot:15, owner:'june',attach:0.7,label:'the paprika'},
+     {kind:'remoteControl',m:[3.70,0.42, 0.30],rot:-8, owner:'walt',attach:1.4,label:'the remote'},
+     {kind:'slippers',    m:[ 5.58,0.00, 2.48],rot:20, owner:'walt',attach:1.0,label:"Walt's slippers"},
+     /* ── M17. Ten more, because the playtest note was "there is still nothing
+        interactable": a 145 m2 house held ten swappable things and everything else
+        was scenery. These fill the surfaces the fixture pass just built, and they
+        are APPENDED — object ids are minted in array order and the save file is
+        keyed by them, so inserting in the middle repoints every later id. ── */
+     {kind:'saltShaker',  m:[-4.20,0.92, 5.02],rot:0,  owner:'walt',attach:1.2,label:'the salt'},
+     {kind:'dishSoap',    m:[-6.58,0.92, 1.55],rot:-6, owner:'june',attach:0.6,label:'the washing-up liquid'},
+     {kind:'throwPillow', m:[ 3.30,0.55,-0.65],rot:12, owner:'june',attach:1.1,label:'the sofa cushion'},
+     {kind:'vase',        m:[ 0.29,0.80,-0.80],rot:0,  owner:'june',attach:1.6,label:'her mother’s vase'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'june',attach:1.0,label:'the blanket'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'june',attach:0.9,label:'the hairbrush'},
+     {kind:'lampShade',   m:[ 4.60,0.80,-2.72],rot:0,  owner:'june',attach:0.8,label:'the shade she never put up'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'walt',attach:1.2,label:'the shelf'},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'walt',attach:1.0,label:'the coasters'},
+     {kind:'potPlant',    m:[ 3.40,0.00,-3.40],rot:0,  owner:'june',attach:0.8,label:'the hall plant'},
    ]},
-  {id:'vance',x:LOT_PITCH,name:'16 Ardsley Ct',wall:'#e0d6c6',
+  {id:'vance',x:LOT_PITCH,name:'16 Ardsley Ct',wall:'#e0d6c6',keeper:'marisol',
+   pal:{wall:'#e6dccb',wallHue:44,floor:36,ceil:42,tile:[46,40],roof:'#5d3b3c',
+        cab:'#e0d6c6',cab2:'#cfc0a8'},
    beds:[{who:'marisol',x:2.15},{who:'aaron',x:3.05}],
    objects:[
      /* Marisol's fixation is ORDER, so everything here is something that can be
         SLIGHTLY out of line. Her floor is 6 — she is the most sensitive person on
         the street and the easiest to overshoot. */
-     {kind:'wallClock',   at:[ 2.90,1.58, 0.82],rot:180,owner:'marisol',attach:1.5,label:'the lounge clock'},
-     {kind:'pictureFrame',at:[ 4.12,0.82, 0.20],rot:270,owner:'marisol',attach:1.8,label:'the wedding photo'},
-     {kind:'tableLamp',   at:[ 4.12,0.80,-0.40],rot:0,  owner:'marisol',attach:1.1,label:'lounge lamp'},
-     {kind:'potPlant',    at:[ 0.70,0.00,-1.10],rot:0,  owner:'marisol',attach:1.0,label:'the fern'},
-     {kind:'coffeeMug',   at:[-3.70,0.92, 0.60],rot:15, owner:'aaron',  attach:1.1,label:"Aaron's mug"},
+     {kind:'wallClock',   m:[ 5.60,1.72, 1.28],rot:180,owner:'marisol',attach:1.5,label:'the lounge clock'},
+     {kind:'pictureFrame',m:[ 0.29,0.80,-0.75],rot:0,  owner:'marisol',attach:1.8,label:'the wedding photo'},
+     {kind:'tableLamp',   m:[ 0.29,0.80,-1.35],rot:0,  owner:'marisol',attach:1.1,label:'lounge lamp'},
+     {kind:'potPlant',    m:[ 1.09,0.00,-1.71],rot:0,  owner:'marisol',attach:1.0,label:'the fern'},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.70],rot:15, owner:'aaron',  attach:1.1,label:"Aaron's mug"},
      {kind:'gardenGnome', at:[ 2.20,0.00,-4.90],rot:200,owner:'marisol',attach:0.9,label:'the garden gnome'},
      /* Marisol's fixation is ORDER, so she gets the things that are supposed to line
         up. The house number is on the OUTSIDE of the front wall (z < -HD) turned to
         face the street, which is the only angle it is ever read from. */
-     {kind:'coasterSet',  at:[ 4.15,0.80, 0.60],rot:0,  owner:'marisol',attach:1.3,label:'the coasters'},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'marisol',attach:1.3,label:'the coasters'},
      {kind:'houseNumber', at:[ 1.20,1.45,-3.58],rot:180,owner:'marisol',attach:1.6,label:'the house number'},
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'marisol',attach:1.2,label:'the doormat'},
-     {kind:'cuttingBoard',at:[-3.90,0.92, 0.60],rot:-12,owner:'aaron',  attach:0.8,label:'the chopping board'},
+     {kind:'cuttingBoard',m:[-6.56,0.92, 0.10],rot:-12,owner:'aaron',  attach:0.8,label:'the chopping board'},
+     // ── M17 ──
+     {kind:'vase',        m:[ 0.29,0.80,-1.55],rot:0,  owner:'marisol',attach:1.7,label:'the good vase'},
+     {kind:'saltShaker',  m:[-3.60,0.92, 5.02],rot:0,  owner:'marisol',attach:1.2,label:'the salt and pepper'},
+     {kind:'throwPillow', m:[ 4.50,0.55,-0.65],rot:-8, owner:'marisol',attach:1.3,label:'the good cushion'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'aaron',  attach:0.9,label:'the throw'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'marisol',attach:1.1,label:'her hairbrush'},
+     {kind:'lampShade',   m:[ 6.66,0.86, 2.75],rot:0,  owner:'marisol',attach:0.9,label:'the spare shade'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'aaron',  attach:0.9,label:'the paperbacks'},
+     /* attach 1.1, not 0.8: Aaron's floor is 26 and perceived delta scales BY
+        attachment, so at 0.8 only one week in six stocked a variant big enough to
+        clear it. The reachability sweep is the gate that caught it. */
+     {kind:'slippers',    m:[ 5.58,0.00, 2.48],rot:20, owner:'aaron',  attach:1.1,label:"Aaron's slippers"},
+     {kind:'alarmClock',  m:[ 2.86,0.55, 5.145],rot:-6,owner:'aaron',  attach:1.0,label:'the alarm'},
+     {kind:'teaBox',      m:[-6.58,0.92, 1.80],rot:8,  owner:'marisol',attach:0.8,label:'the tea'},
    ]},
-  {id:'okonkwo',x:LOT_PITCH*2,name:'18 Ardsley Ct',wall:'#bfc7ce',
+  {id:'okonkwo',x:LOT_PITCH*2,name:'18 Ardsley Ct',wall:'#bfc7ce',keeper:'grace',
+   pal:{wall:'#bfc7ce',wallHue:205,floor:18,ceil:208,tile:[200,206],roof:'#33404e',
+        cab:'#a6b0bb',cab2:'#8f9aa8'},
    /* Grace works nights. Some nights the bed is half empty — which is recon you can
       learn, and the reason this is the house to practise on. */
    beds:[{who:'dev',x:2.15},{who:'grace',x:3.05,shift:true}],
    objects:[
-     {kind:'keyboard',    at:[ 1.35,0.56, 2.95],rot:6,  owner:'dev',  attach:1.6,label:"Dev's keyboard"},
-     {kind:'alarmClock',  at:[ 3.85,0.56, 2.95],rot:-10,owner:'grace',attach:1.2,label:'the alarm'},
-     {kind:'bookRow',     at:[ 3.75,0.80, 0.05],rot:270,owner:'dev',  attach:1.2,label:'the shelf'},
-     {kind:'cerealBox',   at:[-3.75,0.92, 1.20],rot:12, owner:'grace',attach:0.8,label:'cereal'},
-     {kind:'tableLamp',   at:[ 2.00,0.42,-0.50],rot:0,  owner:'grace',attach:0.9,label:'side lamp'},
-     {kind:'curtains',    at:[ 4.34,0.02,-0.30],rot:90, owner:'grace',attach:0.7,label:'lounge curtains',
+     {kind:'keyboard',    m:[ 2.86,0.55, 5.145],rot:6, owner:'dev',  attach:1.6,label:"Dev's keyboard"},
+     {kind:'alarmClock',  m:[ 5.20,0.55, 5.145],rot:-10,owner:'grace',attach:1.2,label:'the alarm'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'dev',  attach:1.2,label:'the shelf'},
+     {kind:'cerealBox',   m:[-6.58,0.92, 2.30],rot:12, owner:'grace',attach:0.8,label:'cereal'},
+     {kind:'tableLamp',   m:[ 0.29,0.80,-0.80],rot:0,  owner:'grace',attach:0.9,label:'side lamp'},
+     {kind:'curtains',    m:[ 6.80,0.60,-0.465],rot:90,owner:'grace',attach:0.7,label:'lounge curtains',
       spec:{length:1.5}},
      /* Grace's floor is 30, so she needs objects with enough attachment to be worth
         the thrift store's very wide swings - see the reachability sweep in GDD 15. */
-     {kind:'teaBox',      at:[-3.90,0.92, 1.80],rot:8,  owner:'grace',attach:0.9,label:'the tea'},
+     {kind:'teaBox',      m:[-6.58,0.92, 1.80],rot:8,  owner:'grace',attach:0.9,label:'the tea'},
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'grace',attach:0.7,label:'the doormat'},
-     {kind:'remoteControl',at:[2.00,0.42,-0.50],rot:6,  owner:'dev',  attach:1.2,label:'the remote'},
+     {kind:'remoteControl',m:[3.70,0.42, 0.30],rot:6,  owner:'dev',  attach:1.2,label:'the remote'},
      {kind:'mailbox',     at:[ 2.60,0.00,-6.20],rot:0,  owner:'dev',  attach:0.6,label:'the mailbox'},
+     // ── M17 ──
+     {kind:'dishSoap',    m:[-6.58,0.92, 1.55],rot:-6, owner:'grace',attach:0.6,label:'the washing-up liquid'},
+     {kind:'throwPillow', m:[ 3.30,0.55,-0.65],rot:12, owner:'grace',attach:0.9,label:'the sofa cushion'},
+     /* A vase is plausibility 0.45 and Grace's floor is 30, which leaves an 11-point
+        window - one stocked week in six. A picture frame is 0.60, and the sweep
+        agrees. The kind has to suit the PERSON, not just the room. */
+     {kind:'pictureFrame',m:[ 0.29,0.80,-1.55],rot:0,  owner:'grace',attach:1.3,label:'the photo of her mother'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'grace',attach:1.0,label:'the hairbrush'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'grace',attach:1.1,label:'the blanket'},
+     {kind:'saltShaker',  m:[-4.60,0.92, 5.02],rot:0,  owner:'dev',  attach:0.9,label:'the salt'},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.30],rot:25, owner:'dev',  attach:1.3,label:"Dev's mug"},
+     {kind:'posterPrint', m:[ 6.89,1.45, 3.60],rot:270,owner:'dev',  attach:1.5,label:'the poster'},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'dev',  attach:0.8,label:'the coasters'},
+     {kind:'fridgeMagnet',m:[-0.52,1.34, 4.64],rot:0,  owner:'grace',attach:0.7,label:'the magnet'},
    ]},
   /* Ray at the dead end, next door to you. He has the smallest doubt window on the
      street (floor 2, band 3) and the lowest credibility (0.1): almost impossible to
      fool, and almost harmless when he is right. His things are chosen so some are
      reachable from Bulwark's finest rung and some only from the antique shop -
      attachment is what decides which, since perceived delta scales by it. */
-  {id:'pittman',x:-LOT_PITCH*2,name:'10 Ardsley Ct',wall:'#b9b3a4',
+  {id:'pittman',x:-LOT_PITCH*2,name:'10 Ardsley Ct',wall:'#b9b3a4',keeper:'ray',
+   pal:{wall:'#b9b3a4',wallHue:62,floor:22,ceil:60,tile:[30,26],roof:'#3a3630',
+        cab:'#b3ab98',cab2:'#9c937f'},
    beds:[{who:'ray',x:2.60}],
    objects:[
-     {kind:'bookRow',     at:[ 3.75,0.80, 0.05],rot:270,owner:'ray',attach:1.9,label:'the research'},
-     {kind:'posterPrint', at:[ 4.30,0.90,-0.90],rot:270,owner:'ray',attach:1.7,label:'the chart on the wall'},
-     {kind:'wallClock',   at:[ 2.90,1.58, 0.82],rot:180,owner:'ray',attach:1.4,label:'the clock he sets by the pips'},
-     {kind:'alarmClock',  at:[ 3.85,0.56, 2.95],rot:-6, owner:'ray',attach:1.2,label:'the alarm'},
-     {kind:'keyring',     at:[-3.60,0.49,-2.60],rot:10, owner:'ray',attach:1.1,label:"Ray's keys"},
-     {kind:'coffeeMug',   at:[-3.70,0.92, 0.20],rot:25, owner:'ray',attach:1.0,label:'the mug he counts in'},
-     {kind:'remoteControl',at:[2.00,0.42,-0.50],rot:-8, owner:'ray',attach:0.9,label:'the remote'},
-     {kind:'fridgeMagnet',at:[-3.90,0.92, 2.10],rot:0,  owner:'ray',attach:0.8,label:'the magnet'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'ray',attach:1.9,label:'the research'},
+     {kind:'posterPrint', m:[ 6.89,1.45, 3.60],rot:270,owner:'ray',attach:1.7,label:'the chart on the wall'},
+     {kind:'wallClock',   m:[ 5.60,1.72, 1.28],rot:180,owner:'ray',attach:1.4,label:'the clock he sets by the pips'},
+     {kind:'alarmClock',  m:[ 5.20,0.55, 5.145],rot:-6,owner:'ray',attach:1.2,label:'the alarm'},
+     {kind:'keyring',     m:[-5.60,0.535,-5.185],rot:10,owner:'ray',attach:1.1,label:"Ray's keys"},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.30],rot:25, owner:'ray',attach:1.0,label:'the mug he counts in'},
+     {kind:'remoteControl',m:[3.70,0.42, 0.30],rot:-8, owner:'ray',attach:0.9,label:'the remote'},
+     {kind:'fridgeMagnet',m:[-0.52,1.34, 4.64],rot:0,  owner:'ray',attach:0.8,label:'the magnet'},
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'ray',attach:0.7,label:'the doormat'},
      {kind:'mailbox',     at:[ 2.60,0.00,-6.20],rot:0,  owner:'ray',attach:0.6,label:'the mailbox he checks twice'},
+     /* ── M17. Ray owns the most things on the street and can be fooled about almost
+        none of them: his band is 3 points wide, so these are deliberately LOW
+        attachment. Perceived delta scales by attachment, and against a 3-point
+        ceiling the cheap things are the only reachable ones. ── */
+     {kind:'saltShaker',  m:[-4.20,0.92, 5.02],rot:0,  owner:'ray',attach:0.7,label:'the salt'},
+     {kind:'teaBox',      m:[-6.58,0.92, 2.20],rot:8,  owner:'ray',attach:0.8,label:'the tea he weighs'},
+     {kind:'cuttingBoard',m:[-6.56,0.92, 0.10],rot:-12,owner:'ray',attach:0.9,label:'the board'},
+     {kind:'vase',        m:[ 0.29,0.80,-0.80],rot:0,  owner:'ray',attach:1.1,label:'the empty vase'},
+     {kind:'throwPillow', m:[ 3.30,0.55,-0.65],rot:12, owner:'ray',attach:0.6,label:'the cushion'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'ray',attach:0.8,label:'the blanket'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'ray',attach:0.6,label:'the hairbrush'},
+     {kind:'slippers',    m:[ 5.58,0.00, 2.48],rot:20, owner:'ray',attach:0.7,label:'his slippers'},
+     {kind:'curtains',    m:[ 6.80,0.60,-0.465],rot:90,owner:'ray',attach:0.9,label:'the curtains',
+      spec:{length:1.5}},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'ray',attach:0.8,label:'the coasters'},
    ]}
 ];
 const HOME={x:-LOT_PITCH,z:-6.8*CONST.ROOM_SCALE};
@@ -3256,7 +3360,7 @@ function dressInterior(def,P){
   };
   art(-2.10,1.72,ZHS-0.02,0.52,0.40,'z',P.floor+40);        // hall
   art(-3.40,1.72,ZHS-0.02,0.38,0.50,'z',P.floor+90);
-  art(XE-0.03,1.66,ZK+1.90,0.66,0.46,'x',P.floor+120);      // lounge
+  art(XE-0.03,1.66,0.80,0.66,0.46,'x',P.floor+120);         // lounge, north of the window
   art(1.20,1.62,ZN-0.06,0.44,0.56,'z',P.floor+70);          // bedroom
   // switch plates by every doorway — the detail your eye reads as "a real room"
   [[-3.10,ZHS-0.03],[2.90,ZHS-0.03],[0.98,ZLN+0.03],[XW+0.04,-2.90]].forEach(s=>
@@ -3278,7 +3382,7 @@ function dressInterior(def,P){
   scenery(-0.52,1.30,ZN-0.72,'their fridge',
     'It hums at 108 hertz, give or take. Every fridge on this street does.');
   scenery(3.90,0.84,ZLN-0.30,'the television','Off. It watches the room back.');
-  scenery(XE-0.20,1.00,0.10,'the shelf','Wood, brackets, and their whole life on it.');
+  scenery(XE-0.20,1.00,-1.80,'the shelf','Wood, brackets, and their whole life on it.');
   // ── IDENTITY. The same six slots, dressed by how much the keeper notices ──
   if(tidy){
     // squared off: shoes in a line, a wall calendar, a labelled shelf, nothing loose
@@ -3312,6 +3416,58 @@ function dressInterior(def,P){
   scenery(4.60,1.42,ZHS-0.03,'a note by the door',
     tidy?'A list. Everything on it is crossed off.'
         :'A list. Nothing on it is crossed off.');
+}
+
+/* The outside of a lot: the driveway, the car on it, the bins, the shed and the
+   back garden. The yard was a lawn, a path, two hedge boxes, three planters and a
+   lamppost — stamped five times — which is why the walk to a front door read as
+   crossing a car park. Same tidiness tell as the interior: a squared-off keeper
+   coils the hose and lines the bins up. */
+function dressLot(def,P){
+  const dr=mulberry32((hashStr(def.id+'|lot')>>>0)||1);
+  const RS=CONST.ROOM_SCALE,_p=v=>v*RS;
+  const HW=_p(4.5),HD=_p(3.5);
+  const keeper=RESIDENTS[def.keeper]||{noticeFloor:24};
+  const tidy=keeper.noticeFloor<=16;
+  const YMIN=_p(-9.0);                                   // the fence line
+  // ── the driveway, down the east side of the lot, and what is parked on it ──
+  const dvx=HW-1.9;
+  ground(3.0,7.4,dvx+OX,-HD-4.2,0.007,texConcrete(),2,4);
+  if(dr()<0.75)parkedCar(dvx+OX,-HD-3.6,Math.PI/2+(dr()-0.5)*0.06,dr()*360,dr);
+  // ── bins by the gate: lined up, or not ──
+  const bz=YMIN+1.5;
+  wheelieBin(dvx-1.0+OX,bz,32,tidy?0:(dr()-0.5)*1.2);
+  wheelieBin(dvx-1.7+OX,bz+(tidy?0:0.55),96,tidy?0:(dr()-0.5)*1.4);
+  scenery(dvx-1.35,0.95,bz,'their bins',
+    tidy?'Both squared to the fence. Somebody moves them back after collection.'
+        :'Left where the lorry put them, some time last week.');
+  // ── the front garden: a tree, and a tap with a hose ──
+  tree(-HW+1.4+OX,-HD-3.0,3.8+dr()*1.3,dr);
+  /* box() applies OX itself; ground/tree/parkedCar/wheelieBin are world-space and
+     do not. Getting that backwards is how the road ended up in the gardens. */
+  box(0.07,0.20,0.07,'#8b8794',-HW+0.35,0.30,-HD-0.20,{collide:false,tag:'tap'});
+  const hose=new THREE.Mesh(new THREE.TorusGeometry(0.24,0.05,6,14),mat('#2e4231'));
+  hose.rotation.x=Math.PI/2;hose.position.set(-HW+0.55+OX,0.06,-HD-0.55);
+  if(!tidy)hose.rotation.z=0.4;
+  scene.add(hose);envMeshes.push(hose);
+  scenery(-HW+0.55,0.30,-HD-0.55,'the hose',
+    tidy?'Coiled, on its hook, dripping onto a paving slab.'
+        :'In a heap by the tap. It has been in that heap a while.');
+  // ── the back garden, which did not exist: fence, shed, line, chairs ──
+  const bg=HD+2.8;                    // kept inside PLAY.maxZ so the shed is reachable
+  [-1,1].forEach(s=>box(0.10,1.70,7.4,'#4a3b2c',s*(HW+0.3),0.85,bg,{tag:'sidefence'}));
+  box(2.30,2.10,1.90,dr()<0.5?'#5b4b34':'#3f5730',HW-2.2,1.05,bg+1.4,{tag:'shed'});
+  box(2.50,0.18,2.10,P.roof,HW-2.2,2.18,bg+1.4,{collide:false,cast:false,tag:'shedroof'});
+  box(0.72,1.40,0.06,'#3a2c22',HW-2.2,0.70,bg+0.43,{collide:false,tag:'sheddoor'});
+  scenery(HW-2.2,1.20,bg+0.40,'the shed',
+    'Padlocked. Whatever is in there, they are not sentimental about it.');
+  [-1,1].forEach(s=>box(0.09,1.90,0.09,'#8b8794',s*2.6,0.95,bg,{tag:'linepost'}));
+  box(5.20,0.02,0.02,'#c8bda6',0,1.86,bg,{collide:false,cast:false,tag:'line'});
+  if(!tidy)[[-1.4,'#8c93b4'],[0.2,'#d98f6a'],[1.5,'#6f7699']].forEach(w=>
+    box(0.42,0.52,0.03,w[1],w[0],1.58,bg,{collide:false,tag:'washing'}));
+  box(0.62,0.72,0.62,'#7a6248',-HW+2.0,0.36,bg+0.4,{tag:'gardenchair'});
+  box(0.62,0.72,0.62,'#7a6248',-HW+2.9,0.36,bg+0.4,{tag:'gardenchair'});
+  box(0.90,0.06,0.90,'#8a6a48',-HW+2.45,0.70,bg+1.3,{collide:false,tag:'gardentable'});
 }
 
 /* ═════════════════════════ THE ESTATE (M17) ═════════════════════════
@@ -5937,9 +6093,14 @@ function doMorning(){
    Whole-world JSON in localStorage, with a schema version from day one. Load
    REBUILDS the street first and then overwrites state onto it — replaying the
    builder is far more robust than trying to serialise geometry. */
-const SAVE_KEY='sd_save_v1';
+/* M17 bumped this. Object ids are 'o'+counter minted in build order, and the save
+   is keyed by them — so adding forty possessions to the middle of the street
+   renumbers every id after the first new one. An old save would then restore Ray's
+   spec onto June's mug with no error at all, which is the quietest possible way to
+   corrupt a run. A version bump makes the old file simply not load. */
+const SAVE_KEY='sd_save_v2';
 function saveGame(){
-  const d={v:1,
+  const d={v:2,
     game:GAME,wife:WIFE,
     day:{block:DAY.block,actions:DAY.actions},
     night:{t:NIGHT.t,budget:NIGHT.budget,running:NIGHT.running},
@@ -5962,7 +6123,7 @@ function hasSave(){
 function loadGame(){
   let d=null;
   try{d=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){d=null;}
-  if(!d||d.v!==1)return false;
+  if(!d||d.v!==2)return false;
   startHouse();                       // rebuild the world, then overwrite state onto it
   Object.keys(d.game).forEach(k=>{GAME[k]=d.game[k];});
   Object.keys(d.wife).forEach(k=>{WIFE[k]=d.wife[k];});
@@ -6691,6 +6852,13 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   look,grabMouse,releaseMouse,isLocked,canLook,
   // - M16: Ray, and gossip -
   RELATIONS,gossip,gossipLine,
+  // - M17: the estate, the dressing, and the one thing that moves -
+  ST,SCENERY,CAR,FACADES,SKY_RIDE,
+  get PLAY(){return PLAY;}, get ROOM(){return ROOM;},
+  buildEstate,buildFarSide,buildHead,buildRoadway,buildHorizon,dressInterior,dressLot,
+  facade,parkedCar,wheelieBin,tree,streetLamp,ground,rotAABB,
+  ambientTick,dawnTick,carTick,carLaunch,carReset,trackShadow,skyFollow,
+  UNIT_BOX,
   // - M15: difficulty + options -
   OPT,DIFFS,DIFF_KEY,winBar,hardenAt,syncDiffBtn,
   // - M14: the street hardens -
@@ -6722,10 +6890,13 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M16'};
+  version:'M17'};
 </script>
 </body>
 </html>
+
+
+
 
 
 

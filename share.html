@@ -241,7 +241,7 @@ body.night #grade{opacity:1}
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M16 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M17 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -632,6 +632,32 @@ const CONST={
   HARD_WATCH_R: 11.0,       // how far up the street he can pick you out
   HARD_CAM_R  : 2.6,        // doorbell camera trigger radius
   HARD_CAM_S  : 7,          // Suspicion per household, once per night
+  // ── the neighbourhood (M17) ───────────────────────────
+  /* Ardsley Court was a 112x15m corridor: one road plane painted THROUGH the front
+     gardens (road z span [-12.4,-8.4] against a fence at -13.95), no far side, no
+     ground between the lots, and no player bound at all. These are the street's
+     cross-section, measured south from the house fronts, and every outdoor builder
+     reads them rather than repeating a literal. */
+  ST_KERB_N   : -15.9,      // north kerb: pavement runs from here up to the fences
+  ST_KERB_S   : -22.1,      // south kerb — a 6.2m carriageway between them
+  ST_PAVE_W   :   1.9,      // pavement width, both sides
+  ST_FAR_Z    : -25.9,      // front wall of the houses opposite
+  CDS_X       : -69.0,      // turning-circle centre. Ray at -49.6 is "at the dead
+  CDS_R       :   9.4,      // end" (GDD), so the head goes west of his lot.
+  ST_EAST_X   :  68.0,      // where the road leaves the estate into the trees
+  YARD_BACK_Z :  11.2,      // rear-garden fence, behind the houses
+  HORIZON_R   :  96.0,      // radius of the distant tree line
+  /* Set-dressing is SOLID (playtest call, M17): you cannot walk through a wheelie
+     bin. Anything at or below this height is walked over instead of into, so low
+     dressing never becomes a snag - STEP_UP is 0.30 and these are authored under it. */
+  DECOR_STEP  : 0.28,
+  /* A passing car: the only moving light in the world, and therefore a real
+     hide-or-be-seen beat rather than decoration. Its headlights go through
+     addLight(), so litAt() - and every seeing check - reads them. */
+  CAR_EVERY   : [42,96],    // seconds between passes, inclusive range
+  CAR_SPEED   : 11.0,       // m/s along the carriageway
+  CAR_LIGHT_R :  9.0,       // headlight pool radius
+  CAR_LIGHT_I :  0.85,
 };
 
 /* ═════════════════════════ RNG ═════════════════════════
@@ -2316,6 +2342,20 @@ moon.shadow.camera.near=1;moon.shadow.camera.far=48;
 moon.shadow.camera.left=-16;moon.shadow.camera.right=16;
 moon.shadow.camera.top=16;moon.shadow.camera.bottom=-16;
 moon.shadow.bias=-0.0016;
+/* M17: the shadow box is +/-16m and the street is 146m long, so before this it
+   covered ONE lot of five — four houses out of five were flat-lit, and the wall
+   shadow bars the interior comment calls load-bearing existed in Hoyt's house
+   only. Park the box on the player instead: same one shadow map, same draw calls,
+   shadows everywhere. moonOff is the light's offset FROM its target, captured by
+   setLighting so the two rigs keep their own sun angles. */
+const moonTarget=new THREE.Object3D();scene.add(moonTarget);moon.target=moonTarget;
+const moonOff=new THREE.Vector3(-9,15,7);
+function trackShadow(){
+  if(!player)return;
+  const px=player.position.x,pz=player.position.z;
+  moonTarget.position.set(px,0,pz);moonTarget.updateMatrixWorld();
+  moon.position.set(px+moonOff.x,moonOff.y,pz+moonOff.z);
+}
 
 // a big inverted sphere rather than scene.background, so the gradient is guaranteed
 // and can opt out of fog
@@ -2338,7 +2378,7 @@ function setLighting(mode){
        places you can be seen (litAt). Light is the gameplay, so it has to be the
        thing your eye goes to. */
     hemi.color.set('#18243f');hemi.groundColor.set('#04060a');hemi.intensity=0.34;
-    moon.color.set('#8ea6dc');moon.intensity=0.40;moon.position.set(-9,15,7);
+    moon.color.set('#8ea6dc');moon.intensity=0.40;moonOff.set(-9,15,7);moon.position.set(-9,15,7);
     fill.color.set('#232c49');fill.intensity=0.12;fill.position.set(7,5,-8);
     scene.fog=new THREE.FogExp2('#0a0f1c',0.038);
     scene.background=new THREE.Color('#070a12');
@@ -2353,7 +2393,7 @@ function setLighting(mode){
     document.body.classList.add('night');
   }else{
     hemi.color.set('#e8eeff');hemi.groundColor.set('#3a3844');hemi.intensity=0.80;
-    moon.color.set('#fff6e8');moon.intensity=0.85;moon.position.set(5,9,4);
+    moon.color.set('#fff6e8');moon.intensity=0.85;moonOff.set(5,9,4);moon.position.set(5,9,4);
     fill.color.set('#b9c6e0');fill.intensity=0.25;fill.position.set(-6,5,-4);
     scene.fog=null;scene.background=new THREE.Color('#1b2436');
     sky.visible=false;
@@ -2505,6 +2545,13 @@ const envMeshes=[],colliders=[],helpers=[];
    threading an offset through sixty coordinates. */
 let OX=0;
 let ROOM=null;          // {minX,maxX,minZ,maxZ} — camera XZ clamp over the whole street
+/* M17: the PLAYER's clamp, and it did not exist before — movePlayer() translated
+   without any bound and groundHeightAt() returns 0 everywhere, so you could walk
+   off the end of the street onto an infinite invisible plane while the camera
+   stayed pinned at ROOM. Kept inside ROOM so the camera never hits its own clamp
+   first, and the estate's fences/hedges are built ON this line so the wall you
+   stop at is one you can see. */
+let PLAY=null;
 /* Ceilings are ZONES, not a single height: a lot has an indoor part with a 2.6m
    ceiling and a yard with none, and the camera must only be pushed down inside. */
 const CEIL_ZONES=[];
@@ -2516,14 +2563,29 @@ function ceilAt(x,z){
   return 0;
 }
 
-function mat(hex,opts){return new THREE.MeshLambertMaterial(Object.assign({color:hex},opts||{}));}
+/* ONE material per colour, ONE unit box for every box() (M17). Draw calls are 1:1
+   with meshes in this scene — no instancing, no merging — and M17 multiplies the
+   mesh count several times over, so the two things that are free to share get
+   shared. Measured before: 694 meshes carried 614 distinct materials and 694
+   distinct geometries. Safe because nothing mutates a scene material after
+   creation (userData.baseColor is written and never read), and disposeProp() only
+   ever runs over PROP groups, which build their own geometry from matL(). */
+const _matCache=new Map();
+function mat(hex,opts){
+  if(opts)return new THREE.MeshLambertMaterial(Object.assign({color:hex},opts));
+  let m=_matCache.get(hex);
+  if(!m){m=new THREE.MeshLambertMaterial({color:hex});_matCache.set(hex,m);}
+  return m;
+}
+const UNIT_BOX=new THREE.BoxGeometry(1,1,1);
 
 /* box(): the ONLY primitive-furniture entry point. opts.collide:false = decor
    (rendered + raycastable, but not solid) — 'visible' and 'solid' are
    independent sets, exactly as in chameleon3d. */
 function box(w,h,d,hex,x,y,z,opts){
   opts=opts||{};
-  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),opts.mat||mat(hex));
+  const m=new THREE.Mesh(UNIT_BOX,opts.mat||mat(hex));
+  m.scale.set(w,h,d);
   x+=OX;
   m.position.set(x,y,z);m.userData.baseColor=hex;
   m.castShadow=opts.cast!==false;m.receiveShadow=true;
@@ -2638,6 +2700,7 @@ function clearWorld(){
      the counter run on and every saved reference dangles. */
   _objId=0;
   envMeshes.length=0;colliders.length=0;helpers.length=0;CEIL_ZONES.length=0;
+  SCENERY.length=0;
   for(const o of objects){if(o.group)disposeProp(o.group);}
   objects.length=0;PLANTERS.length=0;DOORS.length=0;FRONT_DOOR=null;
   BEDS.length=0;LIGHTS.length=0;SLEEPERS.length=0;
@@ -2772,6 +2835,12 @@ function buildHouse(def,rng){
      teleported the player, so nothing caught it. tools/_space.js measures all of it. */
   const RS=CONST.ROOM_SCALE,_p=v=>v*RS;
   const HW=_p(4.5),HD=_p(3.5),H=CONST.WALL_H,T=CONST.WALL_T;
+  /* M17 — the palette. def.wall has been authored on every lot since M8 and was
+     read by NOTHING: the wall colour was a literal three lines down, so all five
+     houses were identical to the pixel and the street read as one asset stamped
+     five times. Five numbers per house is the cheapest variety in the game. */
+  const P=def.pal||{wall:'#c9bda6',wallHue:34,floor:28,ceil:35,tile:[38,32],
+                    roof:'#3b2d26',cab:'#c3b394'};
   const YARD={minX:_p(-5.5),maxX:_p(5.5),minZ:_p(-9.0),maxZ:-HD};
   CEIL_ZONES.push({minX:-HW+OX,maxX:HW+OX,minZ:-HD,maxZ:HD,y:H});
 
@@ -2785,21 +2854,30 @@ function buildHouse(def,rng){
   };
   surf(YARD.maxX-YARD.minX,YARD.maxZ-YARD.minZ,0,(YARD.minZ+YARD.maxZ)/2,0.001,
        tiled(texGrass(),9,5));
-  surf(HW*2,HD*2,0,0,0.002,tiled(texBoards(28),7,6));
-  surf(HW,HD-_p(-1.6),-HW/2,(_p(-1.6)+HD)/2,0.004,tiled(texTile(38,32),5,5)); // kitchen tile
+  surf(HW*2,HD*2,0,0,0.002,tiled(texBoards(P.floor),7,6));
+  surf(HW,HD-_p(-1.6),-HW/2,(_p(-1.6)+HD)/2,0.004,
+       tiled(texTile(P.tile[0],P.tile[1]),5,5));       // kitchen tile
   const ceil=new THREE.Mesh(new THREE.PlaneGeometry(HW*2,HD*2),
-    new THREE.MeshLambertMaterial({map:tiled(texPaint(35,0.10,0.80),3,3)}));
+    new THREE.MeshLambertMaterial({map:tiled(texPaint(P.ceil,0.10,0.80),3,3)}));
   ceil.rotation.x=Math.PI/2;ceil.position.set(OX,H,0);scene.add(ceil);envMeshes.push(ceil);
   /* Roof + ceiling deliberately do NOT cast shadow. Physically the moon would be
      blocked entirely and the interior would be a black box; letting it leak keeps
      the house readable while the walls still cast the shadow bars that sell it. */
-  box(HW*2+0.6,0.20,HD*2+0.6,'#3b2d26',0,H+0.10,0,{collide:false,cast:false,tag:'roof'});
-  box(HW*2+0.3,0.62,HD*1.0,'#4a382e',0,H+0.44,0,{collide:false,cast:false,tag:'roofridge'});
+  box(HW*2+0.6,0.20,HD*2+0.6,P.roof,0,H+0.10,0,{collide:false,cast:false,tag:'roof'});
+  box(HW*2+0.3,0.62,HD*1.0,P.roof,0,H+0.44,0,{collide:false,cast:false,tag:'roofridge'});
+  /* Gutter, downpipe and a porch: the three things whose absence made every house
+     read as a box with a door drawn on it. */
+  [-1,1].forEach(s=>box(HW*2+0.7,0.11,0.13,'#8f95a3',0,H+0.02,s*(HD+0.32),
+    {collide:false,cast:false,tag:'gutter'}));
+  box(0.12,H+0.05,0.12,'#8f95a3',HW-0.5,(H+0.05)/2,-HD-0.30,{collide:false,tag:'downpipe'});
+  box(_p(1.9),0.16,1.10,P.roof,0,2.42,-HD-0.50,{collide:false,cast:false,tag:'porch'});
+  [-1,1].forEach(s=>box(0.14,2.34,0.14,'#c8bda6',s*_p(0.78),1.17,-HD-0.95,{tag:'porchpost'}));
+  box(0.16,0.22,0.16,'#3a3a42',0,2.24,-HD-0.62,{collide:false,cast:false,tag:'porchlight'});
   box(0.45,1.05,0.45,'#514038',_p(-3.2),H+0.75,_p(1.4),{collide:false,cast:false,tag:'chimney'});
 
   // ── shell: front (south) wall has the door gap; the rest is closed ──
-  const wallMat=new THREE.MeshLambertMaterial({map:tiled(texPaint(34,0.16,0.62),3,1)});
-  const WCOL='#c9bda6',WOPT={mat:wallMat};
+  const wallMat=new THREE.MeshLambertMaterial({map:tiled(texPaint(P.wallHue,0.16,0.62),3,1)});
+  const WCOL=P.wall,WOPT={mat:wallMat};
   wallSeg(-HW,-HD,-_p(0.55),-HD,WCOL,WOPT); wallSeg(_p(0.55),-HD,HW,-HD,WCOL,WOPT);
   wallSeg(-HW,-HD,-HW, HD,WCOL,WOPT);   wallSeg(HW,-HD,HW,HD,WCOL,WOPT);
   wallSeg(-HW, HD, HW, HD,WCOL,WOPT);
@@ -2818,6 +2896,8 @@ function buildHouse(def,rng){
   skirt(-HW,-HD,HW,-HD); skirt(-HW,HD,HW,HD);
   skirt(-HW,-HD,-HW,HD); skirt(HW,-HD,HW,HD);
   skirt(0,_p(-1.6),0,HD);
+  skirt(-HW,_p(-1.6),HW,_p(-1.6)); skirt(0,_p(0.9),HW,_p(0.9));   // M17: the two
+  // interior partitions that never got any — the hall wall and the bedroom wall.
 
   // ── the front door: a real collider, spliced out when it opens ──
   (function(){
@@ -2842,13 +2922,28 @@ function buildHouse(def,rng){
 
   // ── the yard: picket fence, path, hedges, three planters, one streetlight ──
   const fy=YARD.minZ;
-  box(YARD.maxX-YARD.minX,0.10,0.09,'#c8bda6',0,0.50,fy,{collide:false,tag:'rail'});
-  box(YARD.maxX-YARD.minX,0.10,0.09,'#c8bda6',0,0.26,fy,{collide:false,tag:'rail'});
-  for(let px=YARD.minX+0.3;px<YARD.maxX-0.2;px+=0.62){
-    if(Math.abs(px)<_p(0.9))continue;                   // the gate gap, on the path
-    box(0.09,0.68,0.06,'#d6cbb4',px,0.34,fy,{collide:false,cast:true,tag:'picket'});
-  }
-  box(YARD.maxX-YARD.minX,0.62,0.10,'#5b4b34',0,0.31,fy,{tag:'fence'});
+  /* M17 — THE GATE IS NOW A HOLE, NOT A PICTURE. The pickets have skipped the path
+     since M8 so the yard LOOKED like it had a gate, but the fence rail underneath
+     was one solid collider across the whole frontage, 0.62 high against a STEP_UP
+     of 0.30. You could only enter a front garden by JUMPING it (apex 0.588 + 0.30
+     of step-up clears 0.62, which is why nobody noticed). Every test that visits a
+     house teleports the player in, so nothing caught it — the same blind spot that
+     hid the sealed lounge in M13. Segments now, with a gap on the path and another
+     where the driveway crosses. */
+  const GATE=_p(0.9), DVX=HW-1.9, DVW=1.6;
+  const runs=[[YARD.minX,-GATE],[GATE,DVX-DVW],[DVX+DVW,YARD.maxX]]
+    .filter(r=>r[1]-r[0]>0.05);
+  runs.forEach(r=>{
+    const w=r[1]-r[0],cx=(r[0]+r[1])/2;
+    box(w,0.10,0.09,'#c8bda6',cx,0.50,fy,{collide:false,tag:'rail'});
+    box(w,0.10,0.09,'#c8bda6',cx,0.26,fy,{collide:false,tag:'rail'});
+    box(w,0.62,0.10,'#5b4b34',cx,0.31,fy,{tag:'fence'});
+    for(let px=r[0]+0.31;px<r[1]-0.2;px+=0.62)
+      box(0.09,0.68,0.06,'#d6cbb4',px,0.34,fy,{collide:false,cast:true,tag:'picket'});
+  });
+  // the gate posts, so the gap reads as a gate rather than as missing fence
+  [-GATE,GATE].forEach(px=>
+    box(0.13,0.96,0.13,'#5b4b34',px,0.48,fy,{collide:false,cast:true,tag:'gatepost'}));
   box(0.10,0.62,YARD.maxZ-YARD.minZ-0.2,'#5b4b34',YARD.minX,0.31,(fy+YARD.maxZ)/2,{tag:'fence'});
   box(0.10,0.62,YARD.maxZ-YARD.minZ-0.2,'#5b4b34',YARD.maxX,0.31,(fy+YARD.maxZ)/2,{tag:'fence'});
   const pathM=new THREE.Mesh(new THREE.PlaneGeometry(_p(1.4),_p(5.4)),
@@ -2898,32 +2993,110 @@ function buildHouse(def,rng){
   spill(_p( 2.4),_p( 2.95),_p(2.3),0.42);
   spill(_p(-2.6),_p(-3.05),_p(1.9),0.38);
 
-  // ── fixtures ──
-  const counter=(x,z,w,d)=>box(w,0.92,d,'#c3b394',x,0.46,z,{tag:'counter'});
-  /* Run LENGTHS scale (a counter spans a wall, and the wall grew); run DEPTHS and
-     every free-standing size do not (a counter is still 0.6m deep). */
-  counter(_p(-3.9),_p(0.9),1.0,_p(3.4));           // kitchen run, west wall
-  counter(_p(-1.9),_p(3.05),_p(3.0),0.7);          // kitchen run, north wall
-  box(1.5,0.74,0.9,'#8a6a48',_p(-2.0),0.37,_p(0.4),{tag:'table'});   // kitchen table
-  [[-2.7,0.4],[-1.3,0.4]].forEach(c=>{
-    box(0.42,0.46,0.42,'#7a5c3e',_p(c[0]),0.23,_p(c[1]),{tag:'chair'});
-    box(0.42,0.52,0.08,'#7a5c3e',_p(c[0]),0.72,_p(c[1])-0.17,{collide:false,tag:'chairback'});
-  });
-  box(2.1,0.44,0.85,'#5d5170',_p(3.3),0.22,_p(-0.60),{tag:'sofa'});  // lounge
-  box(2.1,0.50,0.20,'#655878',_p(3.3),0.47,_p(-0.60)-0.35,{collide:false,tag:'sofaback'});
-  box(1.0,0.42,0.55,'#7a6248',_p(2.0),0.21,_p(-0.50),{tag:'coffeetable'});
-  box(0.45,0.80,1.40,'#8a6a48',_p(4.15),0.40,_p(0.20),{tag:'sideboard'});
-  box(1.2,0.45,0.35,'#7a6248',_p(-3.6),0.225,_p(-2.6),{tag:'shoebench'});  // hall
+  /* ── fixtures ───────────────────────────────────────────────────────────────
+     M17. Two things were wrong here and both came out of M13: ROOM_SCALE
+     multiplied POSITIONS but not DEPTHS, so everything drifted off the wall it was
+     supposed to be against (0.26m for the sideboard, 0.37 for the kitchen counter,
+     1.16 for the shoebench — furniture parked in a field is the loudest
+     unfinished-level signal there is); and the LIST never grew, so a 145 m2 house
+     held 21 boxes and every surface in it was bare.
+     Everything below is now positioned FROM A WALL FACE, so it cannot drift again
+     if the scale changes, and the fixture pass fills the two emptiest surfaces in
+     the house — the walls, and the tops of things. */
+  const XW=-HW+T/2, XE=HW-T/2, ZS=-HD+T/2, ZN=HD-T/2;  // inner faces of the shell
+  const XD=T/2;                                        // the x=0 divider
+  const ZK=_p(-1.6)+T/2, ZHS=_p(-1.6)-T/2;             // hall wall: kitchen side / hall side
+  const ZLN=_p(0.9)-T/2, ZBS=_p(0.9)+T/2;              // lounge side / bedroom side
+  const counter=(x,z,w,d)=>box(w,0.92,d,P.cab||'#c3b394',x,0.46,z,{tag:'counter'});
 
-  // ── the bedroom: where they are ──
-  box(0.70,2.00,1.20,'#6d5238',_p(0.45),1.00,_p(1.90),{tag:'wardrobe'});
-  box(1.75,0.32,1.95,'#6d5238',_p(2.60),0.16,_p(2.40),{tag:'bedframe'});
-  box(1.70,0.22,1.90,'#cfd4e2',_p(2.60),0.43,_p(2.40),{tag:'mattress'});
-  box(1.72,0.10,0.90,'#4e5a80',_p(2.60),0.58,_p(2.40)+0.50,{collide:false,tag:'duvet'});
-  [[2.15],[3.05]].forEach(q=>
-    box(0.52,0.10,0.26,'#eef1f7',_p(q[0]),0.57,_p(2.40)-0.78,{collide:false,tag:'pillow'}));
-  box(0.44,0.55,0.40,'#6d5238',_p(1.35),0.275,_p(2.95),{tag:'nightstand'});
-  box(0.44,0.55,0.40,'#6d5238',_p(3.85),0.275,_p(2.95),{tag:'nightstand'});
+  // ── KITCHEN: two runs, the appliances the fiction already claimed, and clutter ──
+  counter(XW+0.31,0.60,0.62,5.80);                     // west run, ON the west wall
+  /* The north run STOPS at the fridge. Authored from a length rather than from the
+     two faces it spans, a 7m slab ran straight through the divider and came out in
+     the bedroom — which is the same class of mistake as the road in the gardens. */
+  counter(-3.59,ZN-0.31,5.40,0.62);
+  box(0.34,0.68,4.40,P.cab2||'#b8b146',XW+0.17,1.74,0.90,{collide:false,tag:'wallcab'});
+  box(2.60,0.68,0.34,P.cab2||'#b8b146',-3.60,1.74,ZN-0.17,{collide:false,tag:'wallcab'});
+  /* The fridge. CONST has synthesized a per-house fridge hum since M9 and the audio
+     comment says "a fridge in every kitchen humming" — there was no fridge, and the
+     fridgeMagnet was placed standing on a countertop because there was no door to
+     stick it to. */
+  box(0.74,1.88,0.70,'#d9dde4',-0.52,0.94,ZN-0.35,{tag:'fridge'});
+  box(0.03,1.70,0.62,'#8f95a3',-0.52-0.375,1.00,ZN-0.35,{collide:false,cast:false,tag:'fridgeedge'});
+  box(0.05,0.34,0.04,'#8b8794',-0.52-0.36,1.42,ZN-0.68,{collide:false,cast:false,tag:'handle'});
+  box(0.66,0.90,0.60,'#3d4358',XW+0.32,0.45,-1.30,{tag:'oven'});   // oven + hob
+  box(0.62,0.05,0.56,'#232125',XW+0.32,0.93,-1.30,{collide:false,cast:false,tag:'hob'});
+  [[-0.16,-0.16],[-0.16,0.16],[0.16,-0.16],[0.16,0.16]].forEach(r=>
+    box(0.16,0.012,0.16,'#4a4a54',XW+0.32+r[0],0.96,-1.30+r[1],{collide:false,cast:false,tag:'ring'}));
+  box(0.40,0.22,0.66,'#8f95a3',XW+0.22,1.62,-1.30,{collide:false,tag:'extractor'});
+  box(0.52,0.06,0.78,'#b8bcc6',XW+0.34,0.90,1.86,{collide:false,cast:false,tag:'sink'});
+  box(0.04,0.26,0.04,'#c9c4b4',XW+0.14,1.03,1.86,{collide:false,tag:'tap'});
+  box(0.30,0.22,0.40,'#8f95a3',XW+0.36,1.02,2.70,{collide:false,tag:'dishrack'});
+  box(0.38,0.64,0.38,'#4a4a54',-1.20,0.32,ZN-0.72,{tag:'kitchenbin'});
+  box(1.50,0.74,0.95,'#8a6a48',-3.60,0.37,1.30,{tag:'table'});     // table, off the runs
+  [[-4.45,1.30,0],[-2.75,1.30,0],[-3.60,2.15,1],[-3.60,0.45,1]].forEach(c=>{
+    box(0.42,0.46,0.42,'#7a5c3e',c[0],0.23,c[1],{tag:'chair'});
+    box(c[2]?0.42:0.08,0.52,c[2]?0.08:0.42,'#7a5c3e',
+        c[0]+(c[2]?0:(c[0]<-3.6?-0.17:0.17)),0.72,c[1]+(c[2]?(c[1]>1.3?0.17:-0.17):0),
+        {collide:false,tag:'chairback'});
+  });
+
+  // ── LOUNGE: a sofa that faces something, and the shelf the books were floating by ──
+  /* The sofa sits NORTH of the doorway, not across it. Placed at ZK+0.50 it spanned
+     x 2.48..5.32 once inflated by PLAYER_R, and the lounge door gap is x 2.48..4.03
+     — so it sealed the lounge, and with it the bedroom behind it, exactly the fault
+     M13 was created to fix. m13-tests caught it on the first run; nothing else did,
+     because every other test teleports the player. */
+  box(2.20,0.44,0.90,'#5d5170',3.90,0.22,-0.65,{tag:'sofa'});
+  box(2.20,0.52,0.22,'#655878',3.90,0.48,-1.10,{collide:false,tag:'sofaback'});
+  box(0.24,0.46,0.86,'#655878',3.90-1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
+  box(0.24,0.46,0.86,'#655878',3.90+1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
+  box(1.10,0.42,0.62,'#7a6248',3.90,0.21,0.30,{tag:'coffeetable'});
+  /* A television. Three houses have had a remote control on the coffee table since
+     M12 and the day screen has offered "Watch television" since M6. */
+  box(1.52,0.44,0.44,'#4a382e',3.90,0.22,ZLN-0.24,{tag:'tvstand'});
+  box(1.30,0.76,0.09,'#232125',3.90,0.84,ZLN-0.16,{tag:'tv'});
+  const tvS=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial({color:'#101724'}));
+  tvS.scale.set(1.20,0.66,0.02);tvS.position.set(3.90+OX,0.84,ZLN-0.22);
+  scene.add(tvS);envMeshes.push(tvS);
+  /* The bookshelf sits SOUTH of the east window (which spans z -1.165..0.235), not
+     across it. The bookRow objects have been labelled "the shelf" since M8 while
+     floating 0.40m clear of the sideboard with no shelf under them at all. */
+  box(0.34,1.90,1.20,'#6d5238',XE-0.17,0.95,-1.80,{tag:'bookshelf'});
+  [0.42,0.80,1.18,1.56].forEach(sy=>
+    box(0.32,0.035,1.12,'#8a6a48',XE-0.18,sy,-1.80,{collide:false,cast:false,tag:'shelf'}));
+  box(0.46,0.80,1.40,'#8a6a48',XD+0.23,0.40,ZK+1.30,{tag:'sideboard'});
+  box(0.86,0.55,0.10,'#c8bda6',1.20,0.42,ZK+0.06,{collide:false,tag:'radiator'});
+
+  // ── HALL: it was 39 m2 holding a bench and a dish ──
+  box(1.20,0.45,0.36,'#7a6248',-5.60,0.225,ZS+0.18,{tag:'shoebench'});
+  box(1.00,0.05,0.34,'#6b5a44',-5.60,0.47,ZS+0.18,{collide:false,cast:false,tag:'benchtop'});
+  box(0.90,0.62,0.11,'#c8bda6',-4.03,0.44,ZS+0.06,{collide:false,tag:'radiator'});
+  box(0.40,0.80,0.36,'#6d5238',4.60,0.40,ZHS-0.18,{tag:'console'});     // hall table
+  box(0.09,1.80,0.09,'#4a382e',-6.10,0.90,ZHS-0.30,{tag:'coatrack'});
+  box(0.46,0.06,0.09,'#4a382e',-6.10,1.74,ZHS-0.30,{collide:false,tag:'coatarm'});
+  [[-6.26,'#3d4358',0.62],[-5.94,'#4a382e',0.54]].forEach(c=>
+    box(0.30,c[2],0.16,c[1],c[0],1.74-c[2]/2,ZHS-0.30,{collide:false,tag:'coat'}));
+  box(0.22,0.62,0.22,'#6b6270',5.40,0.31,ZHS-0.20,{tag:'brolly'});      // umbrella stand
+  box(0.04,0.90,0.62,'#cfd4e2',XE-0.03,1.55,ZHS-0.70,{collide:false,cast:false,tag:'mirror'});
+
+  // ── BEDROOM: the bed's HEAD is now against the north wall, which is where the
+  //    "on the nightstand beside her head" objects have always claimed to be ──
+  const BEDZ=ZN-1.08;                                   // frame centre; head at ZN
+  box(0.74,2.00,1.24,'#6d5238',XD+0.37,1.00,2.60,{tag:'wardrobe'});
+  box(1.75,0.32,1.95,'#6d5238',4.03,0.16,BEDZ,{tag:'bedframe'});
+  box(1.70,0.22,1.90,'#cfd4e2',4.03,0.43,BEDZ,{tag:'mattress'});
+  box(1.86,0.86,0.09,'#5b4b34',4.03,0.72,ZN-0.06,{collide:false,tag:'headboard'});
+  box(1.72,0.10,0.94,'#4e5a80',4.03,0.58,BEDZ-0.44,{collide:false,tag:'duvet'});
+  [[3.60],[4.46]].forEach(q=>
+    box(0.52,0.10,0.26,'#eef1f7',q[0],0.57,ZN-0.34,{collide:false,tag:'pillow'}));
+  box(0.44,0.55,0.40,'#6d5238',2.86,0.275,ZN-0.22,{tag:'nightstand'});
+  box(0.44,0.55,0.40,'#6d5238',5.20,0.275,ZN-0.22,{tag:'nightstand'});
+  box(0.46,0.86,1.10,'#6d5238',XE-0.23,0.43,2.30,{tag:'dresser'});      // east wall
+  box(0.04,1.10,0.46,'#cfd4e2',XE-0.03,1.62,2.30,{collide:false,cast:false,tag:'mirror'});
+  box(0.44,0.46,0.40,'#8a7a5c',XD+0.30,0.23,4.60,{tag:'basket'});       // laundry
+  dressInterior(def,P);
+  dressLot(def,P);
 
   // ── THE OBJECTS ──────────────────────────────────────────────────────────
   /* Walt's keys, in the dish by the door. His fixation is `precision`; this is the
@@ -2932,7 +3105,7 @@ function buildHouse(def,rng){
      specs currently carry yaw only — hanging it vertically needs a pitch/roll axis,
      which would change the delta maths. The dish-by-the-door is the same beat and
      just as suburban. Revisit if placement gains a full orientation. */
-  box(0.26,0.04,0.20,'#9a8a72',_p(-3.6),0.47,_p(-2.6),{collide:false,cast:false,tag:'dish'});
+  box(0.26,0.04,0.20,'#9a8a72',-5.60,0.515,ZS+0.18,{collide:false,cast:false,tag:'dish'});
 
   /* ── THE OBJECTS. Data, not code (GDD 9) — extracted now that there are three
         houses to compare rather than guessed from a sample of one. The floorplan
@@ -2943,10 +3116,16 @@ function buildHouse(def,rng){
   (def.objects||[]).forEach(o=>{
     const spec=randomSpec(o.kind,rng);
     if(o.spec)Object.assign(spec,o.spec);
-    placeObject(o.kind,spec,[_p(o.at[0]),o.at[1],_p(o.at[2])],o.rot||0,o.owner,o.attach,o.label);
+    /* `at` is in LAYOUT units (scaled with the floorplan by _p); `m` is in real
+       METRES, for anything positioned against a FIXTURE rather than against the
+       plan — a mug belongs on the counter, and the counter is now placed from the
+       wall face. Mixing the two silently is exactly what put the road through the
+       front gardens for four milestones, so the format now says which it is. */
+    const p=o.m?[o.m[0],o.m[1],o.m[2]]:[_p(o.at[0]),o.at[1],_p(o.at[2])];
+    placeObject(o.kind,spec,p,o.rot||0,o.owner,o.attach,o.label);
   });
   (def.beds||[]).forEach(b=>{
-    const s=bed(b.who,_p(b.x),_p(2.40));
+    const s=bed(b.who,b.mx!==undefined?b.mx:_p(b.x),BEDZ);
     if(b.shift)s.shift=true;    // works nights — not always in it
   });
   OX=0;CUR_HOUSE=null;
@@ -2956,88 +3135,764 @@ function buildHouse(def,rng){
    Four lots. Yours, then the three you are working. Hoyt stays at x=0 so every
    coordinate the earlier milestones' tests assert against still holds. */
 const LOT_PITCH=16*CONST.ROOM_SCALE;   // the yards grew with the houses (M13)
+/* M17 — the palette per lot. `wall` was authored on every house back in M8 and read
+   by NOTHING; buildHouse hard-coded the colour and the texture hue, so all five were
+   identical to the pixel. `pal` is what buildHouse actually reads now, and `keeper`
+   is whose habits dress the place (dressInterior). */
 const HOUSES=[
-  {id:'marek',x:-LOT_PITCH,name:'14 Ardsley Ct',yours:true,wall:'#cfc3b0'},
-  {id:'hoyt', x:0,name:'12 Ardsley Ct',wall:'#c9bda6',
+  {id:'marek',x:-LOT_PITCH,name:'14 Ardsley Ct',yours:true,wall:'#cfc3b0',
+   pal:{wall:'#cfc3b0',wallHue:32,floor:26,ceil:34,tile:[40,34],roof:'#4a3228',
+        cab:'#c8bda6',cab2:'#b9ae94'}},
+  {id:'hoyt', x:0,name:'12 Ardsley Ct',wall:'#c9bda6',keeper:'walt',
+   pal:{wall:'#c9bda6',wallHue:34,floor:28,ceil:35,tile:[38,32],roof:'#3b2d26',
+        cab:'#c3b394',cab2:'#b8b146'},
    beds:[{who:'walt',x:2.15},{who:'june',x:3.05}],
+   /* M17: `m` is metres, `at` is layout units. Anything that sits ON a fixture is
+      now authored in metres from the fixture, because the fixtures are placed from
+      a wall face — the counter tops are y=0.92, the coffee table 0.42, the
+      nightstands 0.55, the sideboard 0.80, the bench 0.515, the shelf 0.82. */
    objects:[
-     {kind:'keyring',     at:[-3.60,0.49,-2.60],rot:10, owner:'walt',attach:1.7,label:"Walt's keys"},
-     {kind:'cerealBox',   at:[-3.75,0.92, 1.60],rot:-8, owner:'june',attach:0.9,label:'cereal'},
-     {kind:'coffeeMug',   at:[-3.70,0.92, 0.20],rot:25, owner:'walt',attach:1.5,label:"Walt's mug"},
-     {kind:'wallClock',   at:[ 2.90,1.58, 0.82],rot:180,owner:'walt',attach:1.3,label:'wall clock'},
-     {kind:'curtains',    at:[ 4.34,0.02,-0.30],rot:90, owner:'june',attach:0.8,label:'lounge curtains',
+     {kind:'keyring',     m:[-5.60,0.535,-5.185],rot:10,owner:'walt',attach:1.7,label:"Walt's keys"},
+     {kind:'cerealBox',   m:[-6.58,0.92, 2.60],rot:-8, owner:'june',attach:0.9,label:'cereal'},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.30],rot:25, owner:'walt',attach:1.5,label:"Walt's mug"},
+     {kind:'wallClock',   m:[ 5.60,1.72, 1.28],rot:180,owner:'walt',attach:1.3,label:'wall clock'},
+     {kind:'curtains',    m:[ 6.80,0.60,-0.465],rot:90,owner:'june',attach:0.8,label:'lounge curtains',
       spec:{length:1.5}},
      /* HER most-attached object, on the nightstand beside her head. Getting to it
-        means standing over two sleeping people. */
-     {kind:'pictureFrame',at:[ 3.85,0.55, 2.95],rot:188,owner:'june',attach:1.9,label:'family photo'},
+        means standing over two sleeping people. (M17: the bed's head end is against
+        the north wall now, so "beside her head" is finally where this is.) */
+     {kind:'pictureFrame',m:[ 5.20,0.55, 5.145],rot:188,owner:'june',attach:1.9,label:'family photo'},
      /* M12. Every y below is a real furniture top read out of the builder, not an
         eyeballed number: counter 0.92, coffee table 0.42, floor 0. */
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'june',attach:0.8,label:'the doormat'},
-     {kind:'spiceJar',    at:[-3.90,0.92, 1.40],rot:15, owner:'june',attach:0.7,label:'the paprika'},
-     {kind:'remoteControl',at:[2.00,0.42,-0.50],rot:-8, owner:'walt',attach:1.4,label:'the remote'},
-     {kind:'slippers',    at:[ 3.60,0.00, 1.60],rot:20, owner:'walt',attach:1.0,label:"Walt's slippers"},
+     {kind:'spiceJar',    m:[-6.60,0.92, 1.20],rot:15, owner:'june',attach:0.7,label:'the paprika'},
+     {kind:'remoteControl',m:[3.70,0.42, 0.30],rot:-8, owner:'walt',attach:1.4,label:'the remote'},
+     {kind:'slippers',    m:[ 5.58,0.00, 2.48],rot:20, owner:'walt',attach:1.0,label:"Walt's slippers"},
+     /* ── M17. Ten more, because the playtest note was "there is still nothing
+        interactable": a 145 m2 house held ten swappable things and everything else
+        was scenery. These fill the surfaces the fixture pass just built, and they
+        are APPENDED — object ids are minted in array order and the save file is
+        keyed by them, so inserting in the middle repoints every later id. ── */
+     {kind:'saltShaker',  m:[-4.20,0.92, 5.02],rot:0,  owner:'walt',attach:1.2,label:'the salt'},
+     {kind:'dishSoap',    m:[-6.58,0.92, 1.55],rot:-6, owner:'june',attach:0.6,label:'the washing-up liquid'},
+     {kind:'throwPillow', m:[ 3.30,0.55,-0.65],rot:12, owner:'june',attach:1.1,label:'the sofa cushion'},
+     {kind:'vase',        m:[ 0.29,0.80,-0.80],rot:0,  owner:'june',attach:1.6,label:'her mother’s vase'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'june',attach:1.0,label:'the blanket'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'june',attach:0.9,label:'the hairbrush'},
+     {kind:'lampShade',   m:[ 4.60,0.80,-2.72],rot:0,  owner:'june',attach:0.8,label:'the shade she never put up'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'walt',attach:1.2,label:'the shelf'},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'walt',attach:1.0,label:'the coasters'},
+     {kind:'potPlant',    m:[ 3.40,0.00,-3.40],rot:0,  owner:'june',attach:0.8,label:'the hall plant'},
    ]},
-  {id:'vance',x:LOT_PITCH,name:'16 Ardsley Ct',wall:'#e0d6c6',
+  {id:'vance',x:LOT_PITCH,name:'16 Ardsley Ct',wall:'#e0d6c6',keeper:'marisol',
+   pal:{wall:'#e6dccb',wallHue:44,floor:36,ceil:42,tile:[46,40],roof:'#5d3b3c',
+        cab:'#e0d6c6',cab2:'#cfc0a8'},
    beds:[{who:'marisol',x:2.15},{who:'aaron',x:3.05}],
    objects:[
      /* Marisol's fixation is ORDER, so everything here is something that can be
         SLIGHTLY out of line. Her floor is 6 — she is the most sensitive person on
         the street and the easiest to overshoot. */
-     {kind:'wallClock',   at:[ 2.90,1.58, 0.82],rot:180,owner:'marisol',attach:1.5,label:'the lounge clock'},
-     {kind:'pictureFrame',at:[ 4.12,0.82, 0.20],rot:270,owner:'marisol',attach:1.8,label:'the wedding photo'},
-     {kind:'tableLamp',   at:[ 4.12,0.80,-0.40],rot:0,  owner:'marisol',attach:1.1,label:'lounge lamp'},
-     {kind:'potPlant',    at:[ 0.70,0.00,-1.10],rot:0,  owner:'marisol',attach:1.0,label:'the fern'},
-     {kind:'coffeeMug',   at:[-3.70,0.92, 0.60],rot:15, owner:'aaron',  attach:1.1,label:"Aaron's mug"},
+     {kind:'wallClock',   m:[ 5.60,1.72, 1.28],rot:180,owner:'marisol',attach:1.5,label:'the lounge clock'},
+     {kind:'pictureFrame',m:[ 0.29,0.80,-0.75],rot:0,  owner:'marisol',attach:1.8,label:'the wedding photo'},
+     {kind:'tableLamp',   m:[ 0.29,0.80,-1.35],rot:0,  owner:'marisol',attach:1.1,label:'lounge lamp'},
+     {kind:'potPlant',    m:[ 1.09,0.00,-1.71],rot:0,  owner:'marisol',attach:1.0,label:'the fern'},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.70],rot:15, owner:'aaron',  attach:1.1,label:"Aaron's mug"},
      {kind:'gardenGnome', at:[ 2.20,0.00,-4.90],rot:200,owner:'marisol',attach:0.9,label:'the garden gnome'},
      /* Marisol's fixation is ORDER, so she gets the things that are supposed to line
         up. The house number is on the OUTSIDE of the front wall (z < -HD) turned to
         face the street, which is the only angle it is ever read from. */
-     {kind:'coasterSet',  at:[ 4.15,0.80, 0.60],rot:0,  owner:'marisol',attach:1.3,label:'the coasters'},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'marisol',attach:1.3,label:'the coasters'},
      {kind:'houseNumber', at:[ 1.20,1.45,-3.58],rot:180,owner:'marisol',attach:1.6,label:'the house number'},
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'marisol',attach:1.2,label:'the doormat'},
-     {kind:'cuttingBoard',at:[-3.90,0.92, 0.60],rot:-12,owner:'aaron',  attach:0.8,label:'the chopping board'},
+     {kind:'cuttingBoard',m:[-6.56,0.92, 0.10],rot:-12,owner:'aaron',  attach:0.8,label:'the chopping board'},
+     // ── M17 ──
+     {kind:'vase',        m:[ 0.29,0.80,-1.55],rot:0,  owner:'marisol',attach:1.7,label:'the good vase'},
+     {kind:'saltShaker',  m:[-3.60,0.92, 5.02],rot:0,  owner:'marisol',attach:1.2,label:'the salt and pepper'},
+     {kind:'throwPillow', m:[ 4.50,0.55,-0.65],rot:-8, owner:'marisol',attach:1.3,label:'the good cushion'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'aaron',  attach:0.9,label:'the throw'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'marisol',attach:1.1,label:'her hairbrush'},
+     {kind:'lampShade',   m:[ 6.66,0.86, 2.75],rot:0,  owner:'marisol',attach:0.9,label:'the spare shade'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'aaron',  attach:0.9,label:'the paperbacks'},
+     /* attach 1.1, not 0.8: Aaron's floor is 26 and perceived delta scales BY
+        attachment, so at 0.8 only one week in six stocked a variant big enough to
+        clear it. The reachability sweep is the gate that caught it. */
+     {kind:'slippers',    m:[ 5.58,0.00, 2.48],rot:20, owner:'aaron',  attach:1.1,label:"Aaron's slippers"},
+     {kind:'alarmClock',  m:[ 2.86,0.55, 5.145],rot:-6,owner:'aaron',  attach:1.0,label:'the alarm'},
+     {kind:'teaBox',      m:[-6.58,0.92, 1.80],rot:8,  owner:'marisol',attach:0.8,label:'the tea'},
    ]},
-  {id:'okonkwo',x:LOT_PITCH*2,name:'18 Ardsley Ct',wall:'#bfc7ce',
+  {id:'okonkwo',x:LOT_PITCH*2,name:'18 Ardsley Ct',wall:'#bfc7ce',keeper:'grace',
+   pal:{wall:'#bfc7ce',wallHue:205,floor:18,ceil:208,tile:[200,206],roof:'#33404e',
+        cab:'#a6b0bb',cab2:'#8f9aa8'},
    /* Grace works nights. Some nights the bed is half empty — which is recon you can
       learn, and the reason this is the house to practise on. */
    beds:[{who:'dev',x:2.15},{who:'grace',x:3.05,shift:true}],
    objects:[
-     {kind:'keyboard',    at:[ 1.35,0.56, 2.95],rot:6,  owner:'dev',  attach:1.6,label:"Dev's keyboard"},
-     {kind:'alarmClock',  at:[ 3.85,0.56, 2.95],rot:-10,owner:'grace',attach:1.2,label:'the alarm'},
-     {kind:'bookRow',     at:[ 3.75,0.80, 0.05],rot:270,owner:'dev',  attach:1.2,label:'the shelf'},
-     {kind:'cerealBox',   at:[-3.75,0.92, 1.20],rot:12, owner:'grace',attach:0.8,label:'cereal'},
-     {kind:'tableLamp',   at:[ 2.00,0.42,-0.50],rot:0,  owner:'grace',attach:0.9,label:'side lamp'},
-     {kind:'curtains',    at:[ 4.34,0.02,-0.30],rot:90, owner:'grace',attach:0.7,label:'lounge curtains',
+     {kind:'keyboard',    m:[ 2.86,0.55, 5.145],rot:6, owner:'dev',  attach:1.6,label:"Dev's keyboard"},
+     {kind:'alarmClock',  m:[ 5.20,0.55, 5.145],rot:-10,owner:'grace',attach:1.2,label:'the alarm'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'dev',  attach:1.2,label:'the shelf'},
+     {kind:'cerealBox',   m:[-6.58,0.92, 2.30],rot:12, owner:'grace',attach:0.8,label:'cereal'},
+     {kind:'tableLamp',   m:[ 0.29,0.80,-0.80],rot:0,  owner:'grace',attach:0.9,label:'side lamp'},
+     {kind:'curtains',    m:[ 6.80,0.60,-0.465],rot:90,owner:'grace',attach:0.7,label:'lounge curtains',
       spec:{length:1.5}},
      /* Grace's floor is 30, so she needs objects with enough attachment to be worth
         the thrift store's very wide swings - see the reachability sweep in GDD 15. */
-     {kind:'teaBox',      at:[-3.90,0.92, 1.80],rot:8,  owner:'grace',attach:0.9,label:'the tea'},
+     {kind:'teaBox',      m:[-6.58,0.92, 1.80],rot:8,  owner:'grace',attach:0.9,label:'the tea'},
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'grace',attach:0.7,label:'the doormat'},
-     {kind:'remoteControl',at:[2.00,0.42,-0.50],rot:6,  owner:'dev',  attach:1.2,label:'the remote'},
+     {kind:'remoteControl',m:[3.70,0.42, 0.30],rot:6,  owner:'dev',  attach:1.2,label:'the remote'},
      {kind:'mailbox',     at:[ 2.60,0.00,-6.20],rot:0,  owner:'dev',  attach:0.6,label:'the mailbox'},
+     // ── M17 ──
+     {kind:'dishSoap',    m:[-6.58,0.92, 1.55],rot:-6, owner:'grace',attach:0.6,label:'the washing-up liquid'},
+     {kind:'throwPillow', m:[ 3.30,0.55,-0.65],rot:12, owner:'grace',attach:0.9,label:'the sofa cushion'},
+     /* A vase is plausibility 0.45 and Grace's floor is 30, which leaves an 11-point
+        window - one stocked week in six. A picture frame is 0.60, and the sweep
+        agrees. The kind has to suit the PERSON, not just the room. */
+     {kind:'pictureFrame',m:[ 0.29,0.80,-1.55],rot:0,  owner:'grace',attach:1.3,label:'the photo of her mother'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'grace',attach:1.0,label:'the hairbrush'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'grace',attach:1.1,label:'the blanket'},
+     {kind:'saltShaker',  m:[-4.60,0.92, 5.02],rot:0,  owner:'dev',  attach:0.9,label:'the salt'},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.30],rot:25, owner:'dev',  attach:1.3,label:"Dev's mug"},
+     {kind:'posterPrint', m:[ 6.89,1.45, 3.60],rot:270,owner:'dev',  attach:1.5,label:'the poster'},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'dev',  attach:0.8,label:'the coasters'},
+     {kind:'fridgeMagnet',m:[-0.52,1.34, 4.64],rot:0,  owner:'grace',attach:0.7,label:'the magnet'},
    ]},
   /* Ray at the dead end, next door to you. He has the smallest doubt window on the
      street (floor 2, band 3) and the lowest credibility (0.1): almost impossible to
      fool, and almost harmless when he is right. His things are chosen so some are
      reachable from Bulwark's finest rung and some only from the antique shop -
      attachment is what decides which, since perceived delta scales by it. */
-  {id:'pittman',x:-LOT_PITCH*2,name:'10 Ardsley Ct',wall:'#b9b3a4',
+  {id:'pittman',x:-LOT_PITCH*2,name:'10 Ardsley Ct',wall:'#b9b3a4',keeper:'ray',
+   pal:{wall:'#b9b3a4',wallHue:62,floor:22,ceil:60,tile:[30,26],roof:'#3a3630',
+        cab:'#b3ab98',cab2:'#9c937f'},
    beds:[{who:'ray',x:2.60}],
    objects:[
-     {kind:'bookRow',     at:[ 3.75,0.80, 0.05],rot:270,owner:'ray',attach:1.9,label:'the research'},
-     {kind:'posterPrint', at:[ 4.30,0.90,-0.90],rot:270,owner:'ray',attach:1.7,label:'the chart on the wall'},
-     {kind:'wallClock',   at:[ 2.90,1.58, 0.82],rot:180,owner:'ray',attach:1.4,label:'the clock he sets by the pips'},
-     {kind:'alarmClock',  at:[ 3.85,0.56, 2.95],rot:-6, owner:'ray',attach:1.2,label:'the alarm'},
-     {kind:'keyring',     at:[-3.60,0.49,-2.60],rot:10, owner:'ray',attach:1.1,label:"Ray's keys"},
-     {kind:'coffeeMug',   at:[-3.70,0.92, 0.20],rot:25, owner:'ray',attach:1.0,label:'the mug he counts in'},
-     {kind:'remoteControl',at:[2.00,0.42,-0.50],rot:-8, owner:'ray',attach:0.9,label:'the remote'},
-     {kind:'fridgeMagnet',at:[-3.90,0.92, 2.10],rot:0,  owner:'ray',attach:0.8,label:'the magnet'},
+     {kind:'bookRow',     m:[ 6.72,0.82,-1.80],rot:270,owner:'ray',attach:1.9,label:'the research'},
+     {kind:'posterPrint', m:[ 6.89,1.45, 3.60],rot:270,owner:'ray',attach:1.7,label:'the chart on the wall'},
+     {kind:'wallClock',   m:[ 5.60,1.72, 1.28],rot:180,owner:'ray',attach:1.4,label:'the clock he sets by the pips'},
+     {kind:'alarmClock',  m:[ 5.20,0.55, 5.145],rot:-6,owner:'ray',attach:1.2,label:'the alarm'},
+     {kind:'keyring',     m:[-5.60,0.535,-5.185],rot:10,owner:'ray',attach:1.1,label:"Ray's keys"},
+     {kind:'coffeeMug',   m:[-6.58,0.92, 0.30],rot:25, owner:'ray',attach:1.0,label:'the mug he counts in'},
+     {kind:'remoteControl',m:[3.70,0.42, 0.30],rot:-8, owner:'ray',attach:0.9,label:'the remote'},
+     {kind:'fridgeMagnet',m:[-0.52,1.34, 4.64],rot:0,  owner:'ray',attach:0.8,label:'the magnet'},
      {kind:'doormat',     at:[ 0.00,0.00,-3.15],rot:0,  owner:'ray',attach:0.7,label:'the doormat'},
      {kind:'mailbox',     at:[ 2.60,0.00,-6.20],rot:0,  owner:'ray',attach:0.6,label:'the mailbox he checks twice'},
+     /* ── M17. Ray owns the most things on the street and can be fooled about almost
+        none of them: his band is 3 points wide, so these are deliberately LOW
+        attachment. Perceived delta scales by attachment, and against a 3-point
+        ceiling the cheap things are the only reachable ones. ── */
+     {kind:'saltShaker',  m:[-4.20,0.92, 5.02],rot:0,  owner:'ray',attach:0.7,label:'the salt'},
+     {kind:'teaBox',      m:[-6.58,0.92, 2.20],rot:8,  owner:'ray',attach:0.8,label:'the tea he weighs'},
+     {kind:'cuttingBoard',m:[-6.56,0.92, 0.10],rot:-12,owner:'ray',attach:0.9,label:'the board'},
+     {kind:'vase',        m:[ 0.29,0.80,-0.80],rot:0,  owner:'ray',attach:1.1,label:'the empty vase'},
+     {kind:'throwPillow', m:[ 3.30,0.55,-0.65],rot:12, owner:'ray',attach:0.6,label:'the cushion'},
+     {kind:'blanket',     m:[ 4.03,0.60, 3.55],rot:0,  owner:'ray',attach:0.8,label:'the blanket'},
+     {kind:'hairbrush',   m:[ 6.66,0.86, 2.30],rot:-14,owner:'ray',attach:0.6,label:'the hairbrush'},
+     {kind:'slippers',    m:[ 5.58,0.00, 2.48],rot:20, owner:'ray',attach:0.7,label:'his slippers'},
+     {kind:'curtains',    m:[ 6.80,0.60,-0.465],rot:90,owner:'ray',attach:0.9,label:'the curtains',
+      spec:{length:1.5}},
+     {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'ray',attach:0.8,label:'the coasters'},
    ]}
 ];
 const HOME={x:-LOT_PITCH,z:-6.8*CONST.ROOM_SCALE};
 function houseById(id){return HOUSES.filter(h=>h.id===id)[0];}
+
+/* ═════════════════════════ DRESSING (M17) ═════════════════════════
+   The layer between architecture and possessions: rugs, lampshades, pictures,
+   post on the mat, a coat over a chair. NONE of it is swappable, and that line is
+   deliberate — findTarget() offers E on objects[], and the player's learned rule is
+   "hand-sized thing on a surface = examinable". Break that and the examine loop
+   degrades into sweeping the room aiming at everything. So dressing is either
+   ARCHITECTURE-SCALE (rug, pendant, radiator, curtain rail) or ONE MERGED
+   FURNISHING (a stack of post, a pile of laundry, a fruit bowl) — never a lone
+   hand-sized item sitting on a counter, because that is exactly what a possession
+   looks like. Every piece of it does answer to E as SCENERY (see findTarget), so
+   nothing in the house is dead to look at.
+
+   And it is READABLE (playtest call): a house's clutter is drawn from the person
+   who keeps it. Walt notices everything (attention 0.95) and his hall is squared
+   off; Grace notices least (0.55) and hers has the post still on the mat. A player
+   who reads the room can guess who is dangerous before scanning a single object. */
+const SCENERY=[];
+function scenery(x,y,z,label,line){
+  SCENERY.push({pos:[x+OX,y,z],label:label,line:line});
+}
+function dressInterior(def,P){
+  /* A SEPARATE rng, seeded off the house id. The street's rng is consumed in order
+     by keyIn and then by every randomSpec(), so a single extra draw in here would
+     shift every object spec on every lot after it — silently, and after all the
+     balance tuning was measured. (This is the top risk the M17 audit flagged.) */
+  const dr=mulberry32((hashStr(def.id+'|dress')>>>0)||1);
+  const RS=CONST.ROOM_SCALE,_p=v=>v*RS;
+  const HW=_p(4.5),HD=_p(3.5),H=CONST.WALL_H,T=CONST.WALL_T;
+  const XW=-HW+T/2,XE=HW-T/2,ZS=-HD+T/2,ZN=HD-T/2,XD=T/2;
+  const ZK=_p(-1.6)+T/2,ZHS=_p(-1.6)-T/2,ZLN=_p(0.9)-T/2;
+  /* noticeFloor is the honest tidiness signal, not attention: it is the smallest
+     change this person registers at all (Ray 2, Marisol 6, Walt 16, Grace 30), and
+     a person who registers small things is a person whose hall is squared off. */
+  const keeper=RESIDENTS[def.keeper]||{noticeFloor:24,name:'nobody in particular'};
+  const tidy=keeper.noticeFloor<=16;
+  const rug=(w,d,x,z,hue)=>{
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
+      new THREE.MeshLambertMaterial({map:tiled(texPaint(hue,0.30,0.34),2,2)}));
+    m.rotation.x=-Math.PI/2;m.position.set(x+OX,0.012,z);m.receiveShadow=true;
+    scene.add(m);envMeshes.push(m);return m;
+  };
+  // ── ceiling: a pendant under each of the four window spill lights ──
+  [[-4.0,1.86],[4.0,-0.47],[3.72,2.95],[-4.03,-3.05]].forEach(p=>{
+    box(0.03,0.42,0.03,'#2e2b38',p[0],H-0.21,p[1],{collide:false,cast:false,tag:'cord'});
+    const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.21,0.20,12,1,true),
+      new THREE.MeshLambertMaterial({color:'#e6dfd2',side:THREE.DoubleSide}));
+    sh.position.set(p[0]+OX,H-0.50,p[1]);scene.add(sh);envMeshes.push(sh);
+    scenery(p[0],H-0.50,p[1],'the light fitting',
+      'A shade over a bulb. Nothing of theirs is up here.');
+  });
+  // ── rugs: the single unbroken board texture is why three rooms read as one ──
+  rug(2.30,1.30,-3.90,ZS+0.95,P.floor+180);           // hall runner
+  rug(2.60,1.90,3.90,ZK+1.45,P.floor+150);            // lounge
+  rug(1.90,1.30,4.03,ZN-2.60,P.floor+200);            // bedside
+  // ── walls at eye level, which had literally nothing on them ──
+  const art=(x,y,z,w,h,axis,hue)=>{
+    const d=[axis==='x'?0.04:w,h,axis==='x'?w:0.04];
+    box(d[0],d[1],d[2],'#4a382e',x,y,z,{collide:false,cast:false,tag:'frame'});
+    const inner=new THREE.Mesh(UNIT_BOX,
+      new THREE.MeshLambertMaterial({map:texPaint(hue,0.34,0.42)}));
+    inner.scale.set(axis==='x'?0.05:w*0.86,h*0.86,axis==='x'?w*0.86:0.05);
+    inner.position.set(x+OX,y,z);scene.add(inner);envMeshes.push(inner);
+    scenery(x,y,z,'a picture on the wall',
+      'Somewhere they went, or somewhere they meant to go. Screwed to the wall.');
+  };
+  art(-2.10,1.72,ZHS-0.02,0.52,0.40,'z',P.floor+40);        // hall
+  art(-3.40,1.72,ZHS-0.02,0.38,0.50,'z',P.floor+90);
+  art(XE-0.03,1.66,0.80,0.66,0.46,'x',P.floor+120);         // lounge, north of the window
+  art(1.20,1.62,ZN-0.06,0.44,0.56,'z',P.floor+70);          // bedroom
+  // switch plates by every doorway — the detail your eye reads as "a real room"
+  [[-3.10,ZHS-0.03],[2.90,ZHS-0.03],[0.98,ZLN+0.03],[XW+0.04,-2.90]].forEach(s=>
+    box(0.09,0.13,0.09,'#e6e0d2',s[0],1.28,s[1],{collide:false,cast:false,tag:'switch'}));
+  // curtain rails over the windows the curtains objects hang from
+  [[XE-0.06,-0.47,'x',1.6],[XW+0.06,1.86,'x',1.4],[3.72,ZN-0.06,'z',1.6]].forEach(r=>{
+    const d=r[2]==='x'?[0.05,0.05,r[3]]:[r[3],0.05,0.05];
+    box(d[0],d[1],d[2],'#6b6270',r[0],2.16,r[1],{collide:false,cast:false,tag:'rail'});
+  });
+  // ── the kitchen surfaces, as merged furnishings rather than loose items ──
+  box(0.26,0.30,0.20,'#c9c4b4',XW+0.34,1.07,0.20,{collide:false,tag:'kettle'});
+  scenery(XW+0.34,1.07,0.20,'the kettle','Cold. It is four in the morning to them.');
+  box(0.34,0.22,0.24,'#8f95a3',XW+0.34,1.03,-0.42,{collide:false,tag:'toaster'});
+  scenery(XW+0.34,1.03,-0.42,'the toaster','Crumbs. Not one of theirs to miss.');
+  box(0.30,0.26,0.30,'#b8b146',-2.90,1.05,ZN-0.34,{collide:false,tag:'fruitbowl'});
+  scenery(-2.90,1.05,ZN-0.34,'a bowl of fruit','Two of them are plastic. Even here.');
+  box(0.44,0.34,0.30,'#cfc6b8',-4.30,1.09,ZN-0.34,{collide:false,tag:'jars'});
+  scenery(-4.30,1.09,ZN-0.34,'the jars','Flour, sugar, and one nobody has labelled.');
+  scenery(-0.52,1.30,ZN-0.72,'their fridge',
+    'It hums at 108 hertz, give or take. Every fridge on this street does.');
+  scenery(3.90,0.84,ZLN-0.30,'the television','Off. It watches the room back.');
+  scenery(XE-0.20,1.00,-1.80,'the shelf','Wood, brackets, and their whole life on it.');
+  // ── IDENTITY. The same six slots, dressed by how much the keeper notices ──
+  if(tidy){
+    // squared off: shoes in a line, a wall calendar, a labelled shelf, nothing loose
+    [0,1,2].forEach(i=>{
+      box(0.26,0.11,0.10,'#3b2d26',-5.05+i*0.30,0.055,ZS+0.62,{collide:false,tag:'shoe'});
+      box(0.26,0.11,0.10,'#3b2d26',-5.05+i*0.30,0.055,ZS+0.50,{collide:false,tag:'shoe'});
+    });
+    scenery(-4.75,0.10,ZS+0.56,'their shoes',
+      'Three pairs, toes on a line you could check with a ruler. '+keeper.name+' counts.');
+    box(0.34,0.44,0.03,'#f2ead9',-1.30,1.68,ZHS-0.03,{collide:false,cast:false,tag:'calendar'});
+    scenery(-1.30,1.68,ZHS-0.03,'the wall calendar',
+      'Every square has something in it, in the same pen.');
+    [0,1,2,3].forEach(i=>box(0.30,0.04,0.22,'#cfc6b8',XW+0.36,1.02,2.20+i*0.02,
+      {collide:false,cast:false,tag:'stack'}));
+  }else{
+    // lived-in: post still on the mat, a coat over a chair, a mug ring on the table
+    box(0.30,0.05,0.22,'#e6e0d2',-0.30,0.025,ZS+0.62,{collide:false,cast:false,tag:'post'});
+    box(0.26,0.04,0.20,'#d6cbb4',-0.16,0.06,ZS+0.70,{collide:false,cast:false,tag:'post'});
+    scenery(-0.24,0.10,ZS+0.66,'the post on the mat',
+      'Two days of it, walked over rather than picked up.');
+    box(0.40,0.50,0.14,'#5d3b3c',-3.60,0.86,0.28,{collide:false,tag:'coat'});
+    scenery(-3.60,0.86,0.28,'a coat over the chair',
+      'It has been there long enough to take the shape of the chair.');
+    box(0.44,0.30,0.36,'#8c93b4',XD+0.34,0.62,4.60,{collide:false,tag:'laundry'});
+    scenery(XD+0.34,0.62,4.60,'the laundry','Clean or dirty. Even they do not know.');
+  }
+  // one thing that is always slightly wrong, chosen per house
+  const skew=(dr()-0.5)*0.14;
+  box(0.30,0.40,0.03,'#f2ead9',4.60,1.42,ZHS-0.03,{collide:false,cast:false,tag:'note'})
+    .rotation.z=skew;
+  scenery(4.60,1.42,ZHS-0.03,'a note by the door',
+    tidy?'A list. Everything on it is crossed off.'
+        :'A list. Nothing on it is crossed off.');
+}
+
+/* The outside of a lot: the driveway, the car on it, the bins, the shed and the
+   back garden. The yard was a lawn, a path, two hedge boxes, three planters and a
+   lamppost — stamped five times — which is why the walk to a front door read as
+   crossing a car park. Same tidiness tell as the interior: a squared-off keeper
+   coils the hose and lines the bins up. */
+function dressLot(def,P){
+  const dr=mulberry32((hashStr(def.id+'|lot')>>>0)||1);
+  const RS=CONST.ROOM_SCALE,_p=v=>v*RS;
+  const HW=_p(4.5),HD=_p(3.5);
+  const keeper=RESIDENTS[def.keeper]||{noticeFloor:24};
+  const tidy=keeper.noticeFloor<=16;
+  const YMIN=_p(-9.0);                                   // the fence line
+  // ── the driveway, down the east side of the lot, and what is parked on it ──
+  const dvx=HW-1.9;
+  ground(3.0,7.4,dvx+OX,-HD-4.2,0.007,texConcrete(),2,4);
+  if(dr()<0.75)parkedCar(dvx+OX,-HD-3.6,Math.PI/2+(dr()-0.5)*0.06,dr()*360,dr);
+  // ── bins by the gate: lined up, or not ──
+  const bz=YMIN+1.5;
+  wheelieBin(dvx-1.0+OX,bz,32,tidy?0:(dr()-0.5)*1.2);
+  wheelieBin(dvx-1.7+OX,bz+(tidy?0:0.55),96,tidy?0:(dr()-0.5)*1.4);
+  scenery(dvx-1.35,0.95,bz,'their bins',
+    tidy?'Both squared to the fence. Somebody moves them back after collection.'
+        :'Left where the lorry put them, some time last week.');
+  // ── the front garden: a tree, and a tap with a hose ──
+  tree(-HW+1.4+OX,-HD-3.0,3.8+dr()*1.3,dr);
+  /* box() applies OX itself; ground/tree/parkedCar/wheelieBin are world-space and
+     do not. Getting that backwards is how the road ended up in the gardens. */
+  box(0.07,0.20,0.07,'#8b8794',-HW+0.35,0.30,-HD-0.20,{collide:false,tag:'tap'});
+  const hose=new THREE.Mesh(new THREE.TorusGeometry(0.24,0.05,6,14),mat('#2e4231'));
+  hose.rotation.x=Math.PI/2;hose.position.set(-HW+0.55+OX,0.06,-HD-0.55);
+  if(!tidy)hose.rotation.z=0.4;
+  scene.add(hose);envMeshes.push(hose);
+  scenery(-HW+0.55,0.30,-HD-0.55,'the hose',
+    tidy?'Coiled, on its hook, dripping onto a paving slab.'
+        :'In a heap by the tap. It has been in that heap a while.');
+  // ── the back garden, which did not exist: fence, shed, line, chairs ──
+  const bg=HD+2.8;                    // kept inside PLAY.maxZ so the shed is reachable
+  [-1,1].forEach(s=>box(0.10,1.70,7.4,'#4a3b2c',s*(HW+0.3),0.85,bg,{tag:'sidefence'}));
+  box(2.30,2.10,1.90,dr()<0.5?'#5b4b34':'#3f5730',HW-2.2,1.05,bg+1.4,{tag:'shed'});
+  box(2.50,0.18,2.10,P.roof,HW-2.2,2.18,bg+1.4,{collide:false,cast:false,tag:'shedroof'});
+  box(0.72,1.40,0.06,'#3a2c22',HW-2.2,0.70,bg+0.43,{collide:false,tag:'sheddoor'});
+  scenery(HW-2.2,1.20,bg+0.40,'the shed',
+    'Padlocked. Whatever is in there, they are not sentimental about it.');
+  [-1,1].forEach(s=>box(0.09,1.90,0.09,'#8b8794',s*2.6,0.95,bg,{tag:'linepost'}));
+  box(5.20,0.02,0.02,'#c8bda6',0,1.86,bg,{collide:false,cast:false,tag:'line'});
+  if(!tidy)[[-1.4,'#8c93b4'],[0.2,'#d98f6a'],[1.5,'#6f7699']].forEach(w=>
+    box(0.42,0.52,0.03,w[1],w[0],1.58,bg,{collide:false,tag:'washing'}));
+  box(0.62,0.72,0.62,'#7a6248',-HW+2.0,0.36,bg+0.4,{tag:'gardenchair'});
+  box(0.62,0.72,0.62,'#7a6248',-HW+2.9,0.36,bg+0.4,{tag:'gardenchair'});
+  box(0.90,0.06,0.90,'#8a6a48',-HW+2.45,0.70,bg+1.3,{collide:false,tag:'gardentable'});
+}
+
+/* ═════════════════════════ THE ESTATE (M17) ═════════════════════════
+   Everything outdoors that is not one of the five lots. Before this the whole
+   exterior was ONE mesh — a 120x4m road plane, drawn THROUGH the front gardens
+   because its z was in raw metres while the yards had been scaled by _p() — with
+   no ground between the lots, nothing on the far side, no horizon, and no player
+   bound of any kind.
+
+   The cross-section (CONST ST_*) is authored once, south from the house fronts:
+     fences -13.95 | pavement | kerb -15.9 | ROAD | kerb -22.1 | pavement | far
+     houses -25.9. Ray is "at the dead end" in the fiction, so the road ends in a
+     turning circle west of his lot and leaves the estate east past Grace's. */
+const ST={
+  kerbN:CONST.ST_KERB_N, kerbS:CONST.ST_KERB_S,
+  roadZ:(CONST.ST_KERB_N+CONST.ST_KERB_S)/2,
+  roadW:CONST.ST_KERB_N-CONST.ST_KERB_S,
+  paveW:CONST.ST_PAVE_W, farZ:CONST.ST_FAR_Z,
+  cx:CONST.CDS_X, cr:CONST.CDS_R, eastX:CONST.ST_EAST_X,
+};
+function texAsphalt(){
+  return canvasTex(128,128,'asphalt',(x,W,H)=>{
+    x.fillStyle='#2e2f35';x.fillRect(0,0,W,H);
+    for(let i=0;i<1400;i++){
+      const v=(i%7)*4;
+      x.fillStyle='rgba('+(60+v)+','+(62+v)+','+(70+v)+',.5)';
+      x.fillRect((i*37)%W,(i*79)%H,1,1);
+    }
+    for(let i=0;i<70;i++){x.fillStyle='rgba(20,20,24,.5)';x.fillRect((i*53)%W,(i*29)%H,3,2);}
+  });
+}
+function texShingle(hue){
+  return canvasTex(128,128,'shingle|'+hue,(x,W,H)=>{
+    const rows=8,rh=H/rows;
+    for(let i=0;i<rows;i++){
+      x.fillStyle=hslCss(hue,0.16,0.20+((i*29)%9)/120);
+      x.fillRect(0,i*rh,W,rh);
+      x.strokeStyle='rgba(0,0,0,.42)';x.lineWidth=2;
+      x.beginPath();x.moveTo(0,i*rh+rh-1);x.lineTo(W,i*rh+rh-1);x.stroke();
+      for(let t=0;t<6;t++){
+        const tx=((i%2)?0:W/12)+t*(W/6);
+        x.beginPath();x.moveTo(tx,i*rh);x.lineTo(tx,i*rh+rh);x.stroke();
+      }
+    }
+  });
+}
+function texSiding(hue,light){
+  return canvasTex(128,128,'siding|'+hue+'|'+light,(x,W,H)=>{
+    for(let i=0;i<10;i++){
+      x.fillStyle=hslCss(hue,0.13,light+((i*31)%7)/260);
+      x.fillRect(0,i*(H/10),W,H/10);
+      x.strokeStyle='rgba(0,0,0,.22)';x.lineWidth=1;
+      x.beginPath();x.moveTo(0,(i+1)*(H/10)-0.5);x.lineTo(W,(i+1)*(H/10)-0.5);x.stroke();
+    }
+  });
+}
+/* A plane on the ground. Every outdoor surface is one of these — authored in world
+   coordinates, never through box(), so it costs one draw call and no collider. */
+function ground(w,d,x,z,y,tex,rx,ry){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
+    new THREE.MeshLambertMaterial({map:tiled(tex,rx,ry)}));
+  m.rotation.x=-Math.PI/2;m.position.set(x,y,z);
+  m.receiveShadow=true;scene.add(m);envMeshes.push(m);return m;
+}
+/* A mesh inside a GROUP, for anything that has to be rotated off-axis (the houses
+   round the turning circle). box() writes straight into the scene and its collider
+   is an XZ AABB, which cannot express a yaw — so rotated things get their visual
+   from a group and ONE bounding collider from rotAABB() below. */
+function gbox(g,w,h,d,hex,x,y,z,tex){
+  const m=new THREE.Mesh(UNIT_BOX,tex?new THREE.MeshLambertMaterial({map:tex}):mat(hex));
+  m.scale.set(w,h,d);m.position.set(x,y,z);
+  m.castShadow=true;m.receiveShadow=true;g.add(m);return m;
+}
+function rotAABB(x,z,w,d,yaw,top,tag){
+  const c=Math.abs(Math.cos(yaw)),s=Math.abs(Math.sin(yaw)),R=CONST.PLAYER_R;
+  const hw=w/2*c+d/2*s, hd=w/2*s+d/2*c;
+  const col={minX:x-hw-R,maxX:x+hw+R,minZ:z-hd-R,maxZ:z+hd+R,top:top,tag:tag||'facade'};
+  colliders.push(col);return col;
+}
+/* A tree: trunk plus two or three foliage blobs. The estate had NOTHING vertical
+   outdoors except a 3.4m lamppost, which is why the fog revealed nothing between
+   lots and the horizon was a colour. */
+function tree(x,z,h,rng,tag){
+  const g=new THREE.Group();
+  const th=h*0.42,tr=0.10+h*0.026;
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.78,tr,th,7),mat('#3a2c22'));
+  trunk.position.y=th/2;trunk.castShadow=true;g.add(trunk);
+  const n=2+Math.floor(rng()*2),hue=96+rng()*26;
+  for(let i=0;i<n;i++){
+    const r=h*(0.30-i*0.05)+rng()*0.14;
+    const b=new THREE.Mesh(new THREE.SphereGeometry(r,9,7),
+      mat(hslCss(hue,0.30,0.13+i*0.015)));
+    b.position.set((rng()-0.5)*h*0.20,th+h*(0.16+i*0.19),(rng()-0.5)*h*0.20);
+    b.scale.y=0.82;b.castShadow=true;g.add(b);
+  }
+  g.position.set(x,0,z);scene.add(g);envMeshes.push(g);
+  const R=CONST.PLAYER_R;
+  colliders.push({minX:x-tr-R,maxX:x+tr+R,minZ:z-tr-R,maxZ:z+tr+R,top:th,tag:tag||'tree'});
+  return g;
+}
+/* A parked car. Solid, tall enough to crouch behind, and the only object outdoors
+   with a silhouette a person could hide inside. */
+function parkedCar(x,z,yaw,hue,rng,noCollide){
+  const g=new THREE.Group(),body=hslCss(hue,0.34,0.26);
+  gbox(g,4.05,0.62,1.80,body,0,0.66,0);
+  gbox(g,2.20,0.56,1.66,body,-0.15,1.22,0);
+  gbox(g,2.05,0.40,1.60,'#141a26',-0.15,1.28,0);         // glass band
+  gbox(g,4.10,0.16,1.84,'#1d1f26',0,0.36,0);             // sills / shadow line
+  [[1.72,0.62],[1.72,-0.62],[-1.42,0.62],[-1.42,-0.62]].forEach(w=>{
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.33,0.22,10),mat('#16171c'));
+    t.rotation.x=Math.PI/2;t.position.set(w[0],0.33,w[1]);t.castShadow=true;g.add(t);
+  });
+  gbox(g,0.10,0.16,0.34,'#d9dde4',2.00,0.72,0.56);       // headlights, dark
+  gbox(g,0.10,0.16,0.34,'#d9dde4',2.00,0.72,-0.56);
+  gbox(g,0.08,0.14,0.30,'#7b323c',-1.98,0.74,0.58);
+  gbox(g,0.08,0.14,0.30,'#7b323c',-1.98,0.74,-0.58);
+  g.position.set(x,0,z);g.rotation.y=yaw;
+  scene.add(g);envMeshes.push(g);
+  if(!noCollide)rotAABB(x,z,4.10,1.84,yaw,1.50,'car');
+  return g;
+}
+/* Wheelie bin. Solid, per the playtest call — and the reason the yards now have
+   something to walk around instead of through. */
+function wheelieBin(x,z,hue,yaw){
+  const g=new THREE.Group();
+  gbox(g,0.58,0.92,0.62,hslCss(hue,0.22,0.22),0,0.46,0);
+  gbox(g,0.60,0.07,0.66,hslCss(hue,0.22,0.30),0,0.95,0.01);
+  gbox(g,0.42,0.05,0.05,'#2a2733',0,0.99,-0.30);
+  [[0.24],[-0.24]].forEach(w=>{
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,0.06,8),mat('#1b1c22'));
+    t.rotation.x=Math.PI/2;t.position.set(w[0],0.09,0.28);g.add(t);
+  });
+  g.position.set(x,0,z);g.rotation.y=yaw||0;
+  scene.add(g);envMeshes.push(g);
+  rotAABB(x,z,0.58,0.62,yaw||0,0.98,'bin');
+  return g;
+}
+/* A streetlight that is also a gameplay light ZONE (addLight), like the ones on the
+   lots. Two of these are new — the turning circle and the estate exit — and they
+   are a deliberate difficulty change, not decoration: litAt() reads them. */
+function streetLamp(x,z,r,i){
+  box(0.15,3.9,0.15,'#3a3a42',x,1.95,z,{tag:'lamppost'});
+  box(0.46,0.20,0.86,'#4a4a54',x,3.92,z-0.28,{collide:false,tag:'lamphead'});
+  const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.12,9,7),
+    new THREE.MeshBasicMaterial({color:'#ffdca8'}));
+  bulb.position.set(x+OX,3.80,z-0.28);bulb.userData.temporal=true;scene.add(bulb);
+  const L=new THREE.PointLight('#ffcf94',2.1,r*2.1,1.7);
+  L.position.set(x,3.72,z-0.28);addLight(x,z-0.28,r,i,L);
+}
+/* Poles and wires. A suburban street reads as one because of the things strung
+   ACROSS it at roof height — the eye needs something between the ground and the
+   sky. The catenary is three straight segments; nobody has ever noticed. */
+function powerPole(x,z){
+  box(0.22,7.4,0.22,'#4a382e',x,3.70,z,{tag:'pole'});
+  box(0.16,0.16,2.30,'#4a382e',x,6.86,z,{collide:false,cast:true,tag:'crossarm'});
+  box(0.16,0.16,1.70,'#4a382e',x,6.30,z,{collide:false,cast:true,tag:'crossarm'});
+  [[6.86,1.05],[6.86,-1.05],[6.30,0.78],[6.30,-0.78]].forEach(p=>
+    box(0.09,0.20,0.09,'#8b8794',x,p[0]+0.16,z+p[1],{collide:false,cast:false,tag:'insulator'}));
+}
+function wireSpan(x1,x2,z,y,sag){
+  const n=3,dx=(x2-x1)/n;
+  for(let i=0;i<n;i++){
+    const t=(i+0.5)/n, drop=sag*Math.sin(Math.PI*t);
+    box(Math.abs(dx)+0.04,0.045,0.045,'#191b22',x1+dx*i+dx/2,y-drop,z,
+      {collide:false,cast:false,tag:'wire'});
+  }
+}
+/* A house you can see but can never enter. The far side of the street is a large
+   share of the frame whenever you are working a front garden, and it was empty
+   ground. One collider for the whole shell; the windows are emissive only, with NO
+   light zone, so the far side cannot quietly change how visible you are. */
+function facade(x,z,yaw,w,d,pal,rng){
+  const g=new THREE.Group(),H=2.75+rng()*0.5;
+  const wallT=texSiding(pal.hue,pal.light),roofT=texShingle(pal.roof);
+  gbox(g,w,H,d,null,0,H/2,0,tiled(wallT,Math.round(w/1.6),2));
+  const rf=gbox(g,w+0.5,0.26,d+0.5,null,0,H+0.13,0,tiled(roofT,Math.round(w/1.4),2));
+  gbox(g,w*0.62,0.70,d*0.34,null,0,H+0.46,0,tiled(roofT,4,1));    // ridge
+  gbox(g,0.44,1.00,0.44,'#514038',w*0.28,H+0.72,d*0.10);          // chimney
+  gbox(g,1.02,2.06,0.10,pal.door,-w*0.16,1.03,d/2+0.02);          // front door
+  gbox(g,0.09,0.09,0.06,'#c9a84a',-w*0.16+0.38,1.02,d/2+0.08);
+  gbox(g,1.30,0.14,0.90,'#8f95a3',-w*0.16,0.07,d/2+0.42);         // step
+  /* Some windows are lit and some are not: a street where every window is dark
+     reads as a set, and one where they all glow reads as a party. */
+  const lit=[];
+  for(let i=0;i<3;i++){
+    const wx=-w*0.34+i*(w*0.34)+(i>0?w*0.06:0);
+    if(Math.abs(wx+w*0.16)<0.9)continue;                          // not through the door
+    const on=rng()<0.34;
+    gbox(g,1.16,1.06,0.12,'#cfc6b8',wx,1.62,d/2+0.01);
+    const p=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial(
+      {color:on?'#ffd79a':'#121a2b'}));
+    p.scale.set(1.00,0.90,0.06);p.position.set(wx,1.62,d/2+0.06);g.add(p);
+    if(on)lit.push(p);
+  }
+  for(let i=0;i<2;i++){                                            // upstairs
+    const on=rng()<0.22;
+    const wx=-w*0.24+i*w*0.42;
+    gbox(g,0.96,0.86,0.12,'#cfc6b8',wx,H-0.62,d/2+0.01);
+    const p=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial(
+      {color:on?'#ffcf8e':'#121a2b'}));
+    p.scale.set(0.82,0.70,0.06);p.position.set(wx,H-0.62,d/2+0.06);g.add(p);
+    if(on)lit.push(p);
+  }
+  g.position.set(x,0,z);g.rotation.y=yaw;
+  scene.add(g);envMeshes.push(g);
+  rotAABB(x,z,w,d,yaw,H,'facade');
+  return {group:g,lit:lit,w:w,d:d,yaw:yaw,x:x,z:z};
+}
+/* The far side and the turning circle, as data: x, width, palette, and what sits in
+   front. Seeded, so the street is identical for every player and every save. */
+const FAR_PAL=[
+  {hue:28, light:0.30,roof:16, door:'#5d3b3c'},
+  {hue:196,light:0.28,roof:210,door:'#3b505d'},
+  {hue:84, light:0.26,roof:40, door:'#40422e'},
+  {hue:344,light:0.27,roof:8,  door:'#462748'},
+  {hue:210,light:0.31,roof:224,door:'#2e4231'},
+];
+const FACADES=[];
+function buildFarSide(rng){
+  /* Opposite the five lots, offset half a pitch so no two front doors face each
+     other down the same line — which is what makes a stamped row read as stamped. */
+  for(let i=-2;i<=2;i++){
+    const x=i*LOT_PITCH+LOT_PITCH*0.5;
+    if(x>ST.eastX-9)continue;
+    const pal=FAR_PAL[(i+2)%FAR_PAL.length];
+    const w=11.0+rng()*3.0,d=8.5+rng()*2.0;
+    FACADES.push(facade(x,ST.farZ-d/2,Math.PI,w,d,pal,rng));
+    // front garden: a low wall, a path to the kerb, a hedge, a bin, sometimes a car
+    const fz=ST.farZ+0.1;
+    box(w+1.4,0.44,0.16,'#8a8478',x,0.22,fz+1.55,{tag:'lowwall'});
+    ground(1.3,2.0,x-w*0.16,fz+0.9,0.007,texConcrete(),1,2);
+    if(rng()<0.6)box(2.6,0.80,0.66,'#2f4a2c',x+w*0.30,0.40,fz+1.20,{tag:'hedge'});
+    wheelieBin(x-w*0.44,fz+1.05,rng()*360,0.4);
+    if(rng()<0.55){
+      ground(2.8,3.4,x+w*0.32,fz+1.7,0.008,texConcrete(),2,2);     // driveway
+      parkedCar(x+w*0.32,fz+1.9,Math.PI/2+(rng()-0.5)*0.08,rng()*360,rng);
+    }
+    if(rng()<0.7)tree(x-w*0.62,fz+2.6,3.4+rng()*1.6,rng);
+  }
+}
+function buildHead(rng){
+  /* The dead end. Three houses in a fan around the turning circle, a planted island
+     in the middle of it, and the two lamps that make the head legible from the far
+     end of the street. */
+  const R=ST.cr;
+  for(let i=0;i<3;i++){
+    const a=Math.PI*(0.62+i*0.38);          // west-ish, fanned
+    const dist=R+6.6;
+    const x=ST.cx+Math.cos(a)*dist, z=ST.roadZ+Math.sin(a)*dist;
+    const pal=FAR_PAL[(i+1)%FAR_PAL.length];
+    FACADES.push(facade(x,z,Math.atan2(ST.cx-x,ST.roadZ-z),11.0+rng()*2.4,8.6,pal,rng));
+    if(rng()<0.7)tree(x+Math.cos(a)*-4.2+2.0,z+Math.sin(a)*-4.2,3.2+rng()*1.4,rng);
+  }
+  // the island: kerbed, planted, and the thing that makes a circle read as a circle
+  const isl=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,0.24,18),mat('#3f5730'));
+  isl.position.set(ST.cx,0.12,ST.roadZ);isl.receiveShadow=true;
+  scene.add(isl);envMeshes.push(isl);
+  colliders.push({minX:ST.cx-2.6-CONST.PLAYER_R,maxX:ST.cx+2.6+CONST.PLAYER_R,
+                  minZ:ST.roadZ-2.6-CONST.PLAYER_R,maxZ:ST.roadZ+2.6+CONST.PLAYER_R,
+                  top:0.24,tag:'island'});
+  tree(ST.cx,ST.roadZ,5.2,rng,'island');
+  streetLamp(ST.cx+R*0.72,ST.roadZ-R*0.62,7.4,0.92);
+  // NO THROUGH ROAD, at the mouth of the head
+  box(0.09,2.10,0.09,'#8b8794',ST.cx+R+4.6,1.05,ST.kerbN+0.7,{tag:'signpost'});
+  box(0.06,0.62,0.86,'#e6e0d2',ST.cx+R+4.6,1.94,ST.kerbN+0.7,{collide:false,tag:'sign'});
+}
+function buildRoadway(){
+  const w=ST.eastX-(ST.cx-ST.cr-2);
+  const cxm=(ST.eastX+(ST.cx-ST.cr-2))/2;
+  ground(w,ST.roadW,cxm,ST.roadZ,0.004,texAsphalt(),Math.round(w/6),1);
+  // the turning circle: one disc, one kerb ring
+  const circ=new THREE.Mesh(new THREE.CircleGeometry(ST.cr,26),
+    new THREE.MeshLambertMaterial({map:tiled(texAsphalt(),6,6)}));
+  circ.rotation.x=-Math.PI/2;circ.position.set(ST.cx,0.0045,ST.roadZ);
+  circ.receiveShadow=true;scene.add(circ);envMeshes.push(circ);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(ST.cr+0.06,0.09,6,40),mat('#a6a08f'));
+  ring.rotation.x=Math.PI/2;ring.position.set(ST.cx,0.11,ST.roadZ);
+  scene.add(ring);envMeshes.push(ring);
+  /* Kerbs and pavements. The kerb is 0.13 high — under STEP_UP (0.30), so you walk
+     up it rather than into it, which is the whole reason set-dressing can be solid
+     without becoming a maze. */
+  [[ST.kerbN,1],[ST.kerbS,-1]].forEach(k=>{
+    const z=k[0],s=k[1];
+    box(w,0.13,0.18,'#a6a08f',cxm,0.065,z,{tag:'kerb'});
+    ground(w,ST.paveW,cxm,z+s*ST.paveW/2,0.006,texConcrete(),Math.round(w/2.2),1);
+  });
+  // storm drains, and the joint lines that make a road read as laid rather than painted
+  for(let x=ST.cx+ST.cr+8;x<ST.eastX;x+=17.4){
+    box(0.62,0.06,0.42,'#3a3a42',x,0.04,ST.kerbN-0.34,{collide:false,cast:false,tag:'drain'});
+    box(0.62,0.06,0.42,'#3a3a42',x+8.7,0.04,ST.kerbS+0.34,{collide:false,cast:false,tag:'drain'});
+  }
+}
+function buildHorizon(){
+  /* ONE cylinder with an alpha tree-line, one Points cloud, one moon disc: the
+     entire horizon for three draw calls. The sky sphere is radius 70 and fixed at
+     the origin on a 146m street, so it now rides the camera (skyFollow) — otherwise
+     the gradient band slides as you walk, which reads as the world moving. */
+  const t=canvasTex(1024,128,'treeline',(x,W,H)=>{
+    x.clearRect(0,0,W,H);
+    for(let i=0;i<230;i++){
+      const px=(i*4.43+((i*97)%11))%W, h=26+((i*37)%56), w=10+((i*23)%16);
+      x.fillStyle=(i%5)?'#080b14':'#0b0f1a';
+      x.beginPath();
+      x.moveTo(px-w/2,H);x.lineTo(px-w/2+2,H-h*0.55);
+      x.lineTo(px,H-h);x.lineTo(px+w/2-2,H-h*0.55);x.lineTo(px+w/2,H);
+      x.closePath();x.fill();
+    }
+    x.fillStyle='#070a12';x.fillRect(0,H-14,W,14);
+  });
+  const tt=tiled(t,3,1);
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(CONST.HORIZON_R,CONST.HORIZON_R,15,40,1,true),
+    new THREE.MeshBasicMaterial({map:tt,side:THREE.BackSide,transparent:true,
+      depthWrite:false,fog:false}));
+  band.position.set(0,6.0,-6);band.userData.temporal=true;scene.add(band);
+  const g=new THREE.BufferGeometry(),pts=[],r2=mulberry32(991);
+  for(let i=0;i<420;i++){
+    const a=r2()*Math.PI*2,el=0.10+r2()*1.15,rr=64;
+    pts.push(Math.cos(a)*Math.cos(el)*rr,Math.sin(el)*rr+3,Math.sin(a)*Math.cos(el)*rr);
+  }
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  const stars=new THREE.Points(g,new THREE.PointsMaterial(
+    {color:'#cfd8ee',size:0.42,sizeAttenuation:true,fog:false,transparent:true,opacity:0.75}));
+  stars.userData.temporal=true;scene.add(stars);
+  const md=new THREE.Mesh(new THREE.CircleGeometry(2.9,22),
+    new THREE.MeshBasicMaterial({color:'#e8eeff',fog:false,transparent:true,opacity:0.92}));
+  md.position.set(-34,40,26);md.lookAt(0,1.6,0);md.userData.temporal=true;scene.add(md);
+  SKY_RIDE.push(band,stars,md);
+}
+const SKY_RIDE=[];
+function skyFollow(){
+  if(!player)return;
+  const px=player.position.x,pz=player.position.z;
+  sky.position.set(px,0,pz);
+  for(let i=0;i<SKY_RIDE.length;i++){SKY_RIDE[i].position.x+=px-(SKY_RIDE[i].userData._lx||0);
+    SKY_RIDE[i].position.z+=pz-(SKY_RIDE[i].userData._lz||0);
+    SKY_RIDE[i].userData._lx=px;SKY_RIDE[i].userData._lz=pz;}
+}
+/* ── the one thing on this street that moves ────────────────────────────────
+   A car passes on the carriageway every CAR_EVERY seconds. Its headlights are a
+   real light ZONE, so being caught crossing the road by one is a genuine event
+   that litAt() — and therefore every seeing check — agrees with. */
+/* Seeded, like everything else that can change what happens to you: the headlights
+   are a real light zone, so an unseeded car would make two runs of the same seed
+   disagree about whether you were visible crossing the road. */
+const CAR={t:0,active:null,zone:null,light:null,dir:1,x:0,rng:mulberry32(4)};
+/* Takes the street SEED, not the street's rng: drawing from that generator here
+   would shift every randomSpec() after it and silently repaint the whole street.
+   (The audit of M17 flagged this as the one way decor can corrupt the game.) */
+function carReset(seed){
+  CAR.rng=mulberry32(((seed||0)*7919+13)>>>0);
+  CAR.t=CONST.CAR_EVERY[0]+CAR.rng()*(CONST.CAR_EVERY[1]-CONST.CAR_EVERY[0]);
+  if(CAR.active){scene.remove(CAR.active);CAR.active=null;}
+  if(CAR.light){scene.remove(CAR.light);CAR.light=null;}
+  if(CAR.zone){const i=LIGHTS.indexOf(CAR.zone);if(i>=0)LIGHTS.splice(i,1);CAR.zone=null;}
+}
+function carLaunch(){
+  CAR.dir=(CAR.rng()<0.5)?1:-1;
+  CAR.x=CAR.dir>0?(ST.cx-ST.cr):ST.eastX;
+  const z=ST.roadZ+(CAR.dir>0?1.5:-1.5);
+  // noCollide: a moving car is not a wall. Being hit by one is not in this game.
+  CAR.active=parkedCar(CAR.x,z,CAR.dir>0?0:Math.PI,208+CAR.rng()*40,CAR.rng,true);
+  CAR.light=new THREE.PointLight('#fff0d0',2.2,CONST.CAR_LIGHT_R*2.0,1.6);
+  CAR.light.position.set(CAR.x,0.9,z);CAR.light.userData.temporal=true;scene.add(CAR.light);
+  CAR.zone={x:CAR.x,z:z,r:CONST.CAR_LIGHT_R,i:CONST.CAR_LIGHT_I};LIGHTS.push(CAR.zone);
+  SFX.world('car',CAR.x,z,1.0,'road');
+}
+function carTick(dt){
+  if(CAR.active){
+    CAR.x+=CONST.CAR_SPEED*dt*CAR.dir;
+    const z=CAR.active.position.z;
+    CAR.active.position.x=CAR.x;
+    if(CAR.light)CAR.light.position.x=CAR.x+CAR.dir*2.6;
+    if(CAR.zone)CAR.zone.x=CAR.x+CAR.dir*3.2;
+    if((CAR.dir>0&&CAR.x>ST.eastX+4)||(CAR.dir<0&&CAR.x<ST.cx-ST.cr-4)){
+      const gone=CAR.active;CAR.active=null;
+      scene.remove(gone);
+      const ei=envMeshes.indexOf(gone);if(ei>=0)envMeshes.splice(ei,1);
+      if(CAR.light){scene.remove(CAR.light);CAR.light=null;}
+      if(CAR.zone){const i=LIGHTS.indexOf(CAR.zone);if(i>=0)LIGHTS.splice(i,1);CAR.zone=null;}
+      CAR.t=CONST.CAR_EVERY[0]+CAR.rng()*(CONST.CAR_EVERY[1]-CONST.CAR_EVERY[0]);
+    }
+    return;
+  }
+  CAR.t-=dt;
+  if(CAR.t<=0)carLaunch();
+}
+/* Everything that changes while you stand still: the car, the wind in the hedges,
+   a television nobody is watching, and the sky going grey before curfew. Called
+   from tick() during the house phase only. */
+const SWAY=[],FLICKER=[];
+function ambientTick(dt){
+  skyFollow();
+  carTick(dt);
+  const t=(S._ambT=(S._ambT||0)+dt);
+  for(let i=0;i<SWAY.length;i++){
+    const s=SWAY[i];
+    s.m.rotation.z=Math.sin(t*s.f+s.p)*s.a;
+    s.m.rotation.x=Math.cos(t*s.f*0.7+s.p)*s.a*0.6;
+  }
+  for(let i=0;i<FLICKER.length;i++){
+    const f=FLICKER[i];
+    f.t-=dt;
+    if(f.t<=0){
+      f.t=0.10+Math.random()*0.42;
+      f.m.material.color.setHSL(0.58+Math.random()*0.06,0.42,0.30+Math.random()*0.26);
+    }
+  }
+  dawnTick();
+}
+/* The night visibly ends. Before this, 05:29 looked exactly like 23:00 and curfew
+   arrived with no warning at all — the clock was the only thing that knew. */
+function dawnTick(){
+  if(!NIGHT.running)return;
+  const left=(NIGHT.budget||NIGHT_HOURS)-NIGHT.t;   // NIGHT.t counts UP from 23:00
+  const k=clamp((1.15-left)/1.15,0,1);              // last ~70 game-minutes
+  if(k<=0&&!S._dawnOn)return;
+  S._dawnOn=k>0;
+  hemi.intensity=0.34+k*0.30;
+  hemi.color.setHSL(0.60-k*0.06,0.45-k*0.20,0.18+k*0.16);
+  moon.intensity=0.40+k*0.22;
+  renderer.toneMappingExposure=0.52+k*0.30;
+  if(scene.fog)scene.fog.color.setHSL(0.60-k*0.05,0.42-k*0.16,0.06+k*0.18);
+}
 
 function buildStreet(seed){
   clearWorld();
@@ -3046,14 +3901,47 @@ function buildStreet(seed){
      ids stay stable for the older suites, which is not the same as left-to-right. */
   const xs=HOUSES.map(h=>h.x);
   const minX=Math.min.apply(null,xs)-6.5,maxX=Math.max.apply(null,xs)+6.5;
-  ROOM={minX:minX,maxX:maxX,minZ:-11.5,maxZ:3.5};
-  // the road, running the length of the street in front of every lot
-  const road=new THREE.Mesh(new THREE.PlaneGeometry(maxX-minX+8,4.0),
-    new THREE.MeshLambertMaterial({map:tiled(texConcrete(),18,1)}));
-  road.rotation.x=-Math.PI/2;road.position.set((minX+maxX)/2,0.003,-10.4);
-  road.receiveShadow=true;scene.add(road);envMeshes.push(road);
+  /* PLAY is the player's clamp and ROOM the camera's, and PLAY is strictly inside
+     ROOM so the camera never hits its own wall first. West is the turning circle,
+     east the estate exit, south the far pavement, north the back fences. */
+  PLAY={minX:ST.cx-ST.cr-2.6,maxX:ST.eastX-2.0,
+        minZ:ST.kerbS-ST.paveW+0.5,maxZ:CONST.YARD_BACK_Z-0.6};
+  ROOM={minX:PLAY.minX-3.0,maxX:PLAY.maxX+3.0,minZ:PLAY.minZ-3.0,maxZ:PLAY.maxZ+3.0};
+  FACADES.length=0;SWAY.length=0;FLICKER.length=0;SKY_RIDE.length=0;
+  carReset(seed===undefined?7:seed);
+  // the ground everything else sits on. Before M17 there was no ground mesh at all
+  // between two lots, or behind any of them: 31m of the street was void.
+  ground(230,120,0,-14,0,texGrass(),52,26);
+  buildRoadway();
   HOUSES.forEach(h=>buildHouse(h,rng));
+  buildFarSide(rng);
+  buildHead(rng);
+  buildEstate(rng);
+  buildHorizon();
   OX=0;
+}
+/* Street furniture between and around the lots: the poles and wires overhead, the
+   trees on the verge, the hedgerow that closes the east end, and the back fence
+   line that stops the estate being a stage set seen from behind. */
+function buildEstate(rng){
+  for(let x=ST.cx+ST.cr+6;x<ST.eastX-6;x+=LOT_PITCH){
+    powerPole(x,ST.kerbS-ST.paveW*0.45);
+    wireSpan(x,x+LOT_PITCH,ST.kerbS-ST.paveW*0.45,6.86,0.9);
+    wireSpan(x,x+LOT_PITCH,ST.kerbS-ST.paveW*0.45+0.4,6.30,0.8);
+  }
+  for(let x=ST.cx+ST.cr+3;x<ST.eastX-3;x+=11.6)
+    if(rng()<0.55)tree(x+rng()*3,ST.kerbN+ST.paveW*0.55,3.6+rng()*2.0,rng);
+  // the east end: the road leaves through a gap in a hedgerow you cannot follow
+  box(2.2,2.60,26,'#243a24',ST.eastX+0.6,1.30,ST.roadZ+13,{tag:'hedgerow'});
+  box(2.2,2.60,26,'#243a24',ST.eastX+0.6,1.30,ST.roadZ-13,{tag:'hedgerow'});
+  tree(ST.eastX-1.5,ST.roadZ+16,6.4,rng);tree(ST.eastX-2.2,ST.roadZ-15,5.8,rng);
+  // the back fence line, behind every lot
+  const bz=CONST.YARD_BACK_Z;
+  for(let x=PLAY.minX;x<PLAY.maxX;x+=3.0){
+    box(3.0,1.70,0.10,'#4a3b2c',x+1.5,0.85,bz,{tag:'backfence'});
+    if(((x/3)|0)%2===0)box(0.13,1.86,0.16,'#3b2d26',x,0.93,bz,{collide:false,tag:'post'});
+  }
+  for(let i=0;i<9;i++)tree(PLAY.minX+6+i*((PLAY.maxX-PLAY.minX-12)/8),bz+2.4,4.6+rng()*2.4,rng);
 }
 /* Kept so the milestone 4-7 suites, which know only one house, still drive it. */
 function buildHoyt(seed){buildStreet(seed);}
@@ -3072,16 +3960,25 @@ function bed(resId,x,z){
 /* A sleeping body: torso under a duvet, head on the pillow. The torso pivots up
    when they stir, so "sat up in the dark listening" is one rotation, not an anim. */
 function makeSleeper(){
+  /* M17 — the body now lies with its HEAD AT +Z, which does two things at once.
+     The bed's head end moved to the north wall (there is a headboard there now, and
+     the objects on the nightstands have claimed to be "beside her head" since M4
+     while sitting at the foot of the bed). AND it corrects the stir: the torso is
+     driven to NEGATIVE rotation.x (-0.42 stirring, -1.15 awake, updateSleepers),
+     and with the head at -z that rotation drove it DOWN through the mattress —
+     y' = y·cosθ - z·sinθ is only positive for a head at -z when θ is positive.
+     Head at +z makes the existing angles raise it, which is what "sat up in the
+     dark listening" was always supposed to look like. */
   const g=new THREE.Group();
   const torso=new THREE.Group();
   const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.26,0.95),matL('#8c93b4'));
-  body.position.set(0,0.13,-0.32);body.castShadow=true;torso.add(body);
+  body.position.set(0,0.13,0.32);body.castShadow=true;torso.add(body);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.115,14,10),matL('#e2c9ad'));
-  head.position.set(0,0.16,-0.86);head.castShadow=true;torso.add(head);
+  head.position.set(0,0.16,0.86);head.castShadow=true;torso.add(head);
   torso.position.set(0,0,0);g.add(torso);
   const legs=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.20,0.95),matL('#6f7699'));
-  legs.position.set(0,0.10,0.42);legs.castShadow=true;g.add(legs);
-  g.userData.torso=torso;
+  legs.position.set(0,0.10,-0.42);legs.castShadow=true;g.add(legs);
+  g.userData.torso=torso;g.userData.head=head;
   return g;
 }
 
@@ -3287,6 +4184,10 @@ function movePlayer(dt){
   if(Math.abs(S.mvx)>CONST.VEL_DEAD||Math.abs(S.mvz)>CONST.VEL_DEAD){
     player.position.x+=S.mvx*dt;
     player.position.z+=S.mvz*dt;
+    if(PLAY){   // M17 — the estate edge. See PLAY.
+      player.position.x=clamp(player.position.x,PLAY.minX,PLAY.maxX);
+      player.position.z=clamp(player.position.z,PLAY.minZ,PLAY.maxZ);
+    }
   }
   // normalized against WALK so walk reads 1.0 — this is the signal that drives
   // footstep cadence AND the night-time noise model (GDD 5.5).
@@ -3422,6 +4323,11 @@ function updateHUD(dt){
     'mode   <i>'+S.moveMode+'</i>   grounded <i>'+S.grounded+'</i>\n'+
     'bumped <i>'+bumped+'</i>\n'+
     'cols   <i>'+colliders.length+'</i>   env <i>'+envMeshes.length+'</i>\n'+
+    /* M17: draw calls are the budget that binds here (1 mesh = 1 call on r128 with
+       no instancing), and renderer.info was read nowhere in the file — an expansion
+       was being flown blind. Shown BEFORE the content pass, not after. */
+    'draws  <i>'+renderer.info.render.calls+'</i>   tris <i>'+
+      renderer.info.render.triangles+'</i>   mats <i>'+_matCache.size+'</i>\n'+
     (S.phase==='house'
       ? 'day    <i>'+GAME.day+'</i>   key <i>'+(GAME.hasSpareKey?'yes':'no')+
         '</i>   objects <i>'+objects.length+'</i>\n'+
@@ -3816,6 +4722,15 @@ const SFX=(function(){
       tone(p,v*0.5,2360,3050,0.12,'foley','sine',0.03);
     },
     handle:function(p,mag,mtl){handleMtl(p,CONST.AUD_FOLEY_REF*p.g,mtl);},
+  /* M17. A car on the carriageway: a long tyre-roar that arrives before the light
+     does. Deliberately the longest one-shot in the game — it is a warning, and the
+     headlights behind it are a real light zone. */
+  car:function(p,mag){
+    const v=CONST.AUD_FOLEY_REF*p.g*1.05;
+    burst(p,v*0.80,430,0.35,3.30,'foley');
+    tone(p,v*0.42,74,58,3.20,'foley','sawtooth');
+    tone(p,v*0.20,168,132,2.90,'foley','triangle',0.10);
+  },
     /* M14. Not the distant dog in the ambience bed - this one is in the yard with
        you, and it is the sound of a house about to wake up. */
     dog:function(p,mag){
@@ -4353,6 +5268,11 @@ function onSeen(s){
 function endNight(reason,text){
   if(!NIGHT.running)return;
   NIGHT.running=false;NIGHT.over={reason:reason,text:text};
+  /* M17: dawnTick() ramps the sky, exposure and fog over the last game-hour, so the
+     rig has to be put back or night two starts at whatever grey night one ended on.
+     setLighting is the only writer of those values, which is why this is a call and
+     not five assignments. */
+  if(S._dawnOn){S._dawnOn=false;setLighting('night');}
   /* Every night out costs you with her, and the longer you stay the worse it is.
      This is the ratchet: the only way to keep her calm is to waste good nights. */
   const outFrac=Math.min(1,NIGHT.t/(NIGHT.budget||NIGHT_HOURS));
@@ -5175,9 +6095,14 @@ function doMorning(){
    Whole-world JSON in localStorage, with a schema version from day one. Load
    REBUILDS the street first and then overwrites state onto it — replaying the
    builder is far more robust than trying to serialise geometry. */
-const SAVE_KEY='sd_save_v1';
+/* M17 bumped this. Object ids are 'o'+counter minted in build order, and the save
+   is keyed by them — so adding forty possessions to the middle of the street
+   renumbers every id after the first new one. An old save would then restore Ray's
+   spec onto June's mug with no error at all, which is the quietest possible way to
+   corrupt a run. A version bump makes the old file simply not load. */
+const SAVE_KEY='sd_save_v2';
 function saveGame(){
-  const d={v:1,
+  const d={v:2,
     game:GAME,wife:WIFE,
     day:{block:DAY.block,actions:DAY.actions},
     night:{t:NIGHT.t,budget:NIGHT.budget,running:NIGHT.running},
@@ -5200,7 +6125,7 @@ function hasSave(){
 function loadGame(){
   let d=null;
   try{d=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){d=null;}
-  if(!d||d.v!==1)return false;
+  if(!d||d.v!==2)return false;
   startHouse();                       // rebuild the world, then overwrite state onto it
   Object.keys(d.game).forEach(k=>{GAME[k]=d.game[k];});
   Object.keys(d.wife).forEach(k=>{WIFE[k]=d.wife[k];});
@@ -5250,6 +6175,12 @@ function findTarget(){
   for(let i=0;i<objects.length;i++)consider(objects[i].spec._pos,{t:'prop',o:objects[i]});
   for(let i=0;i<PLANTERS.length;i++)consider(PLANTERS[i].pos,{t:'planter',p:PLANTERS[i]});
   for(let i=0;i<DOORS.length;i++)consider(DOORS[i].pos,{t:'door',d:DOORS[i]});
+  /* SCENERY last, and only if nothing swappable won (M17). A house full of things
+     that are dead to E reads as a set; a house where the fridge answers "it hums at
+     108 hertz, give or take" reads as somebody's. But scenery must never OUTBID a
+     possession for the prompt — the examine loop is the game, and a fixture
+     stealing E from the mug beside it would be the worst bug in this milestone. */
+  if(!best)for(let i=0;i<SCENERY.length;i++)consider(SCENERY[i].pos,{t:'scenery',s:SCENERY[i]});
   return best;
 }
 function setDoor(d,open){
@@ -5344,6 +6275,7 @@ function interact(){
   if(t.t==='prop')enterFocus(t.o);
   else if(t.t==='planter')searchPlanter(t.p);
   else if(t.t==='door')useDoor(t.d);
+  else if(t.t==='scenery'){hint(t.s.line);emitNoise(t.s.pos[0],t.s.pos[2],CONST.N_SCAN,'scan');}
 }
 function updatePrompt(){
   const el=$('prompt');
@@ -5354,6 +6286,9 @@ function updatePrompt(){
   if(t.t==='prop')txt='<b>E</b> examine '+t.o.label+(CATALOG[t.o.id]?'':' (uncatalogued)');
   else if(t.t==='planter')txt='<b>E</b> '+(t.p.searched?'search again':'search the planter');
   else if(t.t==='door')txt='<b>E</b> '+(t.d.locked?'try the front door':(t.d.open?'close the door':'open the door'));
+  /* Deliberately worded LOOK AT, never "examine": the prompt has to tell you, before
+     you press it, that this is not a thing you can take a copy of. */
+  else if(t.t==='scenery')txt='<b>E</b> look at '+t.s.label+' <span class="ds-dim">(not theirs to swap)</span>';
   el.innerHTML=txt;el.classList.add('on');
 }
 
@@ -5833,6 +6768,8 @@ function tick(dt){
   if(!S.menuOpen&&!S.focus){movePlayer(dt);animBody(dt);}
   if(!S.menuOpen&&S.phase==='house')nightTick(dt);
   updateCamera(dt);
+  trackShadow();
+  if(!S.menuOpen&&S.phase==='house')ambientTick(dt);
   SFX.update(dt);
   for(let i=0;i<DOORS.length;i++){
     const d=DOORS[i];
@@ -5917,6 +6854,13 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   look,grabMouse,releaseMouse,isLocked,canLook,
   // - M16: Ray, and gossip -
   RELATIONS,gossip,gossipLine,
+  // - M17: the estate, the dressing, and the one thing that moves -
+  ST,SCENERY,CAR,FACADES,SKY_RIDE,
+  get PLAY(){return PLAY;}, get ROOM(){return ROOM;},
+  buildEstate,buildFarSide,buildHead,buildRoadway,buildHorizon,dressInterior,dressLot,
+  facade,parkedCar,wheelieBin,tree,streetLamp,ground,rotAABB,
+  ambientTick,dawnTick,carTick,carLaunch,carReset,trackShadow,skyFollow,
+  UNIT_BOX,
   // - M15: difficulty + options -
   OPT,DIFFS,DIFF_KEY,winBar,hardenAt,syncDiffBtn,
   // - M14: the street hardens -
@@ -5948,6 +6892,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M16'};
+  version:'M17'};
 </script>
 

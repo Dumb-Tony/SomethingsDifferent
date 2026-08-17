@@ -96,9 +96,42 @@ try{
      across every (shop, week, rung) is the lowest on the street. Measure that. */
   var rayOnlyFine=rayObjs.filter(function(o,i){
     return perObj[i].indexOf('bulwark 0')>=0;}).length;
-  ok('...and half of him cannot be touched from the supermarket at all',
-     rayOnlyFine>=rayObjs.length/2,
-     rayOnlyFine+' of '+rayObjs.length+' are antique-only');
+  /* M17 took Ray from 10 possessions to 20, and the new ones are deliberately LOW
+     attachment: perceived delta scales by attachment and his ceiling is 3 points
+     wide, so the cheap things are the only reachable ones. That moved his
+     antique-only share from 5/10 to 7/20. "Half" was never the property worth
+     defending — being the NARROWEST door on the street is — so assert the
+     comparative fact, which cannot drift when the object count changes. */
+  function antiqueOnlyFrac(resId){
+    var objs=SD.objects.filter(function(o){return o.owner===resId;});
+    if(!objs.length)return 0;
+    var only=0;
+    objs.forEach(function(o){
+      var bulwark=0,other=0;
+      for(var w=1;w<=6;w++){
+        SD.GAME.week=w;
+        SD.STORES.forEach(function(st){
+          if(!SD.storeHas(o.id,st.id))return;
+          SD.shopStock(o.id,st.id).forEach(function(it){
+            var p=SD.predict(o.id,it);
+            if(!p||p.text!=='DOUBT')return;
+            if(st.id==='bulwark')bulwark++;else other++;
+          });
+        });
+      }
+      if(bulwark===0&&other>0)only++;
+    });
+    SD.GAME.week=1;
+    return only/objs.length;
+  }
+  var rayFrac=antiqueOnlyFrac('ray');
+  var worstOther=Math.max.apply(null,
+    ['walt','june','marisol','aaron','dev','grace'].map(antiqueOnlyFrac));
+  ok('...and NO DOOR INTO RAY IS AS WIDE AS ANYONE ELSE\'S',
+     rayFrac>=worstOther&&rayFrac>=0.25,
+     (rayFrac*100).toFixed(0)+'% of Ray is beyond the supermarket; the worst anyone '+
+     'else manages is '+(worstOther*100).toFixed(0)+'%  ('+rayOnlyFine+' of '+
+     rayObjs.length+' antique-only)');
   function density(resId){
     var objs=SD.objects.filter(function(o){return o.owner===resId;});
     var hits=0,tried=0;
