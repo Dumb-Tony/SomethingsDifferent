@@ -234,7 +234,19 @@ Dev-wide catalog of what already exists and where to copy it from.
   MEASURED as a result: on night one $140 buys 264 shelf items, 59 of which would
   create doubt - a 22% blind hit rate, which is what HK is sold against.
   18 assertions.
-  **1000 assertions across twenty-six suites.**
+- 2026-08-20 - **M27 DONE - HIDING.** The game has had detection since M5 and never had
+  COUNTERPLAY: a sleeper sits up, a man with a torch comes round the corner, somebody
+  gets out of bed for water - and all you could do was walk away and hope. 30 hiding
+  places on real furniture (wardrobes, under beds, behind sofas, sheds, the hedges by
+  the path), 6 per lot, half indoors. Two rules keep it honest: **you cannot climb into
+  a wardrobe while somebody is already looking at you** (`watchedNow()`), or it is just
+  an escape key; and **the clock runs while you are in there**, so it costs the one
+  thing the night is short of. 26 assertions.
+  ⚠ AND M26 IMMEDIATELY EARNED ITS KEEP: putting HIDES in the main `findTarget` pass
+  let a wardrobe outbid the picture frame on the nightstand beside it, and the
+  playthrough's "walked to 20, could examine 19" fell to 17. Twenty-six other suites
+  missed it. **HIDES now obey the same `if(!best)` rule as SCENERY.**
+  **1026 assertions across twenty-seven suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
@@ -311,6 +323,11 @@ Dev-wide catalog of what already exists and where to copy it from.
   nights - only on `startHouse()`. It pushed a light zone and a PointLight per porch
   every night and emptied only its bookkeeping arrays. `HARD_FX` + `hardClear()`
   now track, remove AND dispose. Never dispose `UNIT_BOX`; it is shared.
+- **`findTarget` HAS A PRIORITY ORDER AND IT IS LOAD-BEARING.** Possessions, planters
+  and doors compete first; HIDES and SCENERY are only offered `if(!best)`. Anything
+  added to the main pass will silently steal **E** from the object beside it, which is
+  the worst bug this game can have - the examine loop IS the game. M27 did exactly
+  that and m26 caught it.
 - **GRADE THE WORLD, NEVER THE EVIDENCE.** The game is judging whether two objects are
   the same object, and a compressive tone curve pulls colours toward each other -
   exactly what the player is trying to do. Applying it to props turned three declared

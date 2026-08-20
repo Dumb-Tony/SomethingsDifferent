@@ -251,7 +251,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M26 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M27 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -297,6 +297,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>Wheel</b><span>zoom</span>
     <b>E</b><span>examine / search / open</span>
     <b>Q</b><span>scan pulse &mdash; marks their things, and is heard</span>
+    <b>E</b><span>at a wardrobe, a hedge, a shed &mdash; hide, and again to come out</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; end the night, see the morning</span>
     <b>F3</b><span>toggle debug readout</span>
@@ -644,6 +645,17 @@ const CONST={
   HARD_WATCH_R: 11.0,       // how far up the street he can pick you out
   HARD_CAM_R  : 2.6,        // doorbell camera trigger radius
   HARD_CAM_S  : 7,          // Suspicion per household, once per night
+  // -- hiding (M27) ---------------------------------------------------------
+  /* The game has had detection since M5 and never had COUNTERPLAY. A sleeper sits
+     up, a man with a torch comes round the corner, somebody gets out of bed for a
+     glass of water - and the only thing you could do about any of it was walk away
+     and hope. Every stealth game is a conversation between hiding and looking, and
+     this one only had half of it.
+     The two rules that keep it honest: you cannot climb into a wardrobe while
+     somebody is already looking at you, and hiding costs you the thing the night is
+     actually short of, which is time. */
+  HIDE_R      : 1.6,        // how close you must be to use one
+  HIDE_SETTLE : 1.1,        // seconds before it actually works: getting in is not free
   // -- familiarity (GDD Phase 2 "social camouflage", M25) -------------------
   /* The afternoon walk (M20) paid Human Knowledge and nothing else, so spending a
      day action on your neighbours was charity. This is what it buys: a man they
@@ -2457,6 +2469,7 @@ const S={
   yaw:0.6, pitch:CONST.CAM_PITCH0, dist:CONST.CAM_DIST, camP:null, camL:null,
   // debug
   scanCd:0, scanT:0,   // M24: the scanner's cooldown and how long its marks last
+  hidden:null, hideT:0,   // M27: where you are hiding, and how long until it works
   showDbg:false, fps:0,   // F3 turns the engineering readout on; playtesters don't want it
 };
 
@@ -3004,7 +3017,7 @@ function clearWorld(){
      the counter run on and every saved reference dangles. */
   _objId=0;
   envMeshes.length=0;colliders.length=0;helpers.length=0;CEIL_ZONES.length=0;
-  SCENERY.length=0;WINDOWS.length=0;MARKS.length=0;
+  SCENERY.length=0;WINDOWS.length=0;MARKS.length=0;HIDES.length=0;
   for(const o of objects){if(o.group)disposeProp(o.group);}
   objects.length=0;PLANTERS.length=0;DOORS.length=0;FRONT_DOOR=null;
   BEDS.length=0;LIGHTS.length=0;SLEEPERS.length=0;
@@ -3256,6 +3269,12 @@ function buildHouse(def,rng){
   pathM.receiveShadow=true;scene.add(pathM);envMeshes.push(pathM);
   box(_p(2.6),0.75,0.7,'#2f4a2c',_p(-3.4),0.375,_p(-4.1),{tag:'hedge'});
   box(_p(2.6),0.75,0.7,'#2f4a2c',_p( 3.4),0.375,_p(-4.1),{tag:'hedge'});
+  /* The two by the path, because the path is where the streetlight is and where the
+     man with the torch walks. Somewhere to be when he comes round the corner. */
+  addHide(_p(-3.4),0.45,_p(-4.1)+0.75,'behind the hedge',
+          'Down behind the hedge, on somebody\u2019s wet grass. E to come out.');
+  addHide(_p( 3.4),0.45,_p(-4.1)+0.75,'behind the hedge',
+          'Down behind the hedge, on somebody\u2019s wet grass. E to come out.');
 
   /* Streetlight: the only strong light on the lot, and the reason crossing the path
      is dangerous. Both a real THREE light and a gameplay light ZONE (see addLight). */
@@ -3353,6 +3372,8 @@ function buildHouse(def,rng){
      because every other test teleports the player. */
   box(2.20,0.44,0.90,'#5d5170',3.90,0.22,-0.65,{tag:'sofa'});
   box(2.20,0.52,0.22,'#655878',3.90,0.48,-1.10,{collide:false,tag:'sofaback'});
+  addHide(3.90,0.50,-1.45,'behind the sofa',
+          'Behind the sofa, breathing carefully. E to come out.');
   box(0.24,0.46,0.86,'#655878',3.90-1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
   box(0.24,0.46,0.86,'#655878',3.90+1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
   box(1.10,0.42,0.62,'#7a6248',3.90,0.21,0.30,{tag:'coffeetable'});
@@ -3388,7 +3409,13 @@ function buildHouse(def,rng){
   //    "on the nightstand beside her head" objects have always claimed to be ──
   const BEDZ=ZN-1.08;                                   // frame centre; head at ZN
   box(0.74,2.00,1.24,'#6d5238',XD+0.37,1.00,2.60,{tag:'wardrobe'});
+  /* M27 - somewhere to go when it goes wrong. Registered on the real furniture, so
+     every hiding place is a thing you can see in the room before you need it. */
+  addHide(XD+1.05,1.00,2.60,'in the wardrobe',
+          'You fold yourself into somebody else\u2019s coats. E to come out.');
   box(1.75,0.32,1.95,'#6d5238',4.03,0.16,BEDZ,{tag:'bedframe'});
+  addHide(4.03,0.30,BEDZ-1.25,'under the bed',
+          'Under the bed, with the dust and one shoe. E to come out.');
   box(1.70,0.22,1.90,'#cfd4e2',4.03,0.43,BEDZ,{tag:'mattress'});
   box(1.86,0.86,0.09,'#5b4b34',4.03,0.72,ZN-0.06,{collide:false,tag:'headboard'});
   box(1.72,0.10,0.94,'#4e5a80',4.03,0.58,BEDZ-0.44,{collide:false,tag:'duvet'});
@@ -3765,6 +3792,8 @@ function dressLot(def,P){
   box(2.30,2.10,1.90,dr()<0.5?'#5b4b34':'#3f5730',HW-2.2,1.05,bg+1.4,{tag:'shed'});
   box(2.50,0.18,2.10,P.roof,HW-2.2,2.18,bg+1.4,{collide:false,cast:false,tag:'shedroof'});
   box(0.72,1.40,0.06,'#3a2c22',HW-2.2,0.70,bg+0.43,{collide:false,tag:'sheddoor'});
+  addHide(HW-2.2,0.90,bg+0.95,'in the shed',
+          'Somebody else\u2019s shed. It smells of creosote. E to come out.');
   scenery(HW-2.2,1.20,bg+0.40,'the shed',
     'Padlocked. Whatever is in there, they are not sentimental about it.');
   [-1,1].forEach(s=>box(0.09,1.90,0.09,'#8b8794',s*2.6,0.95,bg,{tag:'linepost'}));
@@ -4595,6 +4624,7 @@ function currentMode(){
 
 function movePlayer(dt){
   if(S.menuOpen)return false;
+  if(S.hidden){S.speedNorm=0;S.mvx=0;S.mvz=0;return false;}   // M27
   // camera-relative input
   _fwd.set(-Math.sin(S.yaw),0,-Math.cos(S.yaw));
   _right.set(-_fwd.z,0,_fwd.x);              // true screen-right
@@ -5409,6 +5439,7 @@ function clockString(){
   return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
 }
 function nightReset(){
+  if(S.hidden){S.hidden=null;S.hideT=0;if(player)player.visible=true;}
   NIGHT.t=0;NIGHT.running=true;NIGHT.over=null;NIGHT.budget=NIGHT_HOURS;
   const rng=mulberry32(GAME.day*613+41);
   for(let i=0;i<SLEEPERS.length;i++){
@@ -5732,7 +5763,7 @@ function hardenTick(dt){
     }
     /* He only works outdoors. Inside a house you are his problem no longer, which
        makes the yards — not the rooms — the dangerous part of a hardened street. */
-    if(!WATCH.seen&&ceilAt(px,pz)<=0){
+    if(!WATCH.seen&&!isHidden()&&ceilAt(px,pz)<=0){
       const dx=px-WATCH.x,dz=pz-WATCH.z,dist=Math.hypot(dx,dz);
       const ahead=dist>0.2?(dx/dist)*WATCH.dir>-0.25:true;
       if(dist<CONST.HARD_WATCH_R&&ahead&&
@@ -5824,6 +5855,7 @@ function loudestHeat(){
   return Math.min(1.5,h);
 }
 function canSee(s,px,pz){
+  if(isHidden())return false;        // M27: in the wardrobe is out of the world
   const dx=px-s.x,dz=pz-s.z,d=Math.hypot(dx,dz);
   if(d>CONST.VISION_RANGE)return false;
   /* M23: SIGHT, not sound. A sleeper can see you through their own window now,
@@ -7206,6 +7238,61 @@ function scanTick(dt){
   }
 }
 
+/* ---------------------------- HIDING (M27) ----------------------------------
+   Somewhere to go when it goes wrong. Registered by the builders, because a hiding
+   place has to be a real object in the room - a wardrobe you can see, a bed with a
+   gap under it, the back of a sofa, the shed, a hedge - and not an invisible
+   volume the level designer sprinkled about. */
+const HIDES=[];
+function addHide(x,y,z,label,line){
+  HIDES.push({pos:[x+OX,y,z],label:label,line:line||''});
+}
+/* You cannot get into a wardrobe while somebody is watching you do it. Anybody
+   awake with a line of sight to you right now vetoes the whole idea. */
+function watchedNow(){
+  if(!player)return null;
+  const px=player.position.x,pz=player.position.z;
+  for(let i=0;i<SLEEPERS.length;i++){
+    const s=SLEEPERS[i];
+    if(s.absent||s.state==='asleep')continue;
+    if(canSee(s,px,pz))return s.name;
+  }
+  if(WATCH&&!WATCH.seen&&ceilAt(px,pz)<=0){
+    const dx=px-WATCH.x,dz=pz-WATCH.z,d=Math.hypot(dx,dz);
+    const ahead=d>0.2?(dx/d)*WATCH.dir>-0.25:true;
+    if(d<CONST.HARD_WATCH_R&&ahead&&sightBlocked(WATCH.x,WATCH.z,px,pz)===0)
+      return 'the man in the jacket';
+  }
+  return null;
+}
+function enterHide(hd){
+  const seenBy=watchedNow();
+  if(seenBy){hint(seenBy+' is looking straight at you. Not now.');return false;}
+  S.hidden=hd;S.hideT=CONST.HIDE_SETTLE;
+  if(player)player.visible=false;
+  emitNoise(hd.pos[0],hd.pos[2],CONST.N_HANDLE*0.6,'handle','wood');
+  hint(hd.line||('You get into '+hd.label+'. E to come out.'));
+  return true;
+}
+function exitHide(){
+  if(!S.hidden)return;
+  const hd=S.hidden;
+  S.hidden=null;S.hideT=0;
+  if(player){
+    player.visible=true;
+    player.position.set(hd.pos[0],player.position.y,hd.pos[2]+0.7);
+  }
+  hint('You come out.');
+}
+/* While you are in there the night still runs: the clock, the sleepers settling,
+   the watchman walking on. That is the whole cost - hiding spends the one thing
+   the night is short of. */
+function hideTick(dt){
+  if(!S.hidden)return;
+  if(S.hideT>0)S.hideT=Math.max(0,S.hideT-dt);
+}
+function isHidden(){return !!S.hidden&&S.hideT<=0;}
+
 const INTERACT_RANGE=2.0,INTERACT_DOT=0.15,NUDGE_STEP=0.03,ROT_STEP=8;
 function findTarget(){
   if(!player||S.phase!=='house'||S.menuOpen)return null;
@@ -7228,6 +7315,13 @@ function findTarget(){
      possession for the prompt — the examine loop is the game, and a fixture
      stealing E from the mug beside it would be the worst bug in this milestone. */
   for(let i=0;i<DAYFOLK.length;i++)consider(DAYFOLK[i].pos,{t:'folk',f:DAYFOLK[i]});
+  /* HIDES obey the same rule as SCENERY, and for the same reason. Putting them in
+     the main pass let a wardrobe outbid the picture frame on the nightstand beside
+     it: m26 walks to all twenty of a house's possessions, and the number it could
+     actually press E on fell from 19 to 17 the moment M27 landed. A hiding place is
+     something you want when there is nothing else you want, so it is offered then.
+     Step back half a metre and it is yours. */
+  if(!best)for(let i=0;i<HIDES.length;i++)consider(HIDES[i].pos,{t:'hide',h:HIDES[i]});
   if(!best)for(let i=0;i<SCENERY.length;i++)consider(SCENERY[i].pos,{t:'scenery',s:SCENERY[i]});
   return best;
 }
@@ -7318,8 +7412,10 @@ function focusKey(k,e){
   return true;
 }
 function interact(){
+  if(S.hidden){exitHide();return;}   // M27: E is the way out as well as in
   const t=findTarget();
   if(!t){hint('Nothing within reach.');return;}
+  if(t.t==='hide'){enterHide(t.h);return;}
   if(t.t==='folk'){talkTo(t.f);return;}
   if(t.t==='prop')enterFocus(t.o);
   else if(t.t==='planter')searchPlanter(t.p);
@@ -7337,6 +7433,7 @@ function updatePrompt(){
   else if(t.t==='door')txt='<b>E</b> '+(t.d.locked?'try the front door':(t.d.open?'close the door':'open the door'));
   /* Deliberately worded LOOK AT, never "examine": the prompt has to tell you, before
      you press it, that this is not a thing you can take a copy of. */
+  else if(t.t==='hide')txt='<b>E</b> hide '+t.h.label;
   else if(t.t==='folk')txt='<b>E</b> '+(t.f.spoken?'you have already spoken to ':'stand near ')+t.f.name;
   else if(t.t==='scenery')txt='<b>E</b> look at '+t.s.label+' <span class="ds-dim">(not theirs to swap)</span>';
   el.innerHTML=txt;el.classList.add('on');
@@ -7860,6 +7957,7 @@ function tick(dt){
   updateCamera(dt);
   trackShadow();
   scanTick(dt);
+  hideTick(dt);
   if(!S.menuOpen&&S.phase==='house')ambientTick(dt);
   SFX.update(dt);
   for(let i=0;i<DOORS.length;i++){
@@ -7962,6 +8060,8 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
   get BODY(){return BODY;},
+  // - M27: hiding -
+  HIDES,addHide,enterHide,exitHide,isHidden,watchedNow,hideTick,
   // - M25: familiarity -
   familiar,famAdd,famDecay,seenCost,
   // - M24: the scanner -
@@ -8007,6 +8107,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M26'};
+  version:'M27'};
 </script>
 

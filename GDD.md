@@ -1485,6 +1485,33 @@ previous one runs in a browser.**
     simply cannot see which one it is, which is precisely what Human Knowledge is
     sold against.
 
+27. ~~**Hiding.**~~ **DONE 2026-08-20.** *Verified: 26 assertions.*
+
+    This game has had **detection** since M5 and never had **counterplay**. A sleeper
+    sits up. A man with a torch comes round the corner. Somebody gets out of bed for
+    a glass of water. And the only thing you could do about any of it was walk away
+    and hope. Every stealth game is a conversation between hiding and looking, and
+    this one only ever had half of it.
+
+    Thirty hiding places, registered on real furniture rather than sprinkled about as
+    invisible volumes — wardrobes, under beds, behind sofas, the garden shed, the two
+    hedges either side of the path (which is where the streetlight is, and where the
+    watchman walks). Six per lot, half of them indoors.
+
+    **Two rules keep it honest.**
+
+    - **You cannot climb into a wardrobe while somebody is already looking at you.**
+      Without that it is an escape key: get caught, press E, be fine.
+    - **The clock runs while you are in there,** and you cannot move. Hiding spends
+      the one thing the night is actually short of.
+
+    ⚠ **And M26 earned its keep one milestone after it was written.** Putting `HIDES`
+    into the main `findTarget` pass let a wardrobe outbid the picture frame on the
+    nightstand beside it — the playthrough's *walked to 20, could examine 19* fell to
+    **17**, and twenty-six other suites saw nothing wrong. Hiding places now obey the
+    same `if(!best)` rule as scenery, for the same reason: the examine loop is the
+    game.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
