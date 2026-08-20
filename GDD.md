@@ -1357,6 +1357,37 @@ previous one runs in a browser.**
     and broke both m12's axis gate and m3's 150-degree assertion. Grading is off for
     the duration of every prop build.
 
+22. ~~**People.**~~ **DONE 2026-08-20.** *Verified: 33 assertions +
+    [docs/m22-people.png](docs/m22-people.png).*
+
+    Everybody in this game had been the same body since M1 — a box torso, a sphere
+    for a head, a cone for a nose, in one colourway. That was fine while the only
+    person on screen was you, seen from behind, in the dark. M20 turned the lights
+    on and put the whole street outside in the afternoon, and the bodies became the
+    most-looked-at thing in the game.
+
+    **One builder for all of them.** A *look* is a small parameter vector — height,
+    build, skin, hair and style, top, legs, shoes — derived deterministically from a
+    person's id, so Walt is the same Walt every night and in every rebuild. That is
+    exactly the trick the props have used since M2, applied to people. Across the
+    seven residents it yields 4 skin tones, 4 hair colours and 6 tops.
+
+    `makePerson()` keeps the **exact part names** `animBody` has driven since M1 —
+    `legL`, `legR`, `armL`, `armR`, `torso`, `head`, `nose` — so the walk cycle is
+    untouched. The suite proves it by walking the player and watching the legs swing
+    in opposition rather than by inspecting the code.
+
+    Everybody is one of these now: the player, the seven neighbours in their gardens,
+    the watchman under his hi-vis, and the sleepers you stand over all night — who
+    until now had a beige sphere for a head. And they shift their weight instead of
+    standing like statues, for two sine waves each.
+
+    *22 meshes per person; 1,980 on the street; 315 draw calls.*
+
+    ⚠ **Caught by an M1 test.** The first version's shin ran 2.5 cm below the sole,
+    so the player walked around with their feet through the floor. `m1` has asserted
+    *feet sit at y=0* since the first milestone and fired immediately.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

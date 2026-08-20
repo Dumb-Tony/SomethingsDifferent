@@ -169,7 +169,21 @@ Dev-wide catalog of what already exists and where to copy it from.
   glass/metal/ceramic via the `mtl` taxonomy `PROP_KINDS` has declared since M2; and a
   tighter shadow box (24m/1024 = 2.3cm texels, finer than before) instead of a bigger
   map. Bright share 39% -> 11%. 24 assertions + `docs/m21-daylight.png`.
-  **889 assertions across twenty-one suites.**
+- 2026-08-20 - **M22 DONE - PEOPLE.** Everybody had been the same body since M1: a box
+  torso, a sphere head, a cone nose, one colourway. Fine while the only person on
+  screen was you, from behind, in the dark - and then M20 turned the lights on and put
+  the whole street outside in the afternoon. One builder now: `makePerson(look)`, where
+  a LOOK is a parameter vector (height, build, skin, hair + style, top, legs, shoes)
+  derived deterministically from a person's id, so Walt is the same Walt every night.
+  Across the seven residents: 4 skin tones, 4 hair colours, 6 tops. It keeps the exact
+  part NAMES `animBody` has driven since M1, so the walk cycle is untouched - asserted
+  by actually walking the player and watching the legs swing in opposition. Everybody
+  is one of these: player, neighbours, watchman, and the sleepers you stand over all
+  night (who had a beige sphere for a head). They shift their weight rather than
+  standing like statues. 22 meshes each, 1980 on the street, 315 draw calls.
+  ⚠ Caught by an M1 test: the first shin ran 2.5cm below the sole and the player walked
+  with their feet through the floor. 33 assertions + `docs/m22-people.png`.
+  **922 assertions across twenty-two suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 

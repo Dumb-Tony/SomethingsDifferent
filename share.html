@@ -251,7 +251,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M21 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M22 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -4085,8 +4085,29 @@ function carTick(dt){
    a television nobody is watching, and the sky going grey before curfew. Called
    from tick() during the house phase only. */
 const SWAY=[],FLICKER=[];
+/* Standing still is not the same as being a statue. A slow weight shift and a
+   turn of the head is the whole difference between somebody waiting in a garden
+   and a mannequin left in one, and it costs two sine waves per person. */
+function folkTick(dt){
+  const t=(S._folkT=(S._folkT||0)+dt);
+  for(let i=0;i<DAYFOLK.length;i++){
+    const f=DAYFOLK[i];
+    if(!f.group)continue;
+    if(f.ph===undefined){f.ph=(i*1.7)%6.283;f.baseY=f.group.rotation.y;}
+    const P=f.group.userData.parts;
+    const sway=Math.sin(t*0.7+f.ph);
+    f.group.rotation.y=f.baseY+sway*0.10;
+    f.group.position.y=Math.abs(Math.sin(t*0.55+f.ph))*0.012;
+    if(P){
+      P.torso.rotation.y=sway*0.07;
+      P.armL.rotation.x=Math.sin(t*0.6+f.ph)*0.06-0.05;
+      P.armR.rotation.x=Math.sin(t*0.6+f.ph+2.1)*0.06-0.05;
+    }
+  }
+}
 function ambientTick(dt){
   skyFollow();
+  if(S.daytime)folkTick(dt);
   carTick(dt);
   const t=(S._ambT=(S._ambT||0)+dt);
   for(let i=0;i<SWAY.length;i++){
@@ -4173,7 +4194,7 @@ function buildHoyt(seed){buildStreet(seed);}
 /* Register a sleeper: a body on the mattress plus the state the night systems read. */
 function bed(resId,x,z){
   x+=OX;
-  const g=makeSleeper();
+  const g=makeSleeper(resId);
   g.position.set(x,0.54,z);
   scene.add(g);envMeshes.push(g);
   const res=RESIDENTS[resId];
@@ -4184,7 +4205,7 @@ function bed(resId,x,z){
 }
 /* A sleeping body: torso under a duvet, head on the pillow. The torso pivots up
    when they stir, so "sat up in the dark listening" is one rotation, not an anim. */
-function makeSleeper(){
+function makeSleeper(resId){
   /* M17 — the body now lies with its HEAD AT +Z, which does two things at once.
      The bed's head end moved to the north wall (there is a headboard there now, and
      the objects on the nightstands have claimed to be "beside her head" since M4
@@ -4194,14 +4215,23 @@ function makeSleeper(){
      y' = y·cosθ - z·sinθ is only positive for a head at -z when θ is positive.
      Head at +z makes the existing angles raise it, which is what "sat up in the
      dark listening" was always supposed to look like. */
+  const look=personLook(resId||'sleeper');
   const g=new THREE.Group();
   const torso=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.26,0.95),matL('#8c93b4'));
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.26,0.95),mat('#8c93b4'));
   body.position.set(0,0.13,0.32);body.castShadow=true;torso.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.115,14,10),matL('#e2c9ad'));
+  /* M22: the same head, hair and skin they wear in the afternoon. You spend the
+     whole night standing over these people; before this they were a beige sphere. */
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.24,0.21),mat(look.skin));
   head.position.set(0,0.16,0.86);head.castShadow=true;torso.add(head);
+  if(look.style!=='bald'){
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.21,0.09,0.22),mat(look.hair));
+    cap.position.set(0,0.26,0.87);torso.add(cap);
+  }
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.06,7),mat(look.skin));
+  nose.rotation.x=-Math.PI/2;nose.position.set(0,0.17,0.97);torso.add(nose);
   torso.position.set(0,0,0);g.add(torso);
-  const legs=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.20,0.95),matL('#6f7699'));
+  const legs=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.20,0.95),mat(look.legs));
   legs.position.set(0,0.10,-0.42);legs.castShadow=true;g.add(legs);
   g.userData.torso=torso;g.userData.head=head;
   return g;
@@ -4309,30 +4339,127 @@ const PHYS={
    S.yaw + PI. Get this backwards and the character runs backwards. */
 let player=null,BODY=null;
 
-function makeBlockout(){
-  const H=CONST.CH_H,g=new THREE.Group();
-  const skin='#cfc6b8',cloth='#5f6b8a',dark='#3d4358';
-  const legH=H*0.50,torsoH=H*0.33,headR=H*0.076;
-  const mkLeg=(sx)=>{
-    const l=new THREE.Mesh(new THREE.BoxGeometry(0.15,legH,0.17),mat(dark));
-    l.position.set(sx*0.13,legH/2,0);g.add(l);return l;
+/* ═════════════════════════ PEOPLE (M22) ═════════════════════════
+   Everybody in this game has been the same body since M1: a box torso, a sphere for
+   a head and a cone for a nose, in one colourway. It was fine while the only person
+   on screen was you, seen from behind, in the dark. M20 turned the lights on and put
+   the whole street outside in the afternoon, and now the bodies are the most-looked-at
+   thing in the game — seven neighbours standing in their gardens, a watchman with a
+   torch, seven sleepers, and you.
+
+   ONE builder for all of them. A LOOK is a small parameter vector, derived
+   deterministically from a person's id, so Walt is the same Walt every night and in
+   every rebuild — the same trick the props have used since M2, applied to people. */
+const SKIN=['#e8c9a8','#d9b189','#c08d63','#8d5a3b','#6b4228','#f0d6bc'];
+const HAIR=['#2a2118','#4a3423','#6b4a2a','#8a6b3e','#b8a077','#d8d2c6','#7a3a22','#3a3a42'];
+const TOPS=['#5d5170','#3f6fb0','#7b4289','#40422e','#5d3b3c','#3b505d','#6b4a32',
+            '#8a6a48','#436d7d','#7c4f3c','#4a4a54','#9a8a72'];
+const LEGS=['#2e2b38','#3a3644','#4a382e','#3d4358','#2b2735','#514038'];
+const SHOE=['#1b1a22','#2a2733','#3b2d26','#4a4a54'];
+function personLook(id){
+  const r=mulberry32((hashStr('look|'+id)>>>0)||3);
+  const pick=a=>a[Math.floor(r()*a.length)];
+  return {
+    h:0.93+r()*0.15,           // height multiplier: people are not all 1.78m
+    build:0.88+r()*0.30,       // shoulder width
+    skin:pick(SKIN),hair:pick(HAIR),
+    style:['crop','part','bun','bald','long'][Math.floor(r()*5)],
+    top:pick(TOPS),legs:pick(LEGS),shoe:pick(SHOE),
+    belly:r()<0.35
+  };
+}
+/* Returns {group, parts} — parts carries the SAME names animBody has driven since
+   M1 (legL/legR/armL/armR/torso/head/nose), so the walk cycle is untouched. */
+function makePerson(look){
+  look=look||personLook('nobody');
+  const H=CONST.CH_H*look.h,g=new THREE.Group();
+  const legH=H*0.47,torsoH=H*0.30,neckH=H*0.035,headR=H*0.074;
+  const sw=0.20*look.build;                       // half shoulder width
+  const M=c=>mat(c);
+  /* Legs and arms hinge from their TOP, which is what makes the swing read as a
+     hinge rather than a slide (inherited from the M1 blockout). */
+  const mkLeg=sx=>{
+    const l=new THREE.Group();
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.145,legH*0.55,0.17),M(look.legs));
+    thigh.position.y=-legH*0.275;l.add(thigh);
+    /* The shin stops ABOVE the sole. At 0.48/-0.79 its bottom sat at -1.03*legH,
+       i.e. 2.5cm below the shoe, and the player walked around with their feet
+       through the floor - caught by m1's feet-at-y=0 assertion, which has been
+       guarding that since the first milestone. */
+    const shin=new THREE.Mesh(new THREE.BoxGeometry(0.125,legH*0.38,0.15),M(look.legs));
+    shin.position.y=-legH*0.74;l.add(shin);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.07,0.26),M(look.shoe));
+    foot.position.set(0,-legH+0.035,0.045);l.add(foot);
+    l.position.set(sx*0.115,legH,0);g.add(l);
+    return l;
   };
   const legL=mkLeg(-1),legR=mkLeg(1);
-  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.46,torsoH,0.25),mat(cloth));
-  torso.position.y=legH+torsoH/2;g.add(torso);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(headR,16,12),mat(skin));
-  head.position.y=legH+torsoH+headR*0.95;g.add(head);
-  // nose: the facing tell. Points +Z.
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*0.28,headR*0.7,8),mat('#d98f6a'));
-  nose.rotation.x=Math.PI/2;nose.position.set(0,head.position.y,headR*0.95);g.add(nose);
-  const mkArm=(sx)=>{
-    const a=new THREE.Mesh(new THREE.BoxGeometry(0.11,torsoH*0.95,0.13),mat(skin));
-    a.position.set(sx*0.29,legH+torsoH*0.52,0);g.add(a);return a;
+  const torso=new THREE.Group();torso.position.y=legH;g.add(torso);
+  const chest=new THREE.Mesh(new THREE.BoxGeometry(sw*2,torsoH*0.62,0.24),M(look.top));
+  chest.position.y=torsoH*0.68;torso.add(chest);
+  const waist=new THREE.Mesh(new THREE.BoxGeometry(sw*2*(look.belly?1.06:0.9),
+    torsoH*0.42,look.belly?0.27:0.22),M(look.top));
+  waist.position.y=torsoH*0.24;torso.add(waist);
+  const collar=new THREE.Mesh(new THREE.BoxGeometry(sw*1.5,0.045,0.25),M(look.skin));
+  collar.position.y=torsoH+0.01;torso.add(collar);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.048,0.054,neckH,8),M(look.skin));
+  neck.position.y=torsoH+neckH*0.5;torso.add(neck);
+  /* The head is a slightly squashed box rather than a sphere: a sphere reads as a
+     ball on a stick at any distance, and the flat planes catch the key light. */
+  const head=new THREE.Mesh(new THREE.BoxGeometry(headR*1.7,headR*2.05,headR*1.8),
+    M(look.skin));
+  head.position.y=torsoH+neckH+headR;torso.add(head);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*0.20,headR*0.5,7),M(look.skin));
+  nose.rotation.x=Math.PI/2;
+  nose.position.set(0,head.position.y-headR*0.05,headR*0.92);torso.add(nose);
+  [-1,1].forEach(sx=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(headR*0.20,headR*0.16,0.02),
+      mat('#241f1a'));
+    eye.position.set(sx*headR*0.36,head.position.y+headR*0.20,headR*0.90);torso.add(eye);
+  });
+  if(look.style!=='bald'){
+    const hm=M(look.hair);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(headR*1.78,headR*0.72,headR*1.88),hm);
+    cap.position.y=head.position.y+headR*0.78;torso.add(cap);
+    if(look.style==='part'){
+      const f=new THREE.Mesh(new THREE.BoxGeometry(headR*1.0,headR*0.30,0.03),hm);
+      f.position.set(-headR*0.34,head.position.y+headR*0.50,headR*0.93);torso.add(f);
+    }else if(look.style==='bun'){
+      const b=new THREE.Mesh(new THREE.SphereGeometry(headR*0.42,9,7),hm);
+      b.position.set(0,head.position.y+headR*0.86,-headR*1.05);torso.add(b);
+    }else if(look.style==='long'){
+      const b=new THREE.Mesh(new THREE.BoxGeometry(headR*1.8,headR*1.5,headR*0.5),hm);
+      b.position.set(0,head.position.y-headR*0.10,-headR*0.86);torso.add(b);
+    }
+  }
+  const mkArm=sx=>{
+    const a=new THREE.Group();
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.10,torsoH*0.46,0.12),M(look.top));
+    upper.position.y=-torsoH*0.23;a.add(upper);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.09,torsoH*0.42,0.10),M(look.skin));
+    fore.position.y=-torsoH*0.66;a.add(fore);
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.09,0.075),M(look.skin));
+    hand.position.y=-torsoH*0.92;a.add(hand);
+    a.position.set(sx*(sw+0.055),torsoH*0.92,0);torso.add(a);
+    return a;
   };
   const armL=mkArm(-1),armR=mkArm(1);
-  // pivot the limbs from their TOP so swinging looks like a hinge, not a slide
-  [[legL,legH],[legR,legH]].forEach(([m,h])=>{m.geometry.translate(0,-h/2,0);m.position.y=legH;});
-  [[armL,torsoH*0.95],[armR,torsoH*0.95]].forEach(([m,h])=>{m.geometry.translate(0,-h/2,0);m.position.y=legH+torsoH*0.99;});
+  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  return {group:g,parts:{legL,legR,armL,armR,torso,head,nose,
+                         legH:legH,torsoH:torsoH,H:H}};
+}
+
+function makeBlockout(){
+  /* M22 - one builder for every person in the game. The old body was a box torso, a
+     sphere head and a cone nose in a single colourway; makePerson() keeps exactly the
+     same part NAMES, so animBody's walk cycle is untouched, and adds proportions,
+     clothing, hair and a face. STEVE MAREK is a fixed look rather than a random one:
+     he is the man whose shape the player learns from behind for the whole game. */
+  const H=CONST.CH_H,g0=makePerson(personLook('steve-marek'));
+  const g=g0.group,P=g0.parts;
+  const legL=P.legL,legR=P.legR,armL=P.armL,armR=P.armR;
+  const torso=P.torso,head=P.head,nose=P.nose;
+  const legH=P.legH,torsoH=P.torsoH;
   BODY={legL,legR,armL,armR,torso,head,nose,phase:0,legH,torsoH};
   // normalize to exactly CH_H with the feet at 0, so the mesh can never drift out
   // of sync with the constant every camera number derives from (same trick as the
@@ -5306,28 +5433,19 @@ function hardClear(){
 function hardAdd(obj,zone){HARD_FX.push({obj:obj,zone:zone});return obj;}
 /* A person, built to the same proportions as the player's own blockout (see
    makeBlockout) but without touching the BODY globals it owns. */
-function makeWalker(cloth,jacket){
-  const H=CONST.CH_H,g=new THREE.Group();
-  const legH=H*0.50,torsoH=H*0.33,headR=H*0.076;
-  [-1,1].forEach(sx=>{
-    const l=new THREE.Mesh(new THREE.BoxGeometry(0.15,legH,0.17),mat('#2e2b38'));
-    l.position.set(sx*0.13,legH/2,0);l.castShadow=true;g.add(l);
-  });
-  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.48,torsoH,0.27),mat(cloth));
-  torso.position.y=legH+torsoH/2;torso.castShadow=true;g.add(torso);
-  if(jacket){   // the word on the back, which is the whole joke about him
-    const t=new THREE.Mesh(new THREE.BoxGeometry(0.50,torsoH*0.52,0.29),
+/* Anybody who is not the player: the neighbourhood watch, and everyone standing in
+   their garden in the afternoon. `who` seeds the look, so a given neighbour is the
+   same person every night; `jacket` is the hi-vis band the watchman wears, which is
+   the entire joke about him. */
+function makeWalker(who,jacket){
+  const built=makePerson(personLook(who||'somebody'));
+  const g=built.group,P=built.parts;
+  if(jacket){
+    const t=new THREE.Mesh(new THREE.BoxGeometry(0.44,P.torsoH*0.54,0.30),
       new THREE.MeshLambertMaterial({color:jacket,emissive:jacket,emissiveIntensity:0.22}));
-    t.position.y=legH+torsoH*0.62;g.add(t);
+    t.position.y=P.torsoH*0.62;t.castShadow=true;P.torso.add(t);
   }
-  const head=new THREE.Mesh(new THREE.SphereGeometry(headR,14,10),mat('#cfc6b8'));
-  head.position.y=legH+torsoH+headR*0.95;head.castShadow=true;g.add(head);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*0.28,headR*0.7,8),mat('#d98f6a'));
-  nose.rotation.x=Math.PI/2;nose.position.set(0,head.position.y,headR*0.95);g.add(nose);
-  [-1,1].forEach(sx=>{
-    const a=new THREE.Mesh(new THREE.BoxGeometry(0.11,torsoH*0.95,0.13),mat('#cfc6b8'));
-    a.position.set(sx*0.29,legH+torsoH*0.52,0);a.castShadow=true;g.add(a);
-  });
+  g.userData.parts=P;
   return g;
 }
 /* A dog, asleep in a yard until it is not. */
@@ -5409,7 +5527,7 @@ function hardenNight(){
        away. Before this he was six numbers that ended your night from eleven metres
        with no mesh, no light and no sound. */
     const wz=-CONST.ROOM_SCALE*8.6;
-    const g=makeWalker('#3d4358','#c4bd63');
+    const g=makeWalker('the-watchman','#c4bd63');
     g.position.set(Math.min.apply(null,xs)-2,0,wz);
     scene.add(g);envMeshes.push(g);hardAdd(g,null);
     const beam=new THREE.Mesh(new THREE.ConeGeometry(0.62,3.2,12,1,true),
@@ -6271,7 +6389,7 @@ function buildFolk(){
       const r=RESIDENTS[id];
       if(r.collapsed)return;                      // they are not coming out today
       const spot=FOLK_SPOTS[(k+Math.floor(rng()*FOLK_SPOTS.length))%FOLK_SPOTS.length];
-      const g=makeWalker(CLOTH[(ci++)%CLOTH.length],null);
+      const g=makeWalker(id,null);                 // seeded off WHO they are
       const x=h.x+spot[0],z=spot[1];
       g.position.set(x,0,z);g.rotation.y=Math.PI+ (rng()-0.5)*0.9;
       scene.add(g);envMeshes.push(g);
@@ -7657,6 +7775,9 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   // - M14: the street hardens -
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
+  get BODY(){return BODY;},
+  // - M22: people -
+  makePerson,personLook,folkTick,SKIN,HAIR,TOPS,
   // - M21: the look -
   grade,gradeCss,matShiny,isShiny,mulberry32,
   get GRADE_ON(){return GRADE_ON;},
@@ -7694,6 +7815,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M21'};
+  version:'M22'};
 </script>
 
