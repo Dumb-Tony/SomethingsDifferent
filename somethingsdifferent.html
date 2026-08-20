@@ -257,7 +257,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M23 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M24 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -302,6 +302,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>Mouse</b><span>look around (click once to capture the cursor)</span>
     <b>Wheel</b><span>zoom</span>
     <b>E</b><span>examine / search / open</span>
+    <b>Q</b><span>scan pulse &mdash; marks their things, and is heard</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; end the night, see the morning</span>
     <b>F3</b><span>toggle debug readout</span>
@@ -400,6 +401,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>Mouse</b><span>look around (click once to capture the cursor)</span>
     <b>Wheel</b><span>zoom</span>
     <b>E</b><span>examine / search a planter / open a door</span>
+    <b>Q</b><span>scan pulse &mdash; marks everything of theirs you can see. It goes through glass, not through walls, and they can hear it</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; ends the night, shows you the morning</span>
     <b>Esc</b><span>pause</span>
@@ -640,6 +642,17 @@ const CONST={
   HARD_WATCH_R: 11.0,       // how far up the street he can pick you out
   HARD_CAM_R  : 2.6,        // doorbell camera trigger radius
   HARD_CAM_S  : 7,          // Suspicion per household, once per night
+  // -- the scanner (M24) ---------------------------------------------------
+  /* Until now the only way to learn anything about a room was to walk within
+     INTERACT_RANGE (2.0m) of a thing and face it. A house holds twenty possessions
+     and a hundred-odd pieces of scenery, in the dark, and the player swept it with
+     their face. The alien has an instrument; it should be able to read a room.
+     It reads only what it can SEE - sightBlocked, so it goes through glass (M23)
+     and not through walls, which makes a window a place to case a room from. */
+  SCAN_R      : 9.0,        // metres
+  SCAN_T      : 6.0,        // seconds the marks stay up
+  SCAN_CD     : 4.0,        // ...and before you can pulse again
+  SCAN_NOISE  : 2.6,        // in sleeper-noise units: LOUDER than a single scan
   // -- the look (M21) ------------------------------------
   /* MEASURED before touching anything (tools/_look.js): 684 materials, of which 610
      are Lambert and 74 Basic and ZERO have a specular term - wood, ceramic, glass and
@@ -2429,6 +2442,7 @@ const S={
   // camera
   yaw:0.6, pitch:CONST.CAM_PITCH0, dist:CONST.CAM_DIST, camP:null, camL:null,
   // debug
+  scanCd:0, scanT:0,   // M24: the scanner's cooldown and how long its marks last
   showDbg:false, fps:0,   // F3 turns the engineering readout on; playtesters don't want it
 };
 
@@ -2976,7 +2990,7 @@ function clearWorld(){
      the counter run on and every saved reference dangles. */
   _objId=0;
   envMeshes.length=0;colliders.length=0;helpers.length=0;CEIL_ZONES.length=0;
-  SCENERY.length=0;WINDOWS.length=0;
+  SCENERY.length=0;WINDOWS.length=0;MARKS.length=0;
   for(const o of objects){if(o.group)disposeProp(o.group);}
   objects.length=0;PLANTERS.length=0;DOORS.length=0;FRONT_DOOR=null;
   BEDS.length=0;LIGHTS.length=0;SLEEPERS.length=0;
@@ -7075,6 +7089,73 @@ function loadGame(){
 }
 
 /* ═════════════════════════ INTERACTION ═════════════════════════ */
+/* ---------------------------- THE SCANNER (M24) ----------------------------
+   A pulse that marks every possession you can SEE, colour-coded by what you have
+   already done to it. It is the difference between hunting for objects and reading
+   a room, and it costs the one currency the night is made of: noise.
+
+   Line of sight uses sightBlocked, so it passes through glass and not through
+   walls. Standing in a yard and pulsing through the lounge window to see which of
+   their things you have already catalogued is the whole reason M23 exists. */
+const MARKS=[];
+const MARK_GEO=new THREE.OctahedronGeometry(0.055);
+const MARK_MTL={
+  fresh :new THREE.MeshBasicMaterial({color:'#5ee3c8'}),   // never recorded
+  known :new THREE.MeshBasicMaterial({color:'#8b8794'}),   // catalogued
+  ready :new THREE.MeshBasicMaterial({color:'#ffd27a'}),   // a copy is in your bag
+  marked:new THREE.MeshBasicMaterial({color:'#ff5a5a'})    // they have marked it
+};
+function clearMarks(){
+  for(let i=0;i<MARKS.length;i++)scene.remove(MARKS[i]);
+  MARKS.length=0;
+}
+function markState(o){
+  if(o.marked)return 'marked';
+  if(invFor(o.id).length)return 'ready';
+  return CATALOG[o.id]?'known':'fresh';
+}
+function scanPulse(){
+  if(!player||S.phase!=='house')return null;
+  if(S.scanCd>0){hint('The scanner is still cycling.');return null;}
+  S.scanCd=CONST.SCAN_CD;S.scanT=CONST.SCAN_T;
+  clearMarks();
+  const px=player.position.x,pz=player.position.z;
+  let n=0;
+  const counts={fresh:0,known:0,ready:0,marked:0};
+  for(let i=0;i<objects.length;i++){
+    const o=objects[i],p=o.spec._pos;
+    if(Math.hypot(p[0]-px,p[2]-pz)>CONST.SCAN_R)continue;
+    if(sightBlocked(px,pz,p[0],p[2])>0)continue;      // glass yes, walls no
+    const st=markState(o);
+    const m=new THREE.Mesh(MARK_GEO,MARK_MTL[st]);
+    const sz=(o.group&&o.group.userData.size)?o.group.userData.size.y:0.16;
+    m.position.set(p[0],p[1]+sz+0.16,p[2]);
+    m.userData.temporal=true;
+    scene.add(m);MARKS.push(m);
+    counts[st]++;n++;
+  }
+  /* The cost. A pulse is louder than reading one object by hand, which is what
+     makes "walk over and look" still worth doing when somebody is stirring. */
+  emitNoise(px,pz,CONST.SCAN_NOISE,'scan');
+  hint(n?('Scan: '+counts.fresh+' unrecorded, '+counts.known+' on file, '+
+          counts.ready+' you have a copy of'+
+          (counts.marked?', '+counts.marked+' MARKED':''))
+        :'Nothing of theirs within range.');
+  return {n:n,counts:counts};
+}
+function scanTick(dt){
+  if(S.scanCd>0)S.scanCd=Math.max(0,S.scanCd-dt);
+  if(S.scanT>0){
+    S.scanT=Math.max(0,S.scanT-dt);
+    /* The marks bob, so they read as an overlay the instrument is drawing rather
+       than as objects somebody left floating in the room. */
+    const t=performance.now()*0.004;
+    for(let i=0;i<MARKS.length;i++)
+      MARKS[i].rotation.y=t+i,MARKS[i].position.y+=Math.sin(t*1.6+i)*0.0006;
+    if(S.scanT<=0)clearMarks();
+  }
+}
+
 const INTERACT_RANGE=2.0,INTERACT_DOT=0.15,NUDGE_STEP=0.03,ROT_STEP=8;
 function findTarget(){
   if(!player||S.phase!=='house'||S.menuOpen)return null;
@@ -7551,6 +7632,7 @@ addEventListener('keydown',e=>{
   if(S.focus){focusKey(k,e);return;}          // focus mode owns the keyboard
   if(S.phase==='house'){
     if(k==='e'){interact();return;}
+    if(k==='q'){scanPulse();return;}     // M24: read the room
     if(k==='tab'){showDossier();e.preventDefault();return;}
     if(k==='m'){endNight('home','You are back before anyone stirs.');return;}
   }
@@ -7727,6 +7809,7 @@ function tick(dt){
   if(!S.menuOpen&&S.phase==='house')nightTick(dt);
   updateCamera(dt);
   trackShadow();
+  scanTick(dt);
   if(!S.menuOpen&&S.phase==='house')ambientTick(dt);
   SFX.update(dt);
   for(let i=0;i<DOORS.length;i++){
@@ -7829,6 +7912,8 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
   get BODY(){return BODY;},
+  // - M24: the scanner -
+  MARKS,scanPulse,scanTick,markState,clearMarks,
   // - M23: windows -
   WINDOWS,sightBlocked,
   // - M22: people -
@@ -7870,10 +7955,14 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M23'};
+  version:'M24'};
 </script>
 </body>
 </html>
+
+
+
+
 
 
 

@@ -1412,6 +1412,30 @@ previous one runs in a browser.**
     awake and facing can see you through their own bedroom window, and so can the man
     with the torch.
 
+24. ~~**The scanner.**~~ **DONE 2026-08-20.** *Verified: 22 assertions.*
+
+    Until now the only way to learn anything about a room was to walk within
+    `INTERACT_RANGE` — 2.0 m — of a thing and face it. A house holds twenty
+    possessions and about a hundred pieces of scenery, in the dark. The player swept
+    the room with their face. The alien has an instrument; it ought to be able to
+    read a room.
+
+    **Q** pulses. Every possession you can see gets a mark, colour-coded by the state
+    it is in: never recorded, on file, **a copy already in your bag**, or marked by
+    them. That last pair is the point — the thing a player actually wants to find in
+    a dark room is *the object I am carrying the replacement for*.
+
+    Two properties keep it a mechanic rather than a cheat:
+
+    - **It reads only what it can see.** `sightBlocked`, so it goes through glass and
+      never through walls — which means you can stand in the front garden and case a
+      lounge through the window before you ever open the door. That is what M23 was
+      for, and it measures: 5 of their things read from outside the window, while 6
+      others in range but behind a wall stayed dark.
+    - **It is loud.** 2.6 against a single hand-scan's 0.6 in sleeper-noise units,
+      with a four-second cooldown. Walking over and looking is still the quiet option
+      when somebody is stirring.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

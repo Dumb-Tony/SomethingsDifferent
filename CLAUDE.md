@@ -196,7 +196,19 @@ Dev-wide catalog of what already exists and where to copy it from.
   wall, sight 0; through the solid stretch beside it, 1 and 1. Which cuts both ways -
   a sleeper who is awake and facing can now see you through their own bedroom window,
   and so can the watchman. 17 assertions + `docs/m23-street.png`.
-  **940 assertions across twenty-three suites.**
+- 2026-08-20 - **M24 DONE - THE SCANNER.** The only way to learn anything about a room
+  was to walk within INTERACT_RANGE (2.0m) of a thing and face it. A house holds twenty
+  possessions and ~107 scenery points, in the dark, so the player swept it with their
+  face. `Q` now pulses: every possession you can SEE gets a mark colour-coded by state
+  - never recorded / on file / **you already have a copy in the bag** / they have
+  marked it. Two things make it a mechanic rather than a cheat. It uses `sightBlocked`,
+  so it reads through glass and not through walls - **you can stand in the garden and
+  case a room through the window**, which is what M23 was for (measured: 5 of their
+  things from outside the lounge window). And it is LOUDER than reading one thing by
+  hand (2.6 vs 0.6 in sleeper-noise units) with a 4s cooldown, so walking over and
+  looking is still worth doing when somebody is stirring.
+  22 assertions.
+  **962 assertions across twenty-four suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
