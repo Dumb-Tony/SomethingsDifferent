@@ -50,7 +50,7 @@ if [ "$RUN_TESTS" = "1" ]; then
   cd "$ROOT" || exit 2
   log="$(mktemp)"
   fails=""
-  for s in m1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m17 m18 m19 m20 m21 m22 m23 m24 m25; do
+  for s in m1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m17 m18 m19 m20 m21 m22 m23 m24 m25 m26; do
     # RETRY ONCE. The harness flakes about one run in twenty on Chrome startup and
     # reports NO OUTPUT for a suite that is perfectly green. Measured, and it blocked
     # this very release on m18 — which then passed twice in a row by hand. A real
@@ -70,7 +70,7 @@ if [ "$RUN_TESTS" = "1" ]; then
   done
   rm -f "$log"
   [ -z "$fails" ] || { echo "SUITES FAILED:$fails — not publishing" >&2; exit 1; }
-  echo "all 25 suites green on the shipped bytes"
+  echo "all 26 suites green on the shipped bytes"
 fi
 
 cd "$PUBLISH_DIR" || exit 2
@@ -136,6 +136,7 @@ echo "four minutes on and the URL is still serving the old build" >&2
 echo "  expected ${want_blob:0:12}, serving ${live:0:12}" >&2
 echo "  $URL" >&2
 exit 1
+
 
 
 

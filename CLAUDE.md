@@ -219,7 +219,22 @@ Dev-wide catalog of what already exists and where to copy it from.
   amount of chat over a fence explains why Steve is in your bedroom at three in the
   morning. So the day now buys insurance for the night, and shopping competes with it
   for the same action budget. 20 assertions.
-  **982 assertions across twenty-five suites.**
+- 2026-08-20 - **M26 DONE - A RUN, PLAYED.** Every other suite either drives systems
+  directly or teleports the player. That blind spot has hidden three separate walls -
+  two sealed rooms (M13), a garden gate that was a picture (M17) and an economy that
+  could not fund a win (M18) - each invisible to dozens of green assertions because
+  nothing ever WALKED. This one routes over the real collider set (BFS on a 0.35m
+  grid), holds W and lets collision arbitrate: your doorstep -> a neighbour's door
+  (332 steps) -> a planter for the key -> in at the front door -> **all four rooms** ->
+  a scan pulse -> **all 20 possessions**, 19 examinable from where you stand -> home ->
+  the shop -> back out -> the swap -> the original in your pocket.
+  ⚠ Two "failures" on the first run were the TEST's fault and worth remembering: it
+  aimed at the middle of the kitchen, which is the kitchen table, and it picked
+  purchases by forecast when night-one Human Knowledge is 0 and there IS no forecast.
+  MEASURED as a result: on night one $140 buys 264 shelf items, 59 of which would
+  create doubt - a 22% blind hit rate, which is what HK is sold against.
+  18 assertions.
+  **1000 assertions across twenty-six suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 

@@ -1459,6 +1459,32 @@ previous one runs in a browser.**
     Which finally makes the day cost something to spend: social insurance for the
     night now competes with the shops for the same two actions per block.
 
+26. ~~**A run, played.**~~ **DONE 2026-08-20.** *Verified: 18 assertions.*
+
+    Every other suite in this project either drives systems directly or teleports
+    the player to whatever it wants to test. That single blind spot has hidden three
+    separate walls — two sealed rooms (M13), a garden gate that turned out to be a
+    picture (M17), and an economy that could not fund a win (M18). Each was invisible
+    to dozens of green assertions, because **nothing ever walked**.
+
+    This one walks. It routes over the real collider set (BFS on a 0.35 m grid),
+    holds `W`, and lets collision arbitrate — from your own doorstep to a
+    neighbour's front door (332 steps), through a planter for the spare key, in at
+    the door, round **all four rooms**, a scan pulse, up to **all twenty
+    possessions** (19 examinable from where you stand), home, into the shop, back
+    out, and the swap — with their original in your pocket at the end of it.
+
+    ⚠ **Both of the first run's failures were the test's own fault**, and both are
+    worth remembering. It aimed at "the middle of the kitchen", which is the kitchen
+    table. And it picked purchases by reading the shop's *forecast* — when Human
+    Knowledge is 0 on night one and there is no forecast at all.
+
+    That second mistake turned into the useful measurement. **On night one, $140 buys
+    264 of the things on the shelves, and 59 of them would create doubt: a 22% blind
+    hit rate.** A good first purchase exists and is not a needle in a haystack — you
+    simply cannot see which one it is, which is precisely what Human Knowledge is
+    sold against.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
