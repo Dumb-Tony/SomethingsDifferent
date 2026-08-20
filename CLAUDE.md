@@ -228,7 +228,7 @@ the default. Mutating `CONST` would silently invalidate every suite that reads i
 ## Run it
 ```
 play.bat                    # serves on http://localhost:8341/somethingsdifferent.html
-tools\test.ps1              # all suites (715 assertions), exit 0 = green
+tools\test.ps1              # all suites (760 assertions), exit 0 = green
 tools\test.ps1 -Only m17    # one suite
 
 # diagnostics (not suites — they measure, they don't gate):
@@ -242,6 +242,13 @@ tools\smoketest.ps1 -Tests tools\_escalate.js # what the street meters do over a
 tools\montage.ps1           # re-render docs\m3-props.png
 tools\shot.ps1 -Scene court # screenshot a named scene headless
 tools\build-share.ps1       # build share.html: one self-contained file, no wrapper
+
+# PUBLISH. Build, test the SHIPPED bytes, push dist\, then poll the live URL until
+# it serves THIS build - compared by git BLOB HASH, never by byte count (working copy
+# is CRLF, Pages serves LF, so bytes are off by one per line and can never match).
+# Adapted from C:\Dev\BedroomRacers\tools\publish.sh - see Dev\INDEX.md -> Publishing.
+bash tools/publish.sh                 # build, test, push, wait, verify, print both links
+bash tools/publish.sh --no-tests      # only when you have just run the suites
 ```
 
 ## Sharing a playtest build
@@ -312,6 +319,7 @@ can assert on real pixels via `readPixels`. Don't inherit the Chameleon project'
 
 Keep collider/Doubt/noise/spec math pure (plain objects, no live `THREE` scene) so it
 stays testable without a GL context.
+
 
 
 
