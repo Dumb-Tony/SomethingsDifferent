@@ -257,7 +257,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M20 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M21 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -640,6 +640,26 @@ const CONST={
   HARD_WATCH_R: 11.0,       // how far up the street he can pick you out
   HARD_CAM_R  : 2.6,        // doorbell camera trigger radius
   HARD_CAM_S  : 7,          // Suspicion per household, once per night
+  // -- the look (M21) ------------------------------------
+  /* MEASURED before touching anything (tools/_look.js): 684 materials, of which 610
+     are Lambert and 74 Basic and ZERO have a specular term - wood, ceramic, glass and
+     painted plaster all return light identically. 39% of the palette sits above
+     luminance 0.75 and only 4% is a true dark, which is why daylight read as bleached
+     and why nothing separates from anything else.
+     A wholesale upgrade was PRICED, not assumed: every Lambert -> Standard costs 2.13x
+     the frame, -> Phong 2.60x. Both too much for shininess. Value structure costs
+     nothing, so that is where the milestone spends, and specular goes ONLY on the
+     surfaces the eye expects a highlight from. */
+  TONE_ROLLOFF: 0.42,       // highlight compression on TRUE luminance: Y' = Y*(1-k*Y^2)
+  TONE_SAT    : 1.30,       // ...and a little colour back, since grading kills it
+  /* The handful of materials that DO get a specular term. PROP_KINDS already
+     declares what everything is made of (mtl) and the audio system has used that
+     taxonomy since M9 - the same word now decides whether a thing can glint. */
+  SHINY_MTL   : ['glass','metal'],   // ceramic dropped: it is the commonest mtl on
+                            // the street (mugs, gnomes, vases, shakers, lamps) and
+                            // carrying it took the frame far enough on the software
+                            // renderer that m11's live render-loop check starved.
+  SHINE       : 26,         // Phong shininess for those
   // -- the fence (GDD 5.7, M18) --------------------------
   /* THE HOLE THIS FILLS. Every balance measurement ever made here set bank=1000000
      first (_balance.js, _escalate.js), so the win threshold was tuned for a player
@@ -1004,15 +1024,71 @@ const PROP_KINDS={
 function hsl(h,s,l){return new THREE.Color().setHSL((((h%360)+360)%360)/360,s,l);}
 function hslCss(h,s,l){return 'hsl('+(((h%360)+360)%360).toFixed(1)+','+
   (s*100).toFixed(0)+'%,'+(l*100).toFixed(0)+'%)';}
-function matL(c){return new THREE.MeshLambertMaterial({color:c});}
+/* Props build with matL. It grades like everything else — and takes the kind's
+   declared material, so a ceramic mug and a metal keyring glint while a card cereal
+   box does not. Prop groups are disposed and rebuilt constantly, so these are NOT
+   cached by identity the way scene materials are. */
+function matL(c,mtl){
+  const m=mtl||CUR_MTL;
+  if(m&&isShiny(m))
+    return new THREE.MeshPhongMaterial({color:grade(c),shininess:CONST.SHINE,
+                                        specular:0x22242a});
+  return new THREE.MeshLambertMaterial({color:grade(c)});
+}
 
 /* Canvas textures are cached by a key that MUST capture every spec value the draw
    function reads — a key that misses an axis silently returns the wrong art. */
 const _texCache=new Map();
+/* THE OTHER HALF OF THE GRADE, and the half that actually mattered. Every large
+   surface in the game - walls, floors, ceilings, lawns, the road, the pavements,
+   the facades - is built as `new MeshLambertMaterial({map:...})` with NO colour
+   argument, so material.color is pure white and the ENTIRE palette of those
+   surfaces lives in the canvas. Grading mat() could not touch a pixel of it, which
+   is why the first pass moved the measured share of bright materials only 39% ->
+   30% while the street still bleached in daylight. */
+const _cssCache=new Map();
+function gradeCss(v){
+  if(!GRADE_ON)return v;
+  if(_cssCache.has(v))return _cssCache.get(v);
+  let out=v;
+  const m=/^rgba?\(([^)]+)\)$/i.exec(v);
+  if(m){
+    const p=m[1].split(',').map(function(x){return parseFloat(x);});
+    const col=new THREE.Color(p[0]/255,p[1]/255,p[2]/255);
+    const g=new THREE.Color(grade(col.getHex()));
+    out='rgba('+Math.round(g.r*255)+','+Math.round(g.g*255)+','+Math.round(g.b*255)+
+        ','+(p.length>3?p[3]:1)+')';
+  }else{
+    try{out='#'+grade(v).toString(16).padStart(6,'0');}catch(e){out=v;}
+  }
+  _cssCache.set(v,out);
+  return out;
+}
+/* A 2d context that grades every colour on its way in. Methods are bound to the
+   real context; gradients and patterns are objects rather than strings and pass
+   through untouched. */
+function gradedCtx(ctx){
+  return new Proxy(ctx,{
+    get(t,p){const v=t[p];return (typeof v==='function')?v.bind(t):v;},
+    set(t,p,v){
+      if((p==='fillStyle'||p==='strokeStyle')&&typeof v==='string')v=gradeCss(v);
+      t[p]=v;return true;
+    }
+  });
+}
 function canvasTex(w,h,key,draw){
   if(_texCache.has(key))return _texCache.get(key);
   const c=document.createElement('canvas');c.width=w;c.height=h;
-  draw(c.getContext('2d'),w,h);
+  /* Grade at DRAW time, not per pixel. The first version read the whole canvas back
+     with getImageData and walked it: correct, and far too slow to ship. Prop
+     textures are keyed by SPEC, so a street of 80 objects mints hundreds of unique
+     canvases, and hundreds of getImageData/putImageData round-trips at world-build
+     time blew the whole 200s test budget - every suite went to NO OUTPUT at once.
+     Grading the style assignments instead is O(fills) rather than O(pixels), exact
+     for the flat fills these textures are made of, and free. */
+  const ctx=gradedCtx(c.getContext('2d'));
+  draw(ctx,w,h);
+
   const t=new THREE.CanvasTexture(c);
   t.needsUpdate=true;
   _texCache.set(key,t);
@@ -2076,10 +2152,19 @@ function finishProp(inner,kindId,spec){
   g.userData.size={x:b2.max.x-b2.min.x,y:b2.max.y-b2.min.y,z:b2.max.z-b2.min.z};
   return g;
 }
+/* The kind's declared material, in scope for the whole of its build(). Thirty
+   builders call matL() hundreds of times between them; threading mtl through every
+   one of those calls would be thirty edits and a permanent invitation to forget one.
+   PROP_KINDS has declared this since M2 and the audio system has read it since M9. */
+let CUR_MTL=null;
 function buildProp(kindId,spec){
   const k=PROP_KINDS[kindId];
   if(!k||!k.build)return null;
-  return finishProp(k.build(spec),kindId,spec);
+  CUR_MTL=k.mtl||null;
+  GRADE_ON=false;                              // the evidence is rendered as authored
+  let g=null;
+  try{g=k.build(spec);}finally{CUR_MTL=null;GRADE_ON=true;}
+  return g?finishProp(g,kindId,spec):null;
 }
 /* Geometries are per-instance; textures are shared via _texCache and must NOT be
    disposed here or the next prop with the same spec renders black. */
@@ -2369,10 +2454,21 @@ const hemi=new THREE.HemisphereLight('#e8eeff','#3a3844',0.80);scene.add(hemi);
 const moon=new THREE.DirectionalLight('#fff6e8',0.85);moon.position.set(5,9,4);scene.add(moon);
 const fill=new THREE.DirectionalLight('#b9c6e0',0.25);fill.position.set(-6,5,-4);scene.add(fill);
 moon.castShadow=true;
+/* M21: 2048. The shadow box follows the player (M17) and is only 32m across, so the
+   extra resolution buys genuinely crisper contact edges rather than covering more
+   ground - and soft, washed-out shadows were most of why things read as floating
+   rather than standing on the grass. */
 moon.shadow.mapSize.set(1024,1024);
 moon.shadow.camera.near=1;moon.shadow.camera.far=48;
-moon.shadow.camera.left=-16;moon.shadow.camera.right=16;
-moon.shadow.camera.top=16;moon.shadow.camera.bottom=-16;
+/* M21 - TIGHTER, NOT BIGGER. Crisper shadows were the goal, and 2048x2048 delivered
+   them and then made all twenty test suites time out at once: the harness renders in
+   software (WARP), where a 2048 map over 1039 casters is crippling. A real GPU would
+   not notice, but shipping something the tests cannot run is not a trade worth
+   making. Shrinking the box does the same job for free - it has followed the player
+   since M17, so +/-12 still covers the whole near field, and 24m/1024 gives finer
+   texels than 32m/1024 ever did. */
+moon.shadow.camera.left=-12;moon.shadow.camera.right=12;
+moon.shadow.camera.top=12;moon.shadow.camera.bottom=-12;
 moon.shadow.bias=-0.0016;
 /* M17: the shadow box is +/-16m and the street is 146m long, so before this it
    covered ONE lot of five — four houses out of five were flat-lit, and the wall
@@ -2445,8 +2541,8 @@ function setLighting(mode){
        put the house walls at almost pure white and turned the lawns mint - the
        street looked bleached rather than sunny. A lower key with a warmer colour
        and a much lower ambient keeps the midtones where the textures live. */
-    hemi.color.set('#bcd4f2');hemi.groundColor.set('#5a5240');hemi.intensity=0.55;
-    moon.color.set('#ffeac6');moon.intensity=1.15;
+    hemi.color.set('#bcd4f2');hemi.groundColor.set('#57503f');hemi.intensity=0.34;
+    moon.color.set('#fff0d2');moon.intensity=1.55;
     moonOff.set(-14,20,11);moon.position.set(-14,20,11);
     fill.color.set('#93a7c4');fill.intensity=0.18;fill.position.set(9,7,-9);
     scene.fog=new THREE.FogExp2('#b8cadd',0.0060);
@@ -2636,13 +2732,72 @@ function ceilAt(x,z){
    distinct geometries. Safe because nothing mutates a scene material after
    creation (userData.baseColor is written and never read), and disposeProp() only
    ever runs over PROP groups, which build their own geometry from matL(). */
+/* ── GRADING (M21) ──────────────────────────────────────────────────────────
+   ONE place, because every scene colour in the game already goes through mat() or
+   matL(). Highlights are compressed and a little saturation is put back:
+
+       L' = L * (1 - TONE_ROLLOFF * L^2)
+
+   which leaves the darks alone (0.20 -> 0.198) and pulls the top down hard
+   (0.85 -> 0.68). MEASURED before: 39% of materials above luminance 0.75 against 4%
+   true darks, which is a palette with no floor - in daylight it read as bleached and
+   at night as uniformly grey. Grading is a curve rather than a repaint so twenty
+   milestones of hand-picked colours keep their relationships to each other. */
+/* GRADE THE WORLD, NEVER THE EVIDENCE.
+   The whole game is judging whether two objects are the same object. A compressive
+   tone curve does exactly what the player is trying to do - it pulls colours toward
+   each other - so applying it to PROPS attacks the signal the game is made of.
+   Measured, it did: m12's "every declared axis actually changes the object" gate
+   went red on pictureFrame.frameHue, gardenGnome.hatHue and potPlant.potHue, and
+   m3's 150-degree hue-shift assertion went with it. So grading is switched OFF for
+   the duration of a prop build. Architecture, ground, sky and street get the curve;
+   the things you have to compare are rendered exactly as authored. */
+let GRADE_ON=true;
+const _gradeCache=new Map();
+function grade(c){
+  if(!GRADE_ON)return (new THREE.Color(c)).getHex();
+  const key=String(c);
+  if(_gradeCache.has(key))return _gradeCache.get(key);
+  const col=new THREE.Color(c),h={};
+  /* Saturation first, THEN compress on TRUE luminance rather than on HSL lightness.
+     The first version did both in HSL and they fought: raising saturation at a fixed
+     HSL-L pushes green and yellow UP the luminance scale, so the measured share of
+     the palette above 0.75 barely moved while the median rose. Y is the thing the
+     eye reads and the thing the diagnostic measures, so grade against Y. */
+  col.getHSL(h);
+  col.setHSL(h.h,Math.min(1,h.s*CONST.TONE_SAT+0.02),h.l);
+  const Y=0.2126*col.r+0.7152*col.g+0.0722*col.b;
+  if(Y>0.002){
+    const k=(1-CONST.TONE_ROLLOFF*Y*Y);
+    col.setRGB(col.r*k,col.g*k,col.b*k);
+  }
+  const out=col.getHex();
+  _gradeCache.set(key,out);
+  return out;
+}
 const _matCache=new Map();
 function mat(hex,opts){
-  if(opts)return new THREE.MeshLambertMaterial(Object.assign({color:hex},opts));
+  if(opts)return new THREE.MeshLambertMaterial(Object.assign({color:grade(hex)},opts));
   let m=_matCache.get(hex);
-  if(!m){m=new THREE.MeshLambertMaterial({color:hex});_matCache.set(hex,m);}
+  if(!m){m=new THREE.MeshLambertMaterial({color:grade(hex)});_matCache.set(hex,m);}
   return m;
 }
+/* A surface that can catch a highlight. Phong costs 2.6x the frame if you put it on
+   EVERYTHING (measured); on the ~5% of surfaces that are glass, metal or ceramic it
+   costs almost nothing and it is the entire difference between a mug and a picture
+   of a mug. */
+const _shinyCache=new Map();
+function matShiny(hex,tex){
+  const key=String(hex)+'|'+(tex?tex.uuid:'-');
+  let m=_shinyCache.get(key);
+  if(!m){
+    m=new THREE.MeshPhongMaterial({color:grade(hex),map:tex||null,
+      shininess:CONST.SHINE,specular:0x22242a});
+    _shinyCache.set(key,m);
+  }
+  return m;
+}
+function isShiny(mtl){return CONST.SHINY_MTL.indexOf(mtl)>=0;}
 const UNIT_BOX=new THREE.BoxGeometry(1,1,1);
 
 /* box(): the ONLY primitive-furniture entry point. opts.collide:false = decor
@@ -2741,8 +2896,10 @@ function texConcrete(){
 /* A window: recessed pane + frame. Panes are dark and faintly moonlit — the house
    is asleep. `axis` is the wall they sit in. */
 function windowPane(x,y,z,w,h,axis){
-  const fr=matL('#d8d2c6'),pane=new THREE.MeshLambertMaterial(
-    {color:'#1b2a44',emissive:'#16233a'});
+  const fr=matL('#d8d2c6');
+  /* Glass, and the only surface in the game the moon is allowed to glint off. */
+  const pane=new THREE.MeshPhongMaterial(
+    {color:grade('#1b2a44'),emissive:'#16233a',shininess:88,specular:0x5a6a86});
   const t=0.06;
   const dims=(axis==='x')?[t,h,w]:[w,h,t];
   const g=box(dims[0],dims[1],dims[2],'#1b2a44',x,y,z,{collide:false,cast:false,mat:pane,tag:'pane'});
@@ -7498,6 +7655,13 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   // - M14: the street hardens -
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
+  // - M21: the look -
+  grade,gradeCss,matShiny,isShiny,mulberry32,
+  get GRADE_ON(){return GRADE_ON;},
+  /* The tests need to prove the world is graded and a prop is not, which means
+     flipping the switch by hand. Returns the PREVIOUS value so a caller can put it
+     back rather than assuming it was true. */
+  setGrade(v){const was=GRADE_ON;GRADE_ON=!!v;return was;},
   // - M20: daylight -
   DAYFOLK,buildFolk,clearFolk,talkTo,startWalk,endWalk,FOLK_SPOTS,
   // - M19: the threats have bodies -
@@ -7528,10 +7692,23 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M20'};
+  version:'M21'};
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

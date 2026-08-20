@@ -4,7 +4,7 @@
 param([string]$Only = "")
 
 $root  = Split-Path $PSScriptRoot -Parent
-$suites = @("m1","m2","m3","m4","m5","m6","m7","m8","m9","m10","m11","m12","m13","m14","m15","m16","m17","m18","m19","m20")
+$suites = @("m1","m2","m3","m4","m5","m6","m7","m8","m9","m10","m11","m12","m13","m14","m15","m16","m17","m18","m19","m20","m21")
 if ($Only) { $suites = @($Only) }
 
 $failed = @()
@@ -23,6 +23,7 @@ if ($failed.Count -eq 0) {
   Write-Host "FAILING SUITES: $($failed -join ', ')" -ForegroundColor Red
   exit 1
 }
+
 
 
 

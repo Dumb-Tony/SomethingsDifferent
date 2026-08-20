@@ -1323,6 +1323,40 @@ previous one runs in a browser.**
     key, and ACES bleached the house walls to near-white and the lawns to mint. 0.86
     with a 0.55 ambient keeps the midtones where the textures actually live.
 
+21. ~~**The look.**~~ **DONE 2026-08-20.** *Verified: 24 assertions +
+    [docs/m21-daylight.png](docs/m21-daylight.png).*
+
+    **Measured before touching anything.** 684 materials: 610 Lambert, 74 Basic,
+    **zero with a specular term** — wood, ceramic, glass and painted plaster all
+    return light identically. 39% of the palette above luminance 0.75 against 4%
+    true darks: a palette with no floor, which bleaches in daylight and goes
+    uniformly grey at night.
+
+    **The upgrade was priced, not assumed.** Swapping every Lambert for Standard
+    costs **2.13×** the frame; for Phong, **2.60×**. Neither is worth paying for
+    shininess. Value structure costs nothing, so that is where the milestone spent.
+
+    - **A tone curve on the world**, `Y' = Y·(1 − 0.42·Y²)` plus saturation, applied
+      in *two* places. Colours go through `mat()`/`matL()`. But every large surface —
+      walls, floors, lawns, the road, the facades — is `new MeshLambertMaterial({map})`
+      with **no colour argument**, so its `material.color` is white and its entire
+      palette lives in a canvas. Grading colours alone moved the bright share only
+      39% → 30%; a grading proxy over the 2d context did the rest. **Bright share is
+      now 11%.**
+    - **Specular where the eye expects it.** `PROP_KINDS` has declared what everything
+      is made of since M2 and the audio system has read it since M9 — the same word
+      now decides whether a thing can glint. 130 specular materials out of 2,065.
+    - **Tighter shadows, not bigger ones.** 2048² looked better and made all twenty
+      suites time out on the software renderer the harness uses. The box has followed
+      the player since M17, so shrinking it to ±12 gives 2.3 cm texels — finer than
+      the 3.1 cm it had — for free.
+
+    **The rule this milestone turns on: grade the world, never the evidence.** A
+    compressive curve pulls colours toward each other, which is precisely what the
+    player is trying to do. Applied to props it turned three declared hue axes dead
+    and broke both m12's axis gate and m3's 150-degree assertion. Grading is off for
+    the duration of every prop build.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

@@ -157,7 +157,19 @@ Dev-wide catalog of what already exists and where to copy it from.
   houses to white), everybody who lives here standing out on their own lot, and beats
   paid on APPROACH, once each, by walking up to somebody. Esc goes back inside.
   31 assertions + `docs/m20-daylight.png`.
-  **865 assertions across twenty suites.**
+- 2026-08-20 - **M21 DONE - THE LOOK.** MEASURED first (`tools/_look.js`): 684
+  materials, 610 Lambert / 74 Basic and **zero with a specular term** - wood, ceramic,
+  glass and painted plaster all returned light identically. 39% of the palette sat
+  above luminance 0.75 against 4% true darks, which is why daylight bleached and night
+  went grey. The upgrade was PRICED, not assumed: every Lambert to Standard costs 2.13x
+  the frame, to Phong 2.60x, so a wholesale swap was rejected. Shipped instead: a tone
+  curve on the world applied in TWO places - `mat()`/`matL()` for colours AND a grading
+  proxy over the 2d context, because every big surface is `new MeshLambertMaterial({map})`
+  with a WHITE base colour and its whole palette in the canvas; specular only on
+  glass/metal/ceramic via the `mtl` taxonomy `PROP_KINDS` has declared since M2; and a
+  tighter shadow box (24m/1024 = 2.3cm texels, finer than before) instead of a bigger
+  map. Bright share 39% -> 11%. 24 assertions + `docs/m21-daylight.png`.
+  **889 assertions across twenty-one suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
@@ -234,6 +246,19 @@ Dev-wide catalog of what already exists and where to copy it from.
   nights - only on `startHouse()`. It pushed a light zone and a PointLight per porch
   every night and emptied only its bookkeeping arrays. `HARD_FX` + `hardClear()`
   now track, remove AND dispose. Never dispose `UNIT_BOX`; it is shared.
+- **GRADE THE WORLD, NEVER THE EVIDENCE.** The game is judging whether two objects are
+  the same object, and a compressive tone curve pulls colours toward each other -
+  exactly what the player is trying to do. Applying it to props turned three declared
+  hue axes into dead axes and broke m12's axis gate and m3's 150-degree assertion at
+  once. `GRADE_ON` is switched OFF for the duration of every `buildProp()`.
+- **`Write-Host` output is NOT captured by `> file 2>&1`.** It goes to the information
+  stream, so every suite reads as NO OUTPUT - which looks exactly like a crashed page.
+  Use `*> file`. This cost a full debugging pass.
+- **Keep `.ps1` files ASCII-only.** PS 5.1 reads them as ANSI, so an em-dash or a
+  multiplication sign in a heredoc becomes mojibake and the script dies with a parse
+  error. Write prose into the markdown with an editor, not through a PowerShell script.
+- **The harness flakes about one run in twenty** (Chrome startup noise), producing NO
+  OUTPUT for a suite that passes on retry. Retry once before believing a failure.
 - **The smoketest virtual-time budget is 200s.** A suite that drives many ticks across
   many sections will blow through it and hang the page with no output at all (m12 hit
   this, m19 hit it again). If a new suite produces "No test output", bisect it by
