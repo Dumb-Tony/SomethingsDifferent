@@ -1388,6 +1388,30 @@ previous one runs in a browser.**
     so the player walked around with their feet through the floor. `m1` has asserted
     *feet sit at y=0* since the first milestone and fired immediately.
 
+23. ~~**Windows.**~~ **DONE 2026-08-20.** *Verified: 17 assertions +
+    [docs/m23-street.png](docs/m23-street.png).*
+
+    Every window in this game was a **sealed card**. `windowPane` built a tinted pane
+    and then an opaque `MeshBasicMaterial` box filling the entire wall thickness
+    behind it. From inside a house you could never see the yard, the streetlight or a
+    neighbour; from the street you could never see a room. A stealth game in which you
+    cannot look through a window before you open the door is missing a pillar — the
+    recon is the quiet half of the loop, and glass is the cheapest recon there is.
+
+    The panes are real glass now (plus a glazing bar and a sill, so a hole in a wall
+    still reads as a window), and `WINDOWS[]` records every opening as a world-space
+    rectangle.
+
+    **The asymmetry is the whole design: glass stops a voice and does not stop a
+    look.** Sound keeps using `wallsBetween`. Sight uses the new `sightBlocked`,
+    which is the same slab test except that a wall crossing landing inside an opening
+    does not count. Measured through the lounge window: **sound 1 wall, sight 0**.
+    Through the solid stretch beside it: **1 and 1**.
+
+    And it cuts both ways, which is what stops it being a free gift. A sleeper who is
+    awake and facing can see you through their own bedroom window, and so can the man
+    with the torch.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

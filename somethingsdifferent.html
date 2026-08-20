@@ -257,7 +257,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M22 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M23 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -2895,23 +2895,76 @@ function texConcrete(){
 }
 /* A window: recessed pane + frame. Panes are dark and faintly moonlit — the house
    is asleep. `axis` is the wall they sit in. */
+/* â”€â”€ WINDOWS (M23) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Every window in this game was a SEALED CARD. windowPane built a tinted pane and
+   then an opaque MeshBasic box filling the whole wall thickness behind it, so from
+   inside a house you could never see the yard, the streetlight or a neighbour, and
+   from the street you could never see a room. A stealth game where you cannot look
+   through a window before you open the door is missing a pillar: the recon is the
+   quiet half of the loop, and glass is the cheapest recon there is.
+
+   The pane is now real glass. WINDOWS records each opening as a world-space
+   rectangle, and SIGHT (never sound - see sightBlocked) is allowed through it. */
+const WINDOWS=[];
 function windowPane(x,y,z,w,h,axis){
   const fr=matL('#d8d2c6');
-  /* Glass, and the only surface in the game the moon is allowed to glint off. */
+  /* Glass. The only surface in the game the moon is allowed to glint off, and now
+     the only one you can see anything through. */
   const pane=new THREE.MeshPhongMaterial(
-    {color:grade('#1b2a44'),emissive:'#16233a',shininess:88,specular:0x5a6a86});
+    {color:grade('#22344f'),emissive:'#16233a',shininess:96,specular:0x6a7c9a,
+     transparent:true,opacity:0.30,depthWrite:false});
   const t=0.06;
   const dims=(axis==='x')?[t,h,w]:[w,h,t];
-  const g=box(dims[0],dims[1],dims[2],'#1b2a44',x,y,z,{collide:false,cast:false,mat:pane,tag:'pane'});
+  const g=box(dims[0],dims[1],dims[2],'#22344f',x,y,z,{collide:false,cast:false,mat:pane,tag:'pane'});
   const fw=(axis==='x')?[t*1.4,h+0.1,w+0.1]:[w+0.1,h+0.1,t*1.4];
   const f=new THREE.Mesh(new THREE.BoxGeometry(fw[0],fw[1],fw[2]),fr);
   f.position.set(x+OX,y,z);f.renderOrder=-1;
-  const inner=new THREE.Mesh(new THREE.BoxGeometry(
-    (axis==='x')?t*2:w-0.06,h-0.06,(axis==='x')?w-0.06:t*2),
-    new THREE.MeshBasicMaterial({color:'#0d1626'}));
-  inner.position.set(x+OX,y,z);
-  scene.add(f);envMeshes.push(f);scene.add(inner);envMeshes.push(inner);
+  scene.add(f);envMeshes.push(f);
+  /* A glazing bar, so a hole in a wall still reads as a window. */
+  const barDims=(axis==='x')?[t*1.6,0.035,w]:[w,0.035,t*1.6];
+  box(barDims[0],barDims[1],barDims[2],'#d8d2c6',x,y,z,
+      {collide:false,cast:false,tag:'glazing'});
+  const sill=(axis==='x')?[0.18,0.05,w+0.16]:[w+0.16,0.05,0.18];
+  box(sill[0],sill[1],sill[2],'#c8bda6',x,y-h/2-0.03,z,
+      {collide:false,cast:false,tag:'sill'});
+  WINDOWS.push({minX:x+OX-((axis==='x')?0.12:w/2),maxX:x+OX+((axis==='x')?0.12:w/2),
+                minZ:z-((axis==='x')?w/2:0.12),maxZ:z+((axis==='x')?w/2:0.12),
+                y0:y-h/2,y1:y+h/2,axis:axis});
   return g;
+}
+/* Can A see B? Same slab test as wallsBetween, EXCEPT that a wall crossing which
+   happens inside a window opening does not count. Sound still uses wallsBetween:
+   glass stops a voice and does not stop a look, which is the entire point of it. */
+function sightBlocked(ax,az,bx,bz){
+  let n=0;
+  const R=CONST.PLAYER_R,dx=bx-ax,dz=bz-az;
+  for(let i=0;i<colliders.length;i++){
+    const c=colliders[i];
+    if(c.tag!=='wall'&&c.tag!=='door')continue;
+    let t0=0,t1=1,ok=true;
+    for(let k=0;k<2&&ok;k++){
+      const o=k?az:ax,d=k?dz:dx;
+      const lo=(k?c.minZ:c.minX)+R,hi=(k?c.maxZ:c.maxX)-R;
+      if(lo>=hi){ok=false;continue;}
+      if(Math.abs(d)<1e-8){ok=(o>=lo&&o<=hi);continue;}
+      let a=(lo-o)/d,b=(hi-o)/d;
+      if(a>b){const q=a;a=b;b=q;}
+      if(a>t0)t0=a;if(b<t1)t1=b;
+      if(t0>t1)ok=false;
+    }
+    if(!ok)continue;
+    /* The crossing point. If it lands inside a window on that wall, you can see. */
+    const mx=ax+dx*((t0+t1)/2),mz=az+dz*((t0+t1)/2);
+    let through=false;
+    for(let w=0;w<WINDOWS.length;w++){
+      const q=WINDOWS[w];
+      if(mx>=q.minX-0.05&&mx<=q.maxX+0.05&&mz>=q.minZ-0.05&&mz<=q.maxZ+0.05){
+        through=true;break;
+      }
+    }
+    if(!through)n++;
+  }
+  return n;
 }
 
 function clearWorld(){
@@ -2923,7 +2976,7 @@ function clearWorld(){
      the counter run on and every saved reference dangles. */
   _objId=0;
   envMeshes.length=0;colliders.length=0;helpers.length=0;CEIL_ZONES.length=0;
-  SCENERY.length=0;
+  SCENERY.length=0;WINDOWS.length=0;
   for(const o of objects){if(o.group)disposeProp(o.group);}
   objects.length=0;PLANTERS.length=0;DOORS.length=0;FRONT_DOOR=null;
   BEDS.length=0;LIGHTS.length=0;SLEEPERS.length=0;
@@ -5656,7 +5709,7 @@ function hardenTick(dt){
       const ahead=dist>0.2?(dx/dist)*WATCH.dir>-0.25:true;
       if(dist<CONST.HARD_WATCH_R&&ahead&&
          (dist<3.5||litAt(px,pz)>=CONST.LIT_SEEN_MIN)&&
-         wallsBetween(WATCH.x,WATCH.z,px,pz)===0){
+         sightBlocked(WATCH.x,WATCH.z,px,pz)===0){
         WATCH.seen=true;
         GAME.sightings++;
         SFX.cue('seen');flash();
@@ -5745,7 +5798,9 @@ function loudestHeat(){
 function canSee(s,px,pz){
   const dx=px-s.x,dz=pz-s.z,d=Math.hypot(dx,dz);
   if(d>CONST.VISION_RANGE)return false;
-  if(wallsBetween(s.x,s.z,px,pz)>0)return false;
+  /* M23: SIGHT, not sound. A sleeper can see you through their own window now,
+     which is the price of being able to see them through it first. */
+  if(sightBlocked(s.x,s.z,px,pz)>0)return false;
   const fx=Math.cos(s.look),fz=Math.sin(s.look);       // they sweep the dark room
   if(d>0.4&&(dx*fx+dz*fz)/d<CONST.VISION_COS)return false;
   if(d>2.2&&litAt(px,pz)<CONST.LIT_SEEN_MIN)return false;   // far and unlit = invisible
@@ -7774,6 +7829,8 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
   get BODY(){return BODY;},
+  // - M23: windows -
+  WINDOWS,sightBlocked,
   // - M22: people -
   makePerson,personLook,folkTick,SKIN,HAIR,TOPS,
   // - M21: the look -
@@ -7813,10 +7870,12 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M22'};
+  version:'M23'};
 </script>
 </body>
 </html>
+
+
 
 
 

@@ -183,7 +183,20 @@ Dev-wide catalog of what already exists and where to copy it from.
   standing like statues. 22 meshes each, 1980 on the street, 315 draw calls.
   ⚠ Caught by an M1 test: the first shin ran 2.5cm below the sole and the player walked
   with their feet through the floor. 33 assertions + `docs/m22-people.png`.
-  **922 assertions across twenty-two suites.**
+- 2026-08-20 - **M23 DONE - WINDOWS.** Every window was a SEALED CARD: `windowPane`
+  built a tinted pane and then an opaque MeshBasic box filling the whole wall
+  thickness behind it. From inside a house you could never see the yard, the
+  streetlight or a neighbour; from the street you could never see a room. A stealth
+  game where you cannot look through a window before opening the door is missing a
+  pillar - recon is the quiet half of the loop. The panes are real glass now, plus a
+  glazing bar and a sill, and `WINDOWS[]` records each opening as a world rectangle.
+  **THE ASYMMETRY IS THE DESIGN: glass stops a voice and does not stop a look.** Sound
+  still uses `wallsBetween`; sight uses the new `sightBlocked`, which forgives a wall
+  crossing that lands inside an opening. Measured through the lounge window: sound 1
+  wall, sight 0; through the solid stretch beside it, 1 and 1. Which cuts both ways -
+  a sleeper who is awake and facing can now see you through their own bedroom window,
+  and so can the watchman. 17 assertions + `docs/m23-street.png`.
+  **940 assertions across twenty-three suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
