@@ -1,4 +1,4 @@
-# Something's Different - headless smoke test (GDD 16).
+﻿# Something's Different - headless smoke test (GDD 16).
 #
 # There is no Node.js on this machine, so the harness IS a browser: it builds a
 # scratch copy of the game with a test script injected, serves it over http (the
@@ -75,7 +75,7 @@ $proc = Start-Process $chrome -ArgumentList `
   "--headless=new","--disable-gpu","--no-first-run","--no-default-browser-check",
   "--user-data-dir=$profileDir","--window-size=1280,720",
   "--autoplay-policy=no-user-gesture-required",
-  "--virtual-time-budget=90000","--dump-dom",$url `
+  "--virtual-time-budget=200000","--dump-dom",$url `
   -RedirectStandardOutput $domFile -NoNewWindow -Wait -PassThru
 
 # tidy up
@@ -106,3 +106,4 @@ foreach ($line in ($body -split "`n")) {
   else                           { Write-Host $t }
 }
 if ($body -match 'ALL-PASS') { exit 0 } else { exit 1 }
+

@@ -257,7 +257,7 @@ body.night #grade{opacity:1}
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M18 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M19 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -5066,7 +5066,7 @@ const HARDEN=[
    text:'Somebody in each house is awake all night now. They have not discussed it and '+
         'they would not describe it as a rota, but that is what it is.'}
 ];
-const DOGS=[],CAMS={};
+const DOGS=[],CAMS={},CAM_FX=[];
 let WATCH=null,MOTION=[];
 function hardenedIds(){return GAME.hardened||(GAME.hardened=[]);}
 function isHardened(id){return hardenedIds().indexOf(id)>=0;}
@@ -5086,8 +5086,91 @@ function fireHardening(){
 }
 /* Per-night setup. Rebuilt every night so a load, a restart or a new tier all land
    in the same place. */
+/* ── WHAT THE STREET INSTALLED, AS THINGS YOU CAN SEE (M19) ─────────────────────
+   Four of the five tiers had no body at all. A man who patrols at 2.3 m/s and ENDS
+   YOUR NIGHT from eleven metres had no mesh, no torch and no footsteps, while the
+   text describing him said "a torch and no dog ... a jacket with a word on it".
+   Dogs were {house,x,z,cd}. Cameras were a 2.6m bubble with no lens. The porch
+   lights were a PointLight at y=2.5 with nothing above it emitting them.
+   A stealth game whose threats are invisible is not hard, it is unfair.
+
+   HARD_FX is the other half of the fix: hardenNight() runs EVERY night and used to
+   push a fresh light zone and a fresh PointLight per porch without ever removing
+   the last one. MEASURED: 30 -> 34 -> 38 -> 42 -> 46 -> 50 zones over six nights,
+   and the same climb in real lights, so by the end of a run every porch was lit ten
+   times over. Everything built below is tracked and torn down. */
+const HARD_FX=[];
+function hardClear(){
+  for(let i=0;i<HARD_FX.length;i++){
+    const fx=HARD_FX[i];
+    if(fx.obj){
+      scene.remove(fx.obj);
+      const e=envMeshes.indexOf(fx.obj);if(e>=0)envMeshes.splice(e,1);
+      /* DISPOSE, not just detach. makeDog/makeWalker/the kennel build their own
+         geometry rather than sharing UNIT_BOX, and this runs once a night for ten
+         nights - dropping the reference leaves it on the GPU. Never dispose a
+         SHARED geometry: UNIT_BOX is excluded by identity. */
+      fx.obj.traverse&&fx.obj.traverse(o=>{
+        if(o.isMesh&&o.geometry&&o.geometry!==UNIT_BOX)o.geometry.dispose();
+      });
+    }
+    if(fx.zone){const z=LIGHTS.indexOf(fx.zone);if(z>=0)LIGHTS.splice(z,1);}
+  }
+  HARD_FX.length=0;
+}
+function hardAdd(obj,zone){HARD_FX.push({obj:obj,zone:zone});return obj;}
+/* A person, built to the same proportions as the player's own blockout (see
+   makeBlockout) but without touching the BODY globals it owns. */
+function makeWalker(cloth,jacket){
+  const H=CONST.CH_H,g=new THREE.Group();
+  const legH=H*0.50,torsoH=H*0.33,headR=H*0.076;
+  [-1,1].forEach(sx=>{
+    const l=new THREE.Mesh(new THREE.BoxGeometry(0.15,legH,0.17),mat('#2e2b38'));
+    l.position.set(sx*0.13,legH/2,0);l.castShadow=true;g.add(l);
+  });
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.48,torsoH,0.27),mat(cloth));
+  torso.position.y=legH+torsoH/2;torso.castShadow=true;g.add(torso);
+  if(jacket){   // the word on the back, which is the whole joke about him
+    const t=new THREE.Mesh(new THREE.BoxGeometry(0.50,torsoH*0.52,0.29),
+      new THREE.MeshLambertMaterial({color:jacket,emissive:jacket,emissiveIntensity:0.22}));
+    t.position.y=legH+torsoH*0.62;g.add(t);
+  }
+  const head=new THREE.Mesh(new THREE.SphereGeometry(headR,14,10),mat('#cfc6b8'));
+  head.position.y=legH+torsoH+headR*0.95;head.castShadow=true;g.add(head);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*0.28,headR*0.7,8),mat('#d98f6a'));
+  nose.rotation.x=Math.PI/2;nose.position.set(0,head.position.y,headR*0.95);g.add(nose);
+  [-1,1].forEach(sx=>{
+    const a=new THREE.Mesh(new THREE.BoxGeometry(0.11,torsoH*0.95,0.13),mat('#cfc6b8'));
+    a.position.set(sx*0.29,legH+torsoH*0.52,0);a.castShadow=true;g.add(a);
+  });
+  return g;
+}
+/* A dog, asleep in a yard until it is not. */
+function makeDog(){
+  const g=new THREE.Group(),h='#3a2c22';
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.32,0.26),mat(h));
+  body.position.y=0.40;body.castShadow=true;g.add(body);
+  const neck=new THREE.Group();neck.position.set(0.30,0.52,0);g.add(neck);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.20,0.20),mat(h));
+  head.position.set(0.08,0.02,0);head.castShadow=true;neck.add(head);
+  const snout=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.10,0.12),mat('#2a2733'));
+  snout.position.set(0.22,-0.02,0);neck.add(snout);
+  [[-0.06,0.09],[-0.06,-0.09]].forEach(e=>{
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.12,0.04),mat('#2a2733'));
+    ear.position.set(e[0],0.13,e[1]);neck.add(ear);
+  });
+  [[0.22,0.10],[0.22,-0.10],[-0.22,0.10],[-0.22,-0.10]].forEach(p=>{
+    const l=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.26,0.09),mat(h));
+    l.position.set(p[0],0.13,p[1]);g.add(l);
+  });
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.06,0.06),mat(h));
+  tail.position.set(-0.38,0.46,0);tail.rotation.z=0.5;g.add(tail);
+  g.userData.neck=neck;
+  return g;
+}
 function hardenNight(){
-  DOGS.length=0;MOTION.length=0;WATCH=null;
+  hardClear();                    // M19: tear down last night's before building tonight's
+  DOGS.length=0;MOTION.length=0;WATCH=null;CAM_FX.length=0;
   Object.keys(CAMS).forEach(k=>{delete CAMS[k];});
   if(!HOUSES||!HOUSES.length)return;
 
@@ -5100,19 +5183,85 @@ function hardenNight(){
       LIGHTS.push(z);
       const L=new THREE.PointLight('#fff0cf',0,CONST.HARD_LIGHT_R*2.2,1.6);
       L.position.set(z.x,2.5,z.z);L.userData.temporal=true;scene.add(L);
-      MOTION.push({zone:z,three:L});
+      /* M19: something for the light to come OUT of. It was emitting from thin air
+         at head height above the porch, which is why the street lighting up read as
+         a rendering fault rather than as somebody's security lamp. */
+      const hood=new THREE.Group();
+      const box1=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.10,0.20),mat('#3a3a42'));
+      box1.position.set(0,2.62,0);hood.add(box1);
+      const lens=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.10,0.06),
+        new THREE.MeshBasicMaterial({color:'#4a4438'}));
+      lens.position.set(0,2.54,0.10);hood.add(lens);
+      hood.position.set(z.x,0,z.z-0.55);
+      scene.add(hood);envMeshes.push(hood);
+      hardAdd(hood,null);hardAdd(L,z);
+      MOTION.push({zone:z,three:L,lens:lens});
     });
   }
   if(isHardened('dogs')){
     HOUSES.forEach(h=>{
       if(h.yours)return;
-      DOGS.push({house:h.id,x:h.x+CONST.ROOM_SCALE*2.6,z:-CONST.ROOM_SCALE*5.2,cd:0});
+      const dx=h.x+CONST.ROOM_SCALE*2.6,dz=-CONST.ROOM_SCALE*5.2;
+      const dog=makeDog();dog.position.set(dx,0,dz);dog.rotation.y=Math.PI*0.5;
+      scene.add(dog);envMeshes.push(dog);hardAdd(dog,null);
+      const ken=new THREE.Group();
+      const kb=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.80,0.90),mat('#5b4b34'));
+      kb.position.y=0.40;kb.castShadow=true;ken.add(kb);
+      const kr=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.14,1.00),mat('#3b2d26'));
+      kr.position.y=0.86;ken.add(kr);
+      const kh=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.52,0.08),mat('#1b1a22'));
+      kh.position.set(0,0.30,0.46);ken.add(kh);
+      ken.position.set(dx-1.1,0,dz+0.2);scene.add(ken);envMeshes.push(ken);
+      hardAdd(ken,null);
+      DOGS.push({house:h.id,x:dx,z:dz,cd:0,group:dog,bark:0});
     });
   }
   if(isHardened('watch')){
     const xs=HOUSES.map(h=>h.x);
-    WATCH={x:Math.min.apply(null,xs)-2,z:-CONST.ROOM_SCALE*8.6,dir:1,
-           minX:Math.min.apply(null,xs)-3,maxX:Math.max.apply(null,xs)+3,seen:false};
+    /* M19 — HE EXISTS NOW. A body, a hi-vis jacket and a torch, and the torch is a
+       REAL light zone: litAt() reads it, so being caught in the beam is the thing
+       that gets you seen, and you can watch it coming down the street from two lots
+       away. Before this he was six numbers that ended your night from eleven metres
+       with no mesh, no light and no sound. */
+    const wz=-CONST.ROOM_SCALE*8.6;
+    const g=makeWalker('#3d4358','#c4bd63');
+    g.position.set(Math.min.apply(null,xs)-2,0,wz);
+    scene.add(g);envMeshes.push(g);hardAdd(g,null);
+    const beam=new THREE.Mesh(new THREE.ConeGeometry(0.62,3.2,12,1,true),
+      new THREE.MeshBasicMaterial({color:'#ffe9b8',transparent:true,opacity:0.14,
+                                   side:THREE.DoubleSide,depthWrite:false}));
+    beam.rotation.z=Math.PI/2;beam.position.set(1.7,1.16,0);g.add(beam);
+    const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),
+      new THREE.MeshBasicMaterial({color:'#fff4d6'}));
+    bulb.position.set(0.34,1.16,0);g.add(bulb);
+    const TL=new THREE.PointLight('#ffe6b0',1.9,9.0,1.7);
+    TL.position.set(0,1.16,0);g.add(TL);
+    const zone={x:0,z:0,r:CONST.HARD_WATCH_R*0.62,i:0.66};
+    LIGHTS.push(zone);hardAdd(null,zone);
+    WATCH={x:Math.min.apply(null,xs)-2,z:wz,dir:1,
+           minX:Math.min.apply(null,xs)-3,maxX:Math.max.apply(null,xs)+3,seen:false,
+           group:g,zone:zone,stepT:0};
+  }
+  if(isHardened('cameras')){
+    /* M19: a lens by the door, with an LED you can see from the gate. It was a 2.6m
+       bubble around a doorway with nothing to look at - you found out it existed by
+       walking into it and losing the house. */
+    HOUSES.forEach(h=>{
+      if(h.yours||!h._door)return;
+      const dx=h._door.pos[0]+0.95,dz=h._door.pos[2]-0.04;
+      const unit=new THREE.Group();
+      const bodyM=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.16,0.05),mat('#2a2733'));
+      bodyM.position.y=1.42;unit.add(bodyM);
+      const lens=new THREE.Mesh(new THREE.SphereGeometry(0.026,8,6),
+        new THREE.MeshBasicMaterial({color:'#0d1626'}));
+      lens.position.set(0,1.46,-0.03);unit.add(lens);
+      const led=new THREE.Mesh(new THREE.SphereGeometry(0.012,6,5),
+        new THREE.MeshBasicMaterial({color:'#ff5a5a'}));
+      led.position.set(0,1.36,-0.03);unit.add(led);
+      unit.position.set(dx,0,dz);
+      scene.add(unit);envMeshes.push(unit);hardAdd(unit,null);
+      CAM_FX.push({house:h.id,led:led,t:0});
+    });
   }
   if(isHardened('shifts')){
     /* One of each couple sits up all night. Deterministic per night, so which half of
@@ -5132,6 +5281,24 @@ function hardenNight(){
 function hardenTick(dt){
   if(!NIGHT.running||!player)return;
   const px=player.position.x,pz=player.position.z;
+  /* M19 — the tells. A dog with its head up is a dog that has heard you, and a
+     doorbell LED you can see from the gate is the difference between a camera and
+     an ambush. Neither changes a number; both change whether you knew. */
+  for(let i=0;i<DOGS.length;i++){
+    const d=DOGS[i];
+    if(!d.group)continue;
+    if(d.bark>0)d.bark-=dt;
+    const want=d.bark>0?-0.85:0;
+    const neck=d.group.userData.neck;
+    if(neck)neck.rotation.z+=(want-neck.rotation.z)*Math.min(1,dt*8);
+  }
+  for(let i=0;i<CAM_FX.length;i++){
+    const c=CAM_FX[i];
+    c.t-=dt;
+    if(c.t<=0){c.t=CAMS[c.house]?0.22:1.6;
+
+      c.led.visible=!c.led.visible;}
+  }
 
   for(let i=0;i<MOTION.length;i++){
     const m=MOTION[i];
@@ -5147,7 +5314,7 @@ function hardenTick(dt){
     const d=DOGS[i];
     if(d.cd>0){d.cd-=dt;continue;}
     if(Math.hypot(px-d.x,pz-d.z)<CONST.HARD_DOG_R){
-      d.cd=CONST.HARD_DOG_CD;
+      d.cd=CONST.HARD_DOG_CD;d.bark=1.6;            // M19: and it puts its head up
       SFX.world('dog',d.x,d.z,CONST.HARD_DOG_N);   // you hear it where it is
       /* The HOUSEHOLD hears a flat amount, deliberately NOT run through the distance
          and wall model. That model exists to attenuate YOUR movements; applied here it
@@ -5167,6 +5334,20 @@ function hardenTick(dt){
     WATCH.x+=WATCH.dir*CONST.HARD_WATCH_V*dt;
     if(WATCH.x>WATCH.maxX){WATCH.x=WATCH.maxX;WATCH.dir=-1;}
     if(WATCH.x<WATCH.minX){WATCH.x=WATCH.minX;WATCH.dir=1;}
+    /* Body, beam and light zone all ride him. The zone sits AHEAD of him in the
+       direction he is walking, which is where the torch actually points - so the
+       lit patch you can see on the pavement is the lit patch litAt() charges you
+       for standing in. */
+    if(WATCH.group){
+      WATCH.group.position.x=WATCH.x;
+      WATCH.group.rotation.y=WATCH.dir>0?Math.PI/2:-Math.PI/2;
+    }
+    if(WATCH.zone){WATCH.zone.x=WATCH.x+WATCH.dir*2.4;WATCH.zone.z=WATCH.z;}
+    WATCH.stepT=(WATCH.stepT||0)-dt;
+    if(WATCH.stepT<=0){
+      WATCH.stepT=0.52;
+      SFX.world('step',WATCH.x,WATCH.z,CONST.N_STEP_WALK*0.8,'stone');
+    }
     /* He only works outdoors. Inside a house you are his problem no longer, which
        makes the yards — not the rooms — the dangerous part of a hardened street. */
     if(!WATCH.seen&&ceilAt(px,pz)<=0){
@@ -5178,6 +5359,7 @@ function hardenTick(dt){
         WATCH.seen=true;
         GAME.sightings++;
         SFX.cue('seen');flash();
+        S.lastSeenBy={who:'the man in the jacket',x:WATCH.x,z:WATCH.z};
         endNight('watch','A torch beam stops moving. The man in the jacket is looking '+
           'straight at you across somebody else’s lawn, and he is already reaching '+
           'for his phone.');
@@ -5309,6 +5491,7 @@ function flash(){
 }
 function onSeen(s){
   GAME.sightings++;
+  S.lastSeenBy={who:s.name,x:s.x,z:s.z};   // M19: the report says where it came from
   const r=RESIDENTS[s.res];
   r.suspicion=clamp((r.suspicion||0)+34,0,100);
   r.stress=clamp((r.stress||0)+20,0,100);
@@ -7196,6 +7379,8 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   // - M14: the street hardens -
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
+  // - M19: the threats have bodies -
+  CAM_FX,HARD_FX,hardClear,makeWalker,makeDog,
   // ── M7: her ladder acting, fractures, marking ──
   FRACTURES,fireFractures,markOwned,relocate,
   wifeTierIndex,planWifeNight,wifeNightTick,isHome,
@@ -7222,7 +7407,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M18'};
+  version:'M19'};
 </script>
 
 </body>

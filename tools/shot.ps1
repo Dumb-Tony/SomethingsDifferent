@@ -1,4 +1,4 @@
-# Screenshot a named scene from the game, headless.
+﻿# Screenshot a named scene from the game, headless.
 #   .\tools\shot.ps1 -Scene street -Out docs\m5-street.png
 #
 # NOTE: the render loop is deliberately left RUNNING. preserveDrawingBuffer is false,
@@ -95,6 +95,26 @@ $setups = @{
   SD.player.position.set(-9.0,0,-6.4); SD.player.rotation.y=Math.PI*0.5;
   SD.S.yaw=Math.PI*1.5; SD.S.pitch=0.18; SD.S.dist=4.6; SD.S.camP=null; SD.S.camL=null;
   SD.GUIDE.render();
+"@
+  watchman = @"
+  SD.startHouse(); $open
+  // everything the street can install, on at once, so it can all be SEEN (M19)
+  SD.GAME.hardened=['lights','dogs','watch','cameras'];
+  SD.nightReset();
+  SD.NIGHT.running=true;
+  // stand on your own path, looking up the street at him coming
+  // walking AWAY: he cannot see behind himself (the ahead test), so this is a
+  // safe place to stand and watch him go - and it shows the word on the jacket
+  SD.WATCH.x=SD.houseById('hoyt').x-6; SD.WATCH.dir=-1;
+  SD.player.position.set(SD.WATCH.x+3.4,0,SD.WATCH.z+2.4);
+  SD.S.yaw=Math.atan2(3.4,2.4); SD.S.pitch=0.10; SD.S.dist=3.2;
+  SD.S.camP=null; SD.S.camL=null;
+  SD.run(40,1/60);
+  // Freeze the clock. shot.ps1 leaves the render loop LIVE for several seconds (see
+  // the note at the top), so a watchman patrolling at 2.3 m/s walks half the street
+  // before the shutter opens - and catches you. The bodies stay rendered; nobody
+  // moves and nobody sees.
+  SD.NIGHT.running=false;
 "@
   harden = @"
   SD.startHouse(); $open
@@ -251,6 +271,8 @@ if (Test-Path $Out) {
   Write-Host "$Scene -> $Out ($((Get-Item $Out).Length) bytes)" -ForegroundColor Green
   exit 0
 } else { Write-Host "No screenshot produced." -ForegroundColor Red; exit 1 }
+
+
 
 
 

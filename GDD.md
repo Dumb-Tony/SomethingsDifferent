@@ -1269,6 +1269,34 @@ previous one runs in a browser.**
     because `canSee` reads the sleeper's own x/z, so walking one to the kitchen
     turns them into a roving pair of eyes inside a house you may be standing in.
 
+19. ~~**The threats have bodies.**~~ **DONE 2026-08-19.** *Verified: 26 assertions +
+    [docs/m19-watchman.png](docs/m19-watchman.png).*
+
+    **Four of the five tiers in §5.8 had no physical form at all.** The neighbourhood
+    watch was `{x,z,dir,minX,maxX,seen}`: a man who patrols at 2.3 m/s and **ends
+    your night from eleven metres**, with no mesh, no torch, no footsteps and no
+    sound — while the card announcing him said *"a torch and no dog … a jacket with a
+    word on it"*. Dogs were four numbers with a 5 m radius. Doorbell cameras were a
+    2.6 m bubble with no lens. The porch lights emitted from thin air at y=2.5.
+
+    **A stealth game whose threats are invisible is not difficult, it is unfair** —
+    and the fairness rules were all already there. He has a range. He cannot see
+    behind himself. He does not work indoors. None of that is playable information
+    until you can see the man it applies to.
+
+    Now he has a body, a hi-vis jacket, footsteps, and **a torch that is a real light
+    zone**: `litAt()` reads it, so the moving patch of light you can watch coming
+    down the street is the same patch that gets you caught. Dogs have dogs, kennels,
+    and heads that come up when they bark. Doorbells have a lens and an LED you can
+    see from the gate. Porch lamps have a housing for the light to come out of.
+
+    **And a leak, found while fixing it.** `hardenNight()` is called from
+    `nightReset()` — every night — and the world is only rebuilt on
+    `startHouse()`. It pushed a fresh zone and a fresh `PointLight` per porch
+    every night while emptying only its own arrays. Measured: **30 → 34 → 38 → 42 →
+    46 → 50** zones across six nights, so by the end of a run every porch was lit ten
+    times over. `HARD_FX` now tracks, removes and disposes.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
@@ -1343,6 +1371,17 @@ Add content by filling these; none should require touching systems code.
 *(Resolve by playing, not by arguing. Record answers here with dates.)*
 
 **Tuning log**
+
+- **2026-08-19 — INVISIBLE IS NOT THE SAME AS DIFFICULT.** Four of the five hardening
+  tiers could end a run without ever being rendered. The watchman's rules were already
+  fair — 11m range, a forward-facing check, outdoors only — but a player cannot use a
+  rule about a thing they cannot see, so the whole tier read as an arbitrary loss. The
+  fix was almost entirely presentation, and the only mechanical change was making his
+  torch a real light zone so the visible beam and the seeing check are the same object.
+- **2026-08-19 — Anything built per-night must be torn down per-night.** `hardenNight`
+  runs every night; the world is only rebuilt on `startHouse`. Six nights of porch
+  lights went 30 → 50 zones. Tracked in `HARD_FX`, and DISPOSED, not just detached —
+  `makeDog`/`makeWalker` build their own geometry rather than sharing `UNIT_BOX`.
 
 - **2026-08-19 — THE GAME WAS NOT WINNABLE, AND THE TOOL BUILT TO CHECK THAT WAS
   CHEATING.** `_balance.js` and `_escalate.js` both open with `GAME.bank=1000000`.
@@ -1829,5 +1868,7 @@ Carried over from the Chameleon project because they were learned the hard way:
 ---
 
 *End of v0.1. Sections are sockets — extend, don't restructure.*
+
+
 
 

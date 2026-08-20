@@ -129,7 +129,23 @@ Dev-wide catalog of what already exists and where to copy it from.
   in the bins, and somebody getting up for a glass of water who becomes a roving pair
   of eyes (canSee reads the sleeper's own x/z, so walking one costs no new systems).
   Seeded per night, never the same event twice running. 48 assertions.
-  **808 assertions across eighteen suites.**
+- 2026-08-19 - **M19 DONE - THE THREATS HAVE BODIES.** Four of the five things the
+  street installs to stop you had NO PHYSICAL FORM. The worst: the neighbourhood watch
+  was `{x,z,dir,minX,maxX,seen}` - a man who patrols at 2.3 m/s and ENDS YOUR NIGHT
+  from 11m, with no mesh, no torch and no footsteps, while the text announcing him
+  described "a torch and no dog ... a jacket with a word on it". Dogs were four numbers.
+  Cameras were a 2.6m bubble with no lens. Porch lights emitted from thin air at y=2.5.
+  A stealth game whose threats are invisible is not hard, it is UNFAIR. Now: he has a
+  body, a hi-vis jacket, footsteps, and a torch that is a REAL light zone - litAt()
+  reads it, so the beam you can see coming is the thing that catches you. Dogs have
+  dogs and kennels and lift their heads to bark; doorbells have a lens and a blinking
+  LED; porch lamps have a housing. His fairness rules (range, cannot see behind
+  himself, does not work indoors) were always in the code and are now assertable.
+  ALSO FIXED A LEAK: hardenNight() runs every night and never tore down the night
+  before - MEASURED 30 -> 34 -> 38 -> 42 -> 46 -> 50 light zones over six nights, so by
+  night ten every porch was lit ten times over. HARD_FX tracks and disposes everything.
+  26 assertions + `docs/m19-watchman.png`.
+  **834 assertions across nineteen suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
@@ -201,6 +217,15 @@ Dev-wide catalog of what already exists and where to copy it from.
   authored in layout units and `_p()` converts inside `buildHouse`; `HOUSES` object
   `at` coordinates are converted at the placement call, which is why 30 placements
   needed no edits. Furniture sizes and Y heights are real-world and stay put.
+- **ANYTHING BUILT PER-NIGHT MUST BE TORN DOWN PER-NIGHT.** `hardenNight()` is called
+  from `nightReset()`, which runs every night, and the world is NOT rebuilt between
+  nights - only on `startHouse()`. It pushed a light zone and a PointLight per porch
+  every night and emptied only its bookkeeping arrays. `HARD_FX` + `hardClear()`
+  now track, remove AND dispose. Never dispose `UNIT_BOX`; it is shared.
+- **The smoketest virtual-time budget is 200s.** A suite that drives many ticks across
+  many sections will blow through it and hang the page with no output at all (m12 hit
+  this, m19 hit it again). If a new suite produces "No test output", bisect it by
+  section before assuming a crash - each section may pass perfectly on its own.
 - **A DIAGNOSTIC THAT CHEATS CANNOT ANSWER THE QUESTION IT WAS BUILT FOR.** `_balance.js`
   and `_escalate.js` both open with `bank=1000000`, so for seventeen milestones "is
   this winnable" was measured for a player with infinite money - and the honest answer
@@ -341,6 +366,8 @@ can assert on real pixels via `readPixels`. Don't inherit the Chameleon project'
 
 Keep collider/Doubt/noise/spec math pure (plain objects, no live `THREE` scene) so it
 stays testable without a GL context.
+
+
 
 
 
