@@ -1512,6 +1512,29 @@ previous one runs in a browser.**
     same `if(!best)` rule as scenery, for the same reason: the examine loop is the
     game.
 
+28. ~~**Home.**~~ **DONE 2026-08-20.** *Verified: 22 assertions.*
+
+    Wife Suspicion has driven this game since M6. It shortens the night. It wakes her
+    at tier 2 and sends her out after you at tier 4. It ends runs. **And in
+    twenty-seven milestones Dana has never been on screen** — a number and a
+    paragraph of text, in a game whose entire subject is a man failing to convince
+    the people in his own house that he is a person.
+
+    The evening happens at home now: your own lounge, the lamps on, and her in it.
+    **Where she is standing is the meter.**
+
+    | Suspicion | Where she is |
+    |---|---|
+    | 0 | on the sofa with her feet up |
+    | 25 | on the sofa, not really watching it |
+    | 45 | in the kitchen, doing something she already did |
+    | 65 | in the hall. She was not going anywhere |
+    | 85 | at the front window with the light off behind her |
+
+    You can read the room before she says a word. Walk up to her and press **E**, and
+    it is the same `SCENES` dialogue the menu used to open — the difference is that
+    you had to cross the room to get to it.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

@@ -260,7 +260,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M27 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M28 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -2479,6 +2479,7 @@ const S={
   // debug
   scanCd:0, scanT:0,   // M24: the scanner's cooldown and how long its marks last
   hidden:null, hideT:0,   // M27: where you are hiding, and how long until it works
+  evening:false,          // M28: you are at home with her
   showDbg:false, fps:0,   // F3 turns the engineering readout on; playtesters don't want it
 };
 
@@ -6302,9 +6303,11 @@ const ACTIONS={
     run(){wifeAdd(-7);hkGain(1);
       return 'You cut the grass to the same height as the neighbours’. Two of them waved.';}},
   /* ── EVENING ── */
-  talk:{block:'evening',label:'Talk to Dana',
+  /* M28: no longer a menu that opens a dialogue box. It puts you in your own lounge
+     with her in it, and where she is standing is the meter. */
+  talk:{block:'evening',label:'Go and sit with her',
     desc:'She will ask you something. There is a correct answer.',
-    run(){openTalk();return null;}},
+    run(){startEvening();return null;}},
   dishes:{block:'evening',label:'Do the dishes unasked',
     desc:'Disproportionately effective.',
     run(){wifeAdd(-6);
@@ -6569,6 +6572,78 @@ function talkTo(f){
   }
   if(gained>0)DAY.log.push(f.name+' knows your face a little better now. '+
     'Familiarity '+Math.round(familiar(f.res))+'/100.');
+}
+/* ---------------------------- HOME (M28) ------------------------------------
+   Wife Suspicion has driven this game since M6. It shortens the night, it wakes
+   her at tier 2, it sends her out after you at tier 4, and it ends runs. And in
+   twenty-seven milestones DANA HAS NEVER BEEN ON SCREEN. She is a number and a
+   paragraph of text, in a game whose entire subject is a man failing to convince
+   the people in his house that he is a person.
+
+   So the evening happens at home. Your own lounge, the lights on, and her in it -
+   and where she is standing IS the meter. */
+let DANA=null;
+const DANA_SPOTS=[
+  {at:0,  x:3.10,z:-0.20,line:'Dana is on the sofa with her feet up.'},
+  {at:25, x:3.90,z: 0.60,line:'Dana is on the sofa, not really watching it.'},
+  {at:45, x:-3.30,z:1.10,line:'Dana is in the kitchen, doing something she already did.'},
+  {at:65, x:-4.00,z:-3.40,line:'Dana is in the hall. She was not going anywhere.'},
+  {at:85, x:-4.03,z:-4.70,line:'Dana is at the front window with the light off behind her.'}
+];
+function danaSpot(){
+  var s=DANA_SPOTS[0];
+  for(var i=0;i<DANA_SPOTS.length;i++)if(WIFE.susp>=DANA_SPOTS[i].at)s=DANA_SPOTS[i];
+  return s;
+}
+function clearDana(){
+  if(!DANA)return;
+  scene.remove(DANA);
+  var e=envMeshes.indexOf(DANA);if(e>=0)envMeshes.splice(e,1);
+  DANA.traverse(function(o){
+    if(o.isMesh&&o.geometry&&o.geometry!==UNIT_BOX)o.geometry.dispose();});
+  DANA=null;
+}
+function buildDana(){
+  clearDana();
+  var home=HOUSES.filter(function(h){return h.yours;})[0];
+  if(!home)return null;
+  var sp=danaSpot();
+  DANA=makeWalker('dana-marek',null);
+  DANA.position.set(home.x+sp.x,0,sp.z);
+  DANA.rotation.y=Math.PI*0.15;
+  scene.add(DANA);envMeshes.push(DANA);
+  DANA.userData.spot=sp;
+  return sp;
+}
+function startEvening(){
+  if(S.phase!=='house')return false;
+  S.evening=true;S.daytime=false;
+  NIGHT.running=false;
+  var sp=buildDana();
+  /* Your own house, lit, from the inside. Not the day rig - it is dinnertime, the
+     lamps are on, and the point is that this is the one room in the game that is
+     supposed to feel safe. */
+  setLighting('day');
+  renderer.toneMappingExposure=0.62;
+  scene.fog=new THREE.FogExp2('#101522',0.020);
+  scene.background=new THREE.Color('#1a2130');
+  var home=HOUSES.filter(function(h){return h.yours;})[0];
+  player.position.set(home.x+1.2,0,-3.2);player.rotation.set(0,0,0);
+  S.py=0;S.vy=0;S.grounded=true;S.mvx=0;S.mvz=0;
+  S.yaw=Math.PI*0.5;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
+  for(var i=0;i<SLEEPERS.length;i++)if(SLEEPERS[i].group)SLEEPERS[i].group.visible=false;
+  closeMenu();
+  hint(sp?sp.line+' \u2014 E to talk to her.':'You are home.');
+  return true;
+}
+function endEvening(){
+  if(!S.evening)return;
+  S.evening=false;
+  clearDana();
+  for(var i=0;i<SLEEPERS.length;i++)
+    if(SLEEPERS[i].group)SLEEPERS[i].group.visible=!SLEEPERS[i].absent;
+  setLighting('night');
+  showDay();
 }
 let dayWalkBack='s-day';
 function startWalk(){
@@ -7323,6 +7398,7 @@ function findTarget(){
      108 hertz, give or take" reads as somebody's. But scenery must never OUTBID a
      possession for the prompt — the examine loop is the game, and a fixture
      stealing E from the mug beside it would be the worst bug in this milestone. */
+  if(DANA)consider([DANA.position.x,1.15,DANA.position.z],{t:'dana'});
   for(let i=0;i<DAYFOLK.length;i++)consider(DAYFOLK[i].pos,{t:'folk',f:DAYFOLK[i]});
   /* HIDES obey the same rule as SCENERY, and for the same reason. Putting them in
      the main pass let a wardrobe outbid the picture frame on the nightstand beside
@@ -7424,6 +7500,7 @@ function interact(){
   if(S.hidden){exitHide();return;}   // M27: E is the way out as well as in
   const t=findTarget();
   if(!t){hint('Nothing within reach.');return;}
+  if(t.t==='dana'){openTalk();return;}
   if(t.t==='hide'){enterHide(t.h);return;}
   if(t.t==='folk'){talkTo(t.f);return;}
   if(t.t==='prop')enterFocus(t.o);
@@ -7442,6 +7519,7 @@ function updatePrompt(){
   else if(t.t==='door')txt='<b>E</b> '+(t.d.locked?'try the front door':(t.d.open?'close the door':'open the door'));
   /* Deliberately worded LOOK AT, never "examine": the prompt has to tell you, before
      you press it, that this is not a thing you can take a copy of. */
+  else if(t.t==='dana')txt='<b>E</b> talk to Dana';
   else if(t.t==='hide')txt='<b>E</b> hide '+t.h.label;
   else if(t.t==='folk')txt='<b>E</b> '+(t.f.spoken?'you have already spoken to ':'stand near ')+t.f.name;
   else if(t.t==='scenery')txt='<b>E</b> look at '+t.s.label+' <span class="ds-dim">(not theirs to swap)</span>';
@@ -7779,6 +7857,7 @@ addEventListener('keydown',e=>{
     if($('s-intro').classList.contains('on')){return;}   // read it; it is four lines
     if(S.focus)exitFocus();
     else if(S.daytime)endWalk();      // M20: the afternoon ends when you go back in
+    else if(S.evening)endEvening();   // M28: ...and the evening when you go up
     else if(S.menuOpen)closeMenu();
     else if(PLAYABLE())openMenu();
     return;
@@ -8069,6 +8148,9 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
   get BODY(){return BODY;},
+  // - M28: home -
+  get DANA(){return DANA;}, DANA_SPOTS,danaSpot,buildDana,clearDana,
+  startEvening,endEvening,
   // - M27: hiding -
   HIDES,addHide,enterHide,exitHide,isHidden,watchedNow,hideTick,
   // - M25: familiarity -
@@ -8116,7 +8198,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M27'};
+  version:'M28'};
 </script>
 
 </body>

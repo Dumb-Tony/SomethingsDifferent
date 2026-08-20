@@ -246,7 +246,16 @@ Dev-wide catalog of what already exists and where to copy it from.
   let a wardrobe outbid the picture frame on the nightstand beside it, and the
   playthrough's "walked to 20, could examine 19" fell to 17. Twenty-six other suites
   missed it. **HIDES now obey the same `if(!best)` rule as SCENERY.**
-  **1026 assertions across twenty-seven suites.**
+- 2026-08-20 - **M28 DONE - HOME.** Wife Suspicion has driven this game since M6: it
+  shortens the night, wakes her at tier 2, sends her out after you at tier 4, and ends
+  runs. **And in twenty-seven milestones Dana had never been on screen** - a number and
+  a paragraph of text, in a game whose whole subject is a man failing to convince the
+  people in his house that he is a person. The evening is now your own lounge with the
+  lamps on and her in it, and **where she is standing IS the meter**: on the sofa with
+  her feet up at 0, in the kitchen doing something she already did at 45, in the hall
+  at 65, at the front window with the light off behind her at 85. Walk up and press E
+  and it is the same SCENES dialogue the menu used to open. 22 assertions.
+  **1048 assertions across twenty-eight suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
