@@ -257,7 +257,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M24 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M25 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -642,6 +642,18 @@ const CONST={
   HARD_WATCH_R: 11.0,       // how far up the street he can pick you out
   HARD_CAM_R  : 2.6,        // doorbell camera trigger radius
   HARD_CAM_S  : 7,          // Suspicion per household, once per night
+  // -- familiarity (GDD Phase 2 "social camouflage", M25) -------------------
+  /* The afternoon walk (M20) paid Human Knowledge and nothing else, so spending a
+     day action on your neighbours was charity. This is what it buys: a man they
+     KNOW is a man they explain away. Standing near somebody in daylight makes them
+     familiar with you; a familiar face costs less when it turns up at 3am.
+     It never goes to zero - being seen always hurts, or the night stops mattering -
+     and it does nothing at all for being seen INSIDE their house, which is the one
+     thing no amount of small talk explains. */
+  FAM_TALK    : 22,         // per afternoon spent standing near them
+  FAM_DECAY   : 3,          // ...lost per day you do not
+  FAM_MAX_CUT : 0.55,       // the most it can take off a sighting
+  FAM_INDOORS : 0.15,       // ...and how little of that applies inside their house
   // -- the scanner (M24) ---------------------------------------------------
   /* Until now the only way to learn anything about a room was to walk within
      INTERACT_RANGE (2.0m) of a thing and face it. A house holds twenty possessions
@@ -5859,12 +5871,42 @@ function flash(){
   const f=$('flash');f.classList.add('on');
   setTimeout(()=>f.classList.remove('on'),420);
 }
+/* ---------------------------- FAMILIARITY (M25) ----------------------------
+   How well a given resident knows the man from number 14. Raised by standing next
+   to them in the afternoon, spent when they catch sight of you at night. */
+function familiar(id){const r=RESIDENTS[id];return r?(r.familiar||0):0;}
+function famAdd(id,n){
+  const r=RESIDENTS[id];if(!r)return 0;
+  const before=r.familiar||0;
+  r.familiar=clamp(before+n,0,100);
+  return r.familiar-before;
+}
+/* Everybody forgets a bit each day, so familiarity is a thing you maintain rather
+   than a switch you flip once on night one and never think about again. */
+function famDecay(){
+  Object.keys(RESIDENTS).forEach(function(id){
+    const r=RESIDENTS[id];
+    r.familiar=clamp((r.familiar||0)-CONST.FAM_DECAY,0,100);
+  });
+}
+/* What a sighting costs, after they have talked themselves out of some of it.
+   `indoors` is the killer: no amount of chatting over a fence explains why Steve is
+   standing in your bedroom at three in the morning. */
+function seenCost(id,base,indoors){
+  const f=familiar(id)/100;
+  const cut=CONST.FAM_MAX_CUT*f*(indoors?CONST.FAM_INDOORS:1);
+  return base*(1-cut);
+}
 function onSeen(s){
   GAME.sightings++;
   S.lastSeenBy={who:s.name,x:s.x,z:s.z};   // M19: the report says where it came from
   const r=RESIDENTS[s.res];
-  r.suspicion=clamp((r.suspicion||0)+34,0,100);
+  /* M25. Inside their house is inside their house - familiarity barely touches it. */
+  const indoors=ceilAt(player?player.position.x:0,player?player.position.z:0)>0;
+  const cost=seenCost(s.res,34,indoors);
+  r.suspicion=clamp((r.suspicion||0)+cost,0,100);
   r.stress=clamp((r.stress||0)+20,0,100);
+  S.lastSeenCost={base:34,paid:cost,fam:familiar(s.res),indoors:indoors};
   SFX.cue('seen');
   flash();
   endNight('seen',s.name+' is sitting up in the dark, looking straight at you. '+
@@ -6472,6 +6514,8 @@ function talkTo(f){
   const r=RESIDENTS[f.res];
   if(f.spoken){hint(f.name+' has said their piece for today.');return;}
   f.spoken=true;
+  /* M25: this is what the afternoon is FOR. */
+  const gained=famAdd(f.res,CONST.FAM_TALK);
   const beat=reactionBeat(r);
   if(beat){hkGain(3);hint(beat);DAY.log.push(beat);}
   else{
@@ -6480,6 +6524,8 @@ function talkTo(f){
       'in the same order.';
     hint(line);DAY.log.push(line);
   }
+  if(gained>0)DAY.log.push(f.name+' knows your face a little better now. '+
+    'Familiarity '+Math.round(familiar(f.res))+'/100.');
 }
 let dayWalkBack='s-day';
 function startWalk(){
@@ -7010,6 +7056,7 @@ function doMorning(){
      day. Resolved here, with the rest of the night's consequences, and BEFORE
      fractures - so a thing they recognised can be the push that fires one. */
   GAME.lastWindow=windowTick(lines);
+  famDecay();             // M25: a face you stop showing is a face they forget
   GAME.lastFractures=fireFractures();   // thresholds are checked AFTER the night lands
   GAME.lastHarden=fireHardening();      // ...and so does the street's own reaction
   return lines;
@@ -7040,7 +7087,7 @@ function saveGame(){
   haul:HAUL,window:WINDOW};
   Object.keys(RESIDENTS).forEach(id=>{
     const r=RESIDENTS[id];
-    d.res[id]={doubt:r.doubt,susp:r.suspicion,stress:r.stress,beats:r.beats,
+    d.res[id]={doubt:r.doubt,susp:r.suspicion,stress:r.stress,beats:r.beats,fam:r.familiar,
                fired:r.fired,collapsed:r.collapsed,sq:r.sleepQuality,att:r.attention};
   });
   objects.forEach(o=>{d.obj[o.id]={spec:o.spec,marked:o.marked,fresh:o.fresh};});
@@ -7063,6 +7110,7 @@ function loadGame(){
     const r=RESIDENTS[id],s=d.res[id];
     if(!r)return;
     r.doubt=s.doubt;r.suspicion=s.susp;r.stress=s.stress;r.beats=s.beats||0;
+    r.familiar=s.fam||0;
     r.fired=s.fired||{};r.collapsed=!!s.collapsed;
     if(s.sq!==undefined)r.sleepQuality=s.sq;
     if(s.att!==undefined)r.attention=s.att;
@@ -7695,7 +7743,7 @@ function startHouse(){
   WIFE.susp=0;DAY.block=0;DAY.actions=CONST.ACTIONS_PER_BLOCK;DAY.log=[];
   Object.keys(RESIDENTS).forEach(id=>{
     const r=RESIDENTS[id];r.doubt=0;r.suspicion=0;r.stress=0;r.beats=0;
-    r.fired={};r.collapsed=false;});
+    r.fired={};r.collapsed=false;r.familiar=0;});
   RESIDENTS.walt.sleepQuality=0.50;RESIDENTS.june.sleepQuality=0.40;
   GAME.lastFractures=[];
   nightReset();
@@ -7912,6 +7960,8 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
   get BODY(){return BODY;},
+  // - M25: familiarity -
+  familiar,famAdd,famDecay,seenCost,
   // - M24: the scanner -
   MARKS,scanPulse,scanTick,markState,clearMarks,
   // - M23: windows -
@@ -7955,10 +8005,12 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M24'};
+  version:'M25'};
 </script>
 </body>
 </html>
+
+
 
 
 

@@ -1436,6 +1436,29 @@ previous one runs in a browser.**
       with a four-second cooldown. Walking over and looking is still the quiet option
       when somebody is stirring.
 
+25. ~~**Familiarity.**~~ **DONE 2026-08-20.** *Verified: 20 assertions.*
+
+    The afternoon walk paid Human Knowledge and nothing else, so spending one of the
+    day's two actions on your neighbours was charity. Phase 2 has listed **social
+    camouflage** since this document was written; this is it. A man they *know* is a
+    man they explain away.
+
+    Standing next to somebody in daylight raises their familiarity with you (+22,
+    once each per afternoon). It decays 3 a day if you stop showing your face, so it
+    is something you maintain rather than a switch you flip on night one.
+
+    **Both limits are the design.**
+
+    - It **never reaches zero cost.** A sighting by a stranger costs 34 Suspicion; by
+      somebody who knows you, 15.3. Being seen always hurts, or the night stops
+      mattering.
+    - It does **almost nothing inside their house** — 31.2 of 34. No amount of
+      chatting over a fence explains why Steve is standing in your bedroom at three
+      in the morning.
+
+    Which finally makes the day cost something to spend: social insurance for the
+    night now competes with the shops for the same two actions per block.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

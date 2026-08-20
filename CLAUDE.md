@@ -208,7 +208,18 @@ Dev-wide catalog of what already exists and where to copy it from.
   hand (2.6 vs 0.6 in sleeper-noise units) with a 4s cooldown, so walking over and
   looking is still worth doing when somebody is stirring.
   22 assertions.
-  **962 assertions across twenty-four suites.**
+- 2026-08-20 - **M25 DONE - FAMILIARITY.** The afternoon walk paid Human Knowledge and
+  nothing else, so spending a day action on your neighbours was charity. GDD Phase 2
+  has listed "social camouflage" since the start; this is it. Standing near somebody in
+  daylight raises `familiar` (+22, once each per afternoon, -3/day if you stop showing
+  your face). A familiar face costs less when it turns up at 3am: a sighting by a
+  stranger costs 34 Suspicion, by somebody who knows you 15.3. **The two limits are the
+  design.** It never reaches zero - being seen always hurts, or the night stops
+  mattering. And it does almost nothing INSIDE their house (31.2 of 34), because no
+  amount of chat over a fence explains why Steve is in your bedroom at three in the
+  morning. So the day now buys insurance for the night, and shopping competes with it
+  for the same action budget. 20 assertions.
+  **982 assertions across twenty-five suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
