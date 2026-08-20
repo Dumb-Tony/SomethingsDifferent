@@ -47,14 +47,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$ROOT/tools/build-share.ps1
 # step wraps and inlines, and a wrapper bug is invisible in the source tree.
 if [ "$RUN_TESTS" = "1" ]; then
   echo "testing the shippable build…"
+  cd "$ROOT" || exit 2
+  log="$(mktemp)"
   fails=""
-  for s in m1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m17; do
-    powershell -NoProfile -ExecutionPolicy Bypass -File "$ROOT/tools/smoketest.ps1" \
-      -Tests "tools\$s-tests.js" -Game "_share-test.html" >/dev/null 2>&1 \
-      || fails="$fails $s"
+  for s in m1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m17 m18; do
+    if ! powershell -NoProfile -ExecutionPolicy Bypass -File tools/smoketest.ps1 \
+         -Tests "tools/$s-tests.js" -Game "_share-test.html" >"$log" 2>&1; then
+      fails="$fails $s"
+      echo "  --- $s ---"
+      grep -E "SDTEST|^FAIL|not found|never came up" "$log" | head -4 | sed 's/^/  /'
+    fi
   done
+  rm -f "$log"
   [ -z "$fails" ] || { echo "SUITES FAILED:$fails — not publishing" >&2; exit 1; }
-  echo "all 17 suites green on the shipped bytes"
+  echo "all 18 suites green on the shipped bytes"
 fi
 
 cd "$PUBLISH_DIR" || exit 2

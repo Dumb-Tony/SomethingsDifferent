@@ -112,7 +112,24 @@ Dev-wide catalog of what already exists and where to copy it from.
   car whose headlights are a real light zone, and a dawn ramp. Paid for up front with a
   shared unit box + material cache: 1,965 meshes on 703 geometries / 691 materials.
   Walkable floor went UP, 77.3 -> 84.1 m2. 44 assertions + `docs/m17-court.png`.
-  **760 assertions across seventeen suites.**
+- 2026-08-19 - **M18 DONE - THE FENCE.** Playtest note: "still a pretty bare and
+  unplayable game". The second word was LITERAL. MEASURED with the till open for the
+  first time ever: $475 of income across a ten-night slice against a median doubt rung
+  of $29 buys 15 swaps and reaches collapse 32.0 against a bar of 40 - THE GAME COULD
+  NOT BE WON. Every balance measurement in this project's history opens with
+  bank=1000000 (_balance.js:20, _escalate.js:21), so nobody had ever asked the
+  question. Fix is the loop the fiction already described - swapWith printed "the mark
+  goes in your pocket with the old one" while the original ceased to exist - so YOU NOW
+  KEEP WHAT YOU TOOK and can fence it. Only the two specialists buy: Second Chances
+  pays 25% and is two towns over, Ardsley Antiques pays 55% and is ON THIS STREET,
+  where anything with attachment >= 1.2 goes in the window and its owner walks past it
+  (+14 Suspicion, reported in the morning). The good money and the real risk are the
+  same item. With fencing a competent run reaches 43.9 and ends the slice with $8 in
+  its pocket. Also: the night now HAS things in it - a phone, a light going on, a fox
+  in the bins, and somebody getting up for a glass of water who becomes a roving pair
+  of eyes (canSee reads the sleeper's own x/z, so walking one costs no new systems).
+  Seeded per night, never the same event twice running. 48 assertions.
+  **808 assertions across eighteen suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
@@ -184,6 +201,11 @@ Dev-wide catalog of what already exists and where to copy it from.
   authored in layout units and `_p()` converts inside `buildHouse`; `HOUSES` object
   `at` coordinates are converted at the placement call, which is why 30 placements
   needed no edits. Furniture sizes and Y heights are real-world and stay put.
+- **A DIAGNOSTIC THAT CHEATS CANNOT ANSWER THE QUESTION IT WAS BUILT FOR.** `_balance.js`
+  and `_escalate.js` both open with `bank=1000000`, so for seventeen milestones "is
+  this winnable" was measured for a player with infinite money - and the honest answer
+  was NO. `tools\_economy.js` and m18 section 6 run the slice with the till open and
+  are now gates. If you add a cost or a price, run them.
 - **A TEST THAT TELEPORTS AN ACTOR IS NOT TESTING WHETHER THE ACTOR COULD GET THERE.**
   Learned in M13 (two sealed rooms), and it hid a wall again in M17: the garden gate
   was a PICTURE. The pickets skip the path, but the rail underneath was one collider
@@ -319,6 +341,8 @@ can assert on real pixels via `readPixels`. Don't inherit the Chameleon project'
 
 Keep collider/Doubt/noise/spec math pure (plain objects, no live `THREE` scene) so it
 stays testable without a GL context.
+
+
 
 
 

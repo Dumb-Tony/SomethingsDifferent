@@ -1,4 +1,4 @@
-# SOMETHING'S DIFFERENT — Game Design Document
+﻿# SOMETHING'S DIFFERENT — Game Design Document
 
 **Version 0.1 — 2026-08-06**
 Working title: *Something's Different*
@@ -1226,6 +1226,49 @@ previous one runs in a browser.**
     content: **1,965 meshes now on 703 geometries and 691 materials.** Walkable floor
     went *up*, 77.3 → 84.1 m².
 
+18. ~~**The fence, and a night with things in it.**~~ **DONE 2026-08-19.** Playtest
+    note: *"it's still a pretty bare and unplayable game."* The second word was
+    literal. *Verified: 48 assertions.*
+
+    **THE GAME COULD NOT BE WON.** Measured with the till open for the first time:
+    $140 to start and one $335 payday inside a ten-night slice, against a median
+    doubt rung of $29, buys **15 swaps** and reaches collapse **32.0** against a bar
+    of **40** — and you stand in a shop unable to afford anything **729 times**.
+    Every balance measurement in this project's history opens with
+    `bank=1000000` (`_balance.js:20`, `_escalate.js:21`), so *"four a night wins
+    on night five"* was only ever true for a player with infinite money. **A
+    diagnostic that cheats cannot answer the question it was built for.**
+
+    **The fix was already in the fiction.** `swapWith` printed *"the mark goes in
+    your pocket with the old one"* while the original ceased to exist. Now you keep
+    it, and you can sell it. Only the two specialists buy — a supermarket does not
+    buy your mug — and which one is the decision:
+
+    | | pays | where | costs you |
+    |---|---|---|---|
+    | Second Chances | 25% | two towns over | the drive; Dana notices |
+    | Ardsley Antiques | 55% | **on this street** | it goes in the window |
+
+    Anything with attachment ≥ 1.2 is recognisable, and the antique shop's window is
+    on the road its owner lives on: they walk past, and it costs them +14 Suspicion,
+    reported in the morning with the figure that **landed** rather than the one
+    charged. So the best money and the real risk are the same item, the rule is
+    deterministic, and you can work it out before you hand it over.
+
+    **Measured after:** a competent run reaches **43.9** and ends the slice with
+    **$8** in its pocket — funded, not rich, still short 49 times. `_economy.js`
+    and m18 §6 are now permanent gates.
+
+    **And the night has things in it.** It used to be thirteen minutes in which
+    nothing happened that the player did not cause. Two to four seeded events a
+    night, never the same one twice running, each a world change routed through a
+    system that already existed: a phone ringing in somebody else's kitchen
+    (`emitNoise`), a light going on two doors down (`addLight`, so `litAt` and
+    every seeing check agree you are standing in it), something in the bins, and
+    **somebody getting up for a glass of water** — which cost no new systems at all,
+    because `canSee` reads the sleeper's own x/z, so walking one to the kitchen
+    turns them into a roving pair of eyes inside a house you may be standing in.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
@@ -1300,6 +1343,24 @@ Add content by filling these; none should require touching systems code.
 *(Resolve by playing, not by arguing. Record answers here with dates.)*
 
 **Tuning log**
+
+- **2026-08-19 — THE GAME WAS NOT WINNABLE, AND THE TOOL BUILT TO CHECK THAT WAS
+  CHEATING.** `_balance.js` and `_escalate.js` both open with `GAME.bank=1000000`.
+  Every difficulty number in this document — including `SLICE_WIN_COLLAPSE` — was
+  therefore tuned for a player with infinite money. With the real wallet: 15 swaps,
+  collapse 32.0 against a bar of 40, and 729 occasions of standing in a shop unable to
+  buy. The lesson is not "tune the economy"; it is that **a diagnostic which grants
+  itself a resource cannot answer any question about that resource**, and this one had
+  been quietly answering the most important question in the game for seventeen
+  milestones. `_economy.js` runs the same slice with the till open and is a gate.
+- **2026-08-19 — Fencing rates, measured not guessed.** Thrift 0.25 / antique 0.55.
+  At 0.85 the loop became a money printer (buy a $10 thrift variant, fence the
+  original for $21) which removes the constraint the milestone existed to create; at
+  0.35 a competent run still fell short of the bar. 0.55 lands a competent run at 43.9
+  and ends the slice with $8 — funded, never rich.
+- **2026-08-19 — Never roll the same event twice running.** The first seeded night
+  produced *fox, light, light, light*, which reads as a bug in the world rather than
+  as a night. Drawing from the kinds that did NOT just happen costs one line.
 
 - **2026-08-17 — A TEST THAT TELEPORTS AN ACTOR IS NOT TESTING WHETHER THE ACTOR
   COULD GET THERE. Learned twice now, and the second time it hid a wall.** M13 found
@@ -1768,3 +1829,5 @@ Carried over from the Chameleon project because they were learned the hard way:
 ---
 
 *End of v0.1. Sections are sockets — extend, don't restructure.*
+
+

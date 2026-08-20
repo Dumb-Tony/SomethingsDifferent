@@ -135,6 +135,20 @@ $setups = @{
   });
   SD.openShop('thrift');
 "@
+  fence = @"
+  SD.startHouse(); $open
+  SD.GAME.bank=900; SD.GAME.cash=40; SD.GAME.hk=88;
+  // take four things first, so the counter has a haul on it to sell (M18)
+  ['wallClock','coffeeMug','pictureFrame','doormat'].forEach(function(k){
+    var o=SD.objects.filter(function(x){return x.kind===k;})[0];
+    if(!o) return;
+    SD.scanObject(o);
+    SD.buyVariant(o.id,0,'bulwark');
+    var m=SD.invFor(o.id);
+    if(m.length) SD.swapWith(o,m.length-1);
+  });
+  SD.openShop('antique');
+"@
   antique = @"
   SD.startHouse(); $open
   SD.GAME.bank=900; SD.GAME.hk=64;

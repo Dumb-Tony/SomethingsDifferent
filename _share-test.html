@@ -170,6 +170,13 @@ body.night #grade{opacity:1}
 .rp-hard .rp-band{color:#9fb0cc}
 /* gossip (M16) - what the street said about you, in its own colour */
 .rp-gos{border-left-color:#b08cc4;background:#211a26}
+.sh-sell{border:1px solid #4a3a22;background:#1c1710}
+.sh-sell .sh-h{color:#e0a95e}
+.sh-sell-b{font:inherit;font-size:11px;letter-spacing:1px;padding:3px 10px;border-radius:7px;
+  border:1px solid #7a5c2e;background:#2a2013;color:#f0cfae;cursor:pointer}
+.sh-sell-b:hover{background:#3a2c19}
+.rp-win{border-left-color:#c98a4a;background:#241d14}
+.rp-win .rp-band{color:#e0a95e}
 .rp-gos .rp-band{color:#c8a8dc}
 /* the state-of-the-street readout on the day screen (M15). Every number in here
    already existed; none of it had ever been shown during a run. */
@@ -250,7 +257,7 @@ body.night #grade{opacity:1}
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M17 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M18 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -641,6 +648,30 @@ const CONST={
   HARD_WATCH_R: 11.0,       // how far up the street he can pick you out
   HARD_CAM_R  : 2.6,        // doorbell camera trigger radius
   HARD_CAM_S  : 7,          // Suspicion per household, once per night
+  // -- the fence (GDD 5.7, M18) --------------------------
+  /* THE HOLE THIS FILLS. Every balance measurement ever made here set bank=1000000
+     first (_balance.js, _escalate.js), so the win threshold was tuned for a player
+     with infinite money. MEASURED with the till open: ${'$'}475 of income across a whole
+     10-night slice against a median doubt rung of ${'$'}29 buys 15 swaps and reaches
+     collapse 32.0 against a bar of 40 - the game was NOT WINNABLE. See GDD 15.
+     The fix is the loop the fiction already described: swapWith says "the mark goes
+     in your pocket with the old one", so you keep the original, and you can sell it. */
+  FENCE_THRIFT: 0.25,       // Second Chances pays badly and asks nothing
+  FENCE_ANTIQUE: 0.55,      // Ardsley Antiques pays double that - and is ON this street
+  /* WHICH is the decision. An item somebody would RECOGNISE in a shop window is
+     exactly the item worth the most, so the good money and the real risk are the
+     same choice. Attachment is the tell: a doormat is anonymous, a wedding photo is
+     not. Deterministic, not a dice roll, so you can reason about it before you sell. */
+  FENCE_REC_ATTACH: 1.2,
+  FENCE_REC_SUSP: 14,       // ...and what it costs when they see it in the window
+  // -- the night has things in it (M18) ------------------
+  /* A night was 13 minutes in which NOTHING happened that you did not cause. These
+     are seeded per night, so a night is a fact you can learn rather than a dice roll,
+     and every one of them is a WORLD CHANGE - noise, light, or a body in a room -
+     rather than a cutscene. */
+  EVENT_COUNT : [2,4],      // how many fire in one night, inclusive
+  EVENT_FIRST : 0.55,       // earliest, in game hours after 23:00
+  EVENT_GAP   : 0.65,       // minimum game hours between two of them
   // ── the neighbourhood (M17) ───────────────────────────
   /* Ardsley Court was a 112x15m corridor: one road plane painted THROUGH the front
      gardens (road z span [-12.4,-8.4] against a fence at -13.95), no far side, no
@@ -4734,6 +4765,17 @@ const SFX=(function(){
   /* M17. A car on the carriageway: a long tyre-roar that arrives before the light
      does. Deliberately the longest one-shot in the game — it is a warning, and the
      headlights behind it are a real light zone. */
+  /* M18. A landline in an empty kitchen, and something in the bins. */
+  phone:function(p,mag){
+    const v=CONST.AUD_FOLEY_REF*p.g*0.95;
+    tone(p,v,860,860,0.34,'foley','square');
+    tone(p,v*0.8,1180,1180,0.30,'foley','square',0.16);
+  },
+  fox:function(p,mag){
+    const v=CONST.AUD_FOLEY_REF*p.g*0.8;
+    burst(p,v,2600,0.6,0.22,'foley','highpass');
+    tone(p,v*0.5,220,140,0.26,'foley','sawtooth',0.08);
+  },
   car:function(p,mag){
     const v=CONST.AUD_FOLEY_REF*p.g*1.05;
     burst(p,v*0.80,430,0.35,3.30,'foley');
@@ -4987,6 +5029,7 @@ function nightReset(){
   }
   planWifeNight();
   hardenNight();          // M14: set up whatever the street has installed by now
+  planNightEvents();      // M18: ...and what happens tonight without you
 }
 
 /* ═════════════════════════ HARDENING ═════════════════════════
@@ -5325,6 +5368,145 @@ function wifeNightTick(dt){
     }
   }
 }
+/* ═════════════════════════ THE NIGHT HAS THINGS IN IT (M18) ═════════════════════
+   A night was thirteen minutes in which nothing happened that the player did not
+   cause. Everything below is a WORLD CHANGE - a noise, a light, or a body in a
+   room - never a cutscene, and every one of them routes through a system that
+   already exists: emitNoise for the sleepers, addLight for litAt and therefore for
+   every seeing check, and the sleeper's own x/z for canSee.
+
+   SEEDED PER NIGHT off the day number, so which night the phone rings is a FACT you
+   can learn and plan around rather than a dice roll at the worst moment. */
+const EVENTS=[];
+function planNightEvents(){
+  EVENTS.length=0;
+  const rng=mulberry32((hashStr('night|'+GAME.day+'|'+GAME.week)>>>0)||7);
+  const budget=NIGHT.budget||NIGHT_HOURS;
+  const lo=CONST.EVENT_COUNT[0],hi=CONST.EVENT_COUNT[1];
+  const n=lo+Math.floor(rng()*(hi-lo+1));
+  const kinds=['phone','light','fox','water'];
+  let t=CONST.EVENT_FIRST,last=null;
+  for(let i=0;i<n;i++){
+    const room=budget-0.35-t;
+    if(room<=0)break;
+    t+=rng()*Math.min(1.5,room);
+    /* Never the same thing twice running. The first seeded night this produced was
+       fox, light, light, light - which reads as a bug in the world rather than as a
+       night. Drawing from what has NOT just happened costs one line. */
+    const pool=kinds.filter(k=>k!==last);
+    const kind=pool[Math.floor(rng()*pool.length)];
+    last=kind;
+    EVENTS.push({at:t,kind:kind,seed:Math.floor(rng()*1e9),done:false});
+    t+=CONST.EVENT_GAP;
+  }
+}
+/* A house other than the one you are standing in, where possible: an event that
+   only ever fires on top of you is a punishment, not an event. */
+function otherHouse(rng){
+  const stocked=HOUSES.filter(h=>(h.objects||[]).length);
+  if(!stocked.length)return null;
+  const near=player?stocked.filter(h=>Math.abs(h.x-player.position.x)<9):[];
+  const far=stocked.filter(h=>near.indexOf(h)<0);
+  const pool=far.length?far:stocked;
+  return pool[Math.floor(rng()*pool.length)];
+}
+function fireEvent(e){
+  const rng=mulberry32(e.seed>>>0||3);
+  const RS=CONST.ROOM_SCALE;
+  if(e.kind==='phone'){
+    /* A landline, in somebody else's kitchen. Pure noise through emitNoise, so it
+       can wake THEIR sleepers and not yours - and if you are in that house when it
+       goes, it is the loudest thing that has ever happened to you. */
+    const h=otherHouse(rng); if(!h)return;
+    const x=h.x-3.6,z=1.30;
+    emitNoise(x,z,CONST.N_DOOR*1.35,'phone');
+    if(player&&Math.hypot(player.position.x-x,player.position.z-z)<16)
+      hint('A phone starts ringing in '+h.name+'. It rings eleven times.');
+    return;
+  }
+  if(e.kind==='fox'){
+    /* Something in the bins. It makes a real noise that can genuinely wake
+       somebody, which is the point: you cannot tell it from your own mistake. */
+    const h=otherHouse(rng); if(!h)return;
+    const x=h.x+(rng()-0.5)*8,z=-9.0*RS+1.4;
+    emitNoise(x,z,CONST.N_SEARCH*2.2,'fox');
+    if(player&&Math.hypot(player.position.x-x,player.position.z-z)<20)
+      hint('Something goes through a bin further up the street.');
+    return;
+  }
+  if(e.kind==='light'){
+    /* A window goes on two doors down. A REAL light zone, so litAt() - and every
+       seeing check that reads it - agrees that you are now standing in it. */
+    const h=otherHouse(rng); if(!h)return;
+    const x=h.x+(rng()<0.5?-4.0:4.0),z=-3.05*RS;
+    const L=new THREE.PointLight('#ffd9a0',1.9,9.0,1.6);
+    L.position.set(x,1.9,z);L.userData.temporal=true;scene.add(L);
+    const zone={x:x,z:z,r:6.4,i:0.72};LIGHTS.push(zone);
+    e.light=L;e.zone=zone;e.until=NIGHT.t+0.42;      // ~25 real seconds
+    if(player&&Math.hypot(player.position.x-x,player.position.z-z)<22)
+      hint('A light goes on at '+h.name+'. Somebody is up.');
+    return;
+  }
+  if(e.kind==='water'){
+    /* SOMEBODY GETS UP. The strongest of the four, and it costs no new systems:
+       canSee() reads the sleeper's own x/z, wallsBetween and litAt do the rest, so
+       walking one to the kitchen turns them into a roving pair of eyes inside a
+       house you may be standing in. */
+    const cand=SLEEPERS.filter(s=>!s.absent&&s.state==='asleep');
+    if(!cand.length)return;
+    const s=cand[Math.floor(rng()*cand.length)];
+    const h=houseById(s.house); if(!h)return;
+    s.state='awake';s.awake=1e9;s.up=true;
+    s.homeX=s.x;s.homeZ=s.z;
+    s.legs=[[h.x-3.6,1.30],[s.homeX,s.homeZ]];       // kitchen, then back to bed
+    s.leg=0;s.legT=0;
+    if(s.group){s.group.position.y=0.86;
+      if(s.group.userData.torso)s.group.userData.torso.rotation.x=-1.45;}
+    if(player&&Math.hypot(player.position.x-s.x,player.position.z-s.z)<18)
+      hint(s.name+' is getting up.');
+    e.sleeper=s;
+    return;
+  }
+}
+/* Walk anybody who is up, and put them back to bed when they are done. */
+function walkSleepers(dt){
+  for(let i=0;i<SLEEPERS.length;i++){
+    const s=SLEEPERS[i];
+    if(!s.up||!s.legs)continue;
+    const tgt=s.legs[s.leg];
+    const dx=tgt[0]-s.x,dz=tgt[1]-s.z,d=Math.hypot(dx,dz);
+    if(d<0.25){
+      s.legT+=dt;
+      if(s.legT>(s.leg===0?4.0:0.6)){                // a moment at the tap
+        s.legT=0;s.leg++;
+        if(s.leg>=s.legs.length){
+          s.up=false;s.legs=null;s.state='asleep';s.awake=0;s.look=0;s.noise=0;
+          if(s.group){s.group.position.y=0.54;
+            if(s.group.userData.torso)s.group.userData.torso.rotation.x=0;}
+        }
+      }
+      continue;
+    }
+    const v=1.15*dt/d;                                // a slow, half-asleep walk
+    s.x+=dx*v;s.z+=dz*v;
+    s.look=Math.atan2(dz,dx);
+    if(s.group)s.group.position.set(s.x,0.86,s.z);
+    s.stepT=(s.stepT||0)-dt;
+    if(s.stepT<=0){s.stepT=0.62;emitNoise(s.x,s.z,CONST.N_STEP_SNEAK,'step','wood');}
+  }
+}
+function eventTick(dt){
+  for(let i=0;i<EVENTS.length;i++){
+    const e=EVENTS[i];
+    if(!e.done&&NIGHT.t>=e.at){e.done=true;fireEvent(e);}
+    if(e.light&&e.until!==undefined&&NIGHT.t>=e.until){
+      scene.remove(e.light);e.light=null;
+      const zi=LIGHTS.indexOf(e.zone);if(zi>=0)LIGHTS.splice(zi,1);
+      e.zone=null;
+    }
+  }
+  walkSleepers(dt);
+}
 function nightTick(dt){
   if(!NIGHT.running)return;
   NIGHT.t+=dt*CONST.NIGHT_SCALE/3600;
@@ -5336,6 +5518,8 @@ function nightTick(dt){
   wifeNightTick(dt);
   if(!NIGHT.running)return;
   hardenTick(dt);                 // M14: the street's own defences
+  if(!NIGHT.running)return;
+  eventTick(dt);                  // M18: and the things that happen on their own
   if(!NIGHT.running)return;
   updateSleepers(dt);
 }
@@ -5538,6 +5722,7 @@ function beginNight(){
   // her tier eats into the usable night, then buys her actions inside what is left
   NIGHT.budget=NIGHT_HOURS*wifeTier().night;
   planWifeNight();
+  planNightEvents();      // re-plan: her tier just shortened the night to fit them in
   player.position.set(HOME.x,0,HOME.z);player.rotation.set(0,0,0);
   S.py=0;S.vy=0;S.grounded=true;S.mvx=0;S.mvz=0;
   S.yaw=Math.PI;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
@@ -5573,19 +5758,28 @@ const STORES=[
   {id:'bulwark',name:'Bulwark Mart',short:'BULWARK',
    sub:'Groceries, home, hardware. Everything in here is fine.',
    range:'the middle of the street',
-   ladder:SHOP_LADDER,priceMult:1.00,stockP:1.00,susp:0,special:true},
+   ladder:SHOP_LADDER,priceMult:1.00,stockP:1.00,susp:0,special:true,
+   /* A supermarket does not buy your mug. Only the two specialists take a haul,
+      which is what finally makes them destinations rather than price tiers. */
+   buys:0,local:false},
   {id:'thrift',name:'Second Chances',short:'THRIFT',
    sub:'Second-hand, two towns over. Nothing in here matches anything else.',
    range:'people who barely look up',
    ladder:[64,52,42,32,22],priceMult:0.35,stockP:CONST.THRIFT_STOCK,
-   susp:CONST.THRIFT_SUSP,special:false},
+   susp:CONST.THRIFT_SUSP,special:false,
+   /* Two towns over: nobody from Ardsley Court will ever see it again. Pays badly,
+      and the drive itself is what Dana notices (susp above). */
+   buys:CONST.FENCE_THRIFT,local:false},
   {id:'antique',name:'Ardsley Antiques',short:'ANTIQUE',
    sub:'By appointment. Everything here is very nearly perfect.',
    range:'people who notice everything',
    /* bottom rung sits ABOVE Bulwark's top (97) on purpose: each shop owns a band of
       the spectrum outright, so "which shop" is a clean read and not a coin toss
       between two overlapping shelves */
-   ladder:[99.2,98.6,98.2,97.7,97.3],priceMult:3.60,stockP:1.00,susp:0,special:false},
+   ladder:[99.2,98.6,98.2,97.7,97.3],priceMult:3.60,stockP:1.00,susp:0,special:false,
+   /* ON this street. It pays more than twice what the thrift does, and everything
+      you sell it goes in the window, where the people you took it from walk past. */
+   buys:CONST.FENCE_ANTIQUE,local:true},
 ];
 function storeById(id){return STORES.filter(s=>s.id===id)[0]||STORES[0];}
 /* Deterministic per week, so "the thrift didn't have one" is a fact you can plan
@@ -5715,6 +5909,75 @@ function pickScene(){
    Splitting the change from its perception is deliberate: what you do at 03:00 you
    have to stand next to at 15:00 (GDD pillar 3). */
 const CATALOG={},INV=[],PENDING=[];
+/* ═════════════════════════ THE HAUL (M18) ═════════════════════════
+   What you took. Before this, swapWith() built the copy, put it in the world and
+   let the ORIGINAL cease to exist - while the hint text it printed said "the mark
+   goes in your pocket with the old one". The object was already in your pocket in
+   the fiction; it just was not in the game.
+
+   It matters because the game was not winnable without it. ${'$'}475 of income across a
+   ten-night slice, a median doubt rung of ${'$'}29: fifteen swaps, collapse 32 against a
+   bar of 40. You need something to sell, and you are standing in a house full of
+   things you are about to replace. */
+const HAUL=[];
+/* What a thing is worth, as opposed to what somebody will pay for it. Deterministic
+   from the kind and the spec, so the same object is worth the same every time you
+   look at it - a price that moved when you re-opened the shop would make the whole
+   decision unreadable. Reuses the shop's own price band (PROP_KINDS.price) rather
+   than inventing a second scale. */
+function itemValue(kind,spec){
+  const k=PROP_KINDS[kind];
+  if(!k)return 1;
+  const span=k.price[1]-k.price[0];
+  /* Position in the band comes from the SPEC, so the fancy variant of a thing is
+     worth more than the plain one - and the player can see why. */
+  const h=hashStr(kind+'|'+JSON.stringify(spec))>>>0;
+  return Math.max(1,Math.round(k.price[0]+span*(0.30+(h%1000)/1000*0.70)));
+}
+/* What a given shop will hand over for it. */
+function offerFor(item,storeId){
+  const st=storeById(storeId);
+  if(!st||!st.buys)return 0;
+  return Math.max(1,Math.round(itemValue(item.kind,item.spec)*st.buys));
+}
+/* Would the person you took it from know it on sight? Attachment is the tell: a
+   doormat is anonymous and a wedding photo is not, which puts the best money and
+   the real risk on the SAME item. Deterministic on purpose - you are supposed to be
+   able to work this out before you hand it over, not find out afterwards. */
+function isRecognisable(item){return (item.attach||0)>=CONST.FENCE_REC_ATTACH;}
+/* Sell it. Returns a string for the UI, and never throws on a bad index. */
+function sellItem(idx,storeId){
+  const it=HAUL[idx];
+  if(!it)return 'gone';
+  const st=storeById(storeId);
+  if(!st.buys)return 'nobuy';
+  const paid=offerFor(it,st.id);
+  GAME.cash+=paid;                    // cash, not bank: a shop counter pays in notes
+  HAUL.splice(idx,1);
+  /* Sold on the street it came off. It goes in the window; the owner walks past.
+     Resolved at doMorning() with the rest of the night's consequences rather than
+     immediately, so the report can tell you in one place. */
+  if(st.local&&isRecognisable(it)){
+    WINDOW.push({owner:it.owner,label:it.label,store:st.id,paid:paid});
+  }
+  SFX.cue('buy');
+  return 'sold '+paid;
+}
+/* Things sitting in the antique shop window that somebody is going to recognise. */
+const WINDOW=[];
+function windowTick(lines){
+  const said=[];
+  while(WINDOW.length){
+    const w=WINDOW.shift();
+    const r=RESIDENTS[w.owner];
+    if(!r||r.collapsed)continue;
+    const before=r.suspicion||0;
+    r.suspicion=clamp(before+CONST.FENCE_REC_SUSP,0,100);
+    const applied=r.suspicion-before;   // report what LANDED, per the M16 lesson
+    said.push({name:r.name,label:w.label,amt:applied,paid:w.paid});
+  }
+  return said;
+}
 const GAME={day:1,hasSpareKey:false,sightings:0,
   bank:140,cash:0,hk:0,week:1,weekday:0,wagePenalty:0,
   bought:{},scenesSeen:{},watched:false,keys:{},
@@ -5777,6 +6040,12 @@ function swapWith(o,idx){
   const defeated=o.marked&&it.sim>=99.9;
   if(defeated)o.marked=false;
   INV.splice(INV.indexOf(it),1);
+  /* M18 - YOU KEEP THE ORIGINAL. It used to be overwritten and gone, while the line
+     printed two rows down said it went in your pocket. It is the only thing you own
+     that is worth anything, and the run is not affordable without selling it. */
+  HAUL.push({kind:o.kind,spec:JSON.parse(JSON.stringify(o.spec)),owner:o.owner,
+             label:o.label,attach:o.attach,house:o.house,day:GAME.day,
+             value:itemValue(o.kind,o.spec)});
   applyChange(o,s,defeated?'replaced the marked one with an identical copy'
                           :'swapped in a '+it.sim.toFixed(1)+'% match');
   if(defeated)hint('The mark goes in your pocket with the old one. It is clean again.');
@@ -6095,6 +6364,10 @@ function doMorning(){
   /* Gossip runs BEFORE fractures so a fracture threshold can be crossed by what the
      street said about you, not only by what you did (M16). */
   GAME.lastGossip=gossip(lines);
+  /* M18. Anything you fenced at the shop ON THIS STREET has been in the window all
+     day. Resolved here, with the rest of the night's consequences, and BEFORE
+     fractures - so a thing they recognised can be the push that fires one. */
+  GAME.lastWindow=windowTick(lines);
   GAME.lastFractures=fireFractures();   // thresholds are checked AFTER the night lands
   GAME.lastHarden=fireHardening();      // ...and so does the street's own reaction
   return lines;
@@ -6118,7 +6391,11 @@ function saveGame(){
     res:{},obj:{},
     planters:PLANTERS.map(p=>({s:p.searched})),
     doors:DOORS.map(x=>({l:x.locked,o:x.open})),
-    catalog:CATALOG,inv:INV,pending:PENDING};
+    catalog:CATALOG,inv:INV,pending:PENDING,
+  /* M18: the haul is the only thing you own that is worth money, and the window is
+     a consequence that has not landed yet. A save that forgot either would hand the
+     player a different run than the one they left. */
+  haul:HAUL,window:WINDOW};
   Object.keys(RESIDENTS).forEach(id=>{
     const r=RESIDENTS[id];
     d.res[id]={doubt:r.doubt,susp:r.suspicion,stress:r.stress,beats:r.beats,
@@ -6163,6 +6440,8 @@ function loadGame(){
   Object.keys(CATALOG).forEach(k=>{delete CATALOG[k];});
   Object.keys(d.catalog).forEach(k=>{CATALOG[k]=d.catalog[k];});
   INV.length=0;(d.inv||[]).forEach(i=>INV.push(i));
+  HAUL.length=0;(d.haul||[]).forEach(i=>HAUL.push(i));
+  WINDOW.length=0;(d.window||[]).forEach(i=>WINDOW.push(i));
   PENDING.length=0;(d.pending||[]).forEach(p=>PENDING.push(p));
   return true;
 }
@@ -6353,6 +6632,11 @@ function showReport(reason,text){
     h+='<div class="rp-item rp-frac"><div class="rp-band">FRACTURE &middot; DOUBT '+f.at+
        '</div><div class="rp-say">'+f.text+'</div></div>';
   });
+  (GAME.lastWindow||[]).forEach(w=>{
+    h+='<div class="rp-row rp-win"><div class="rp-band">SEEN IN THE WINDOW</div>'+
+       '<div class="rp-say">'+w.name+' walked past Ardsley Antiques and saw '+w.label+
+       ' in it. You got $'+w.paid+' for it. Suspicion +'+w.amt.toFixed(1)+'.</div></div>';
+  });
   (GAME.lastGossip||[]).forEach(g=>{
     h+='<div class="rp-item rp-gos"><div class="rp-band">THEY TALKED</div>'+
        '<div class="rp-say">'+gossipLine(g)+'</div></div>';
@@ -6437,6 +6721,28 @@ function openShop(storeId){
         '<span class="sh-range">stocks '+st.ladder[st.ladder.length-1]+'&ndash;'+
         st.ladder[0]+'% &middot; for '+st.range+'</span></div>';
   h+='<div class="dy-meta">$'+money().toFixed(0)+' &middot; '+cal+'</div>';
+  /* ── THE COUNTER (M18). What you took, and what this shop will give you for it.
+     Only the two specialists buy, and only one of them is on this street. ── */
+  if(st.buys&&HAUL.length){
+    h+='<div class="sh-obj sh-sell"><div class="sh-h">WHAT YOU TOOK '+
+       '<span class="ds-dim">'+HAUL.length+' in the bag &middot; they pay '+
+       Math.round(st.buys*100)+'% of what it is worth</span></div>';
+    HAUL.forEach(function(it,i){
+      var pay=offerFor(it,st.id),risky=st.local&&isRecognisable(it);
+      h+='<div class="sh-row"><b>$'+pay+'</b>'+
+         '<span class="sh-diff">'+it.label+' <span class="ds-dim">&mdash; '+
+           (RESIDENTS[it.owner]?RESIDENTS[it.owner].name:it.owner)+'&rsquo;s</span></span>'+
+         '<span class="sh-pred '+(risky?'sh-bad':'ds-dim')+'">'+
+           (risky?'THEY WOULD KNOW IT':'anonymous')+'</span>'+
+         '<button class="sh-sell-b" data-i="'+i+'">sell</button></div>';
+    });
+    if(st.local)h+='<div class="sh-row ds-dim">Everything sold here goes in the window. '+
+      'People from this street walk past that window.</div>';
+    h+='</div>';
+  }else if(st.buys){
+    h+='<div class="sh-obj sh-sell"><div class="sh-h">WHAT YOU TOOK '+
+       '<span class="ds-dim">the bag is empty</span></div></div>';
+  }
   if(!ids.length)h+='<div class="ds-dim">You have recorded nothing. There is nothing here to match.</div>';
   ids.forEach(id=>{
     const c=CATALOG[id];
@@ -6461,6 +6767,17 @@ function openShop(storeId){
   });
   $('shop-body').innerHTML=h;
   go('s-shop');S.menuOpen=true;
+  $('shop-body').querySelectorAll('.sh-sell-b').forEach(function(b){
+    b.addEventListener('click',function(){
+      var i=+b.getAttribute('data-i'),it=HAUL[i];
+      var risky=it&&st.local&&isRecognisable(it);
+      var r=sellItem(i,st.id);
+      if(/^sold/.test(r))hint(risky
+        ?('Sold, and it is going straight in the window. '+r.replace('sold','$'))
+        :('Sold. '+r.replace('sold','$')+', in notes.'));
+      openShop(st.id);
+    });
+  });
   $('shop-body').querySelectorAll('.sh-buy').forEach(function(b){
     b.addEventListener('click',function(){
       const r=buyVariant(b.getAttribute('data-o'),+b.getAttribute('data-i'),st.id);
@@ -6652,7 +6969,7 @@ function startHouse(){
   S.menuOpen=false;
   exitFocus();
   Object.keys(CATALOG).forEach(k=>{delete CATALOG[k];});
-  INV.length=0;PENDING.length=0;
+  INV.length=0;PENDING.length=0;HAUL.length=0;WINDOW.length=0;
   GAME.day=1;GAME.hasSpareKey=false;GAME.sightings=0;
   GAME.bank=140;GAME.cash=0;GAME.hk=0;GAME.week=1;GAME.weekday=0;
   GAME.wagePenalty=0;GAME.bought={};GAME.scenesSeen={};GAME.watched=false;GAME.keys={};
@@ -6863,6 +7180,10 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   look,grabMouse,releaseMouse,isLocked,canLook,
   // - M16: Ray, and gossip -
   RELATIONS,gossip,gossipLine,
+  // - M18: the night has things in it -
+  EVENTS,planNightEvents,eventTick,fireEvent,walkSleepers,
+  // - M18: the fence -
+  HAUL,WINDOW,itemValue,offerFor,isRecognisable,sellItem,windowTick,
   // - M17: the estate, the dressing, and the one thing that moves -
   ST,SCENERY,CAR,FACADES,SKY_RIDE,
   get PLAY(){return PLAY;}, get ROOM(){return ROOM;},
@@ -6901,7 +7222,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M17'};
+  version:'M18'};
 </script>
 
 </body>
