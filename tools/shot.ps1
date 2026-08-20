@@ -116,6 +116,17 @@ $setups = @{
   // moves and nobody sees.
   SD.NIGHT.running=false;
 "@
+  evening = @"
+  SD.startHouse();
+  SD.WIFE.susp=72;                 // tier where she stops pretending to sit down
+  SD.startEvening();
+  var d=SD.DANA;
+  // forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z, which is where she is
+  SD.player.position.set(d.position.x+0.6,0,d.position.z+2.6);
+  SD.S.yaw=0; SD.S.pitch=0.12; SD.S.dist=3.6;
+  SD.S.camP=null; SD.S.camL=null;
+  SD.run(20,1/60);
+"@
   daylight = @"
   SD.startHouse();
   SD.RESIDENTS.walt.beats=2; SD.RESIDENTS.june.beats=1; SD.RESIDENTS.marisol.beats=3;
