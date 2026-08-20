@@ -175,6 +175,9 @@ body.night #grade{opacity:1}
 .sh-sell-b{font:inherit;font-size:11px;letter-spacing:1px;padding:3px 10px;border-radius:7px;
   border:1px solid #7a5c2e;background:#2a2013;color:#f0cfae;cursor:pointer}
 .sh-sell-b:hover{background:#3a2c19}
+/* M20: the night HUD is about not being heard and not being seen. Neither is a
+   thing in the afternoon, so the pills that measure them go away. */
+body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:none}
 .rp-win{border-left-color:#c98a4a;background:#241d14}
 .rp-win .rp-band{color:#e0a95e}
 .rp-gos .rp-band{color:#c8a8dc}
@@ -257,7 +260,7 @@ body.night #grade{opacity:1}
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M19 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M20 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -2407,6 +2410,17 @@ const skyTex=(function(){
   x.fillStyle=g;x.fillRect(0,0,4,256);
   const t=new THREE.CanvasTexture(c);t.needsUpdate=true;return t;
 })();
+/* M20 — the same sphere, in daylight. The world has only ever been rendered at
+   toneMappingExposure 0.52 through FogExp2(0.038): 2,000 meshes, five dressed
+   houses, a cul-de-sac and a tree line that no player has ever actually SEEN. */
+const skyDayTex=(function(){
+  const c=document.createElement('canvas');c.width=4;c.height=256;
+  const x=c.getContext('2d'),g=x.createLinearGradient(0,0,0,256);
+  g.addColorStop(0.00,'#2f6ec0');g.addColorStop(0.38,'#6fa6dd');
+  g.addColorStop(0.74,'#a9c9e6');g.addColorStop(1.00,'#d8dfe2');
+  x.fillStyle=g;x.fillRect(0,0,4,256);
+  const t=new THREE.CanvasTexture(c);t.needsUpdate=true;return t;
+})();
 const sky=new THREE.Mesh(new THREE.SphereGeometry(70,16,12),
   new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,fog:false,depthWrite:false}));
 sky.visible=false;scene.add(sky);
@@ -2422,7 +2436,9 @@ function setLighting(mode){
     fill.color.set('#232c49');fill.intensity=0.12;fill.position.set(7,5,-8);
     scene.fog=new THREE.FogExp2('#0a0f1c',0.038);
     scene.background=new THREE.Color('#070a12');
+    sky.material.map=skyTex;sky.material.needsUpdate=true;
     sky.visible=true;
+    document.body.classList.remove('daylight');
     /* EXPOSURE is the real night control. sRGB output gamma lifts midtones hard, so
        simply turning the lights down leaves everything a flat grey-blue. Filmic tone
        mapping plus a low exposure crushes the ambient toward black while letting the
@@ -2431,6 +2447,27 @@ function setLighting(mode){
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=0.52;
     document.body.classList.add('night');
+  }else if(mode==='day'){
+    /* AFTERNOON. A high, warm sun and a bright sky bounce, because the point of
+       going outside in the day is to see the street you have only ever crept
+       through. Fog stays, an order of magnitude thinner, so the tree line and the
+       far end of the cul-de-sac still read as distance rather than as a wall. */
+    /* Tuned DOWN from the first pass. ACES plus a 0.95 hemisphere plus a 1.45 key
+       put the house walls at almost pure white and turned the lawns mint - the
+       street looked bleached rather than sunny. A lower key with a warmer colour
+       and a much lower ambient keeps the midtones where the textures live. */
+    hemi.color.set('#bcd4f2');hemi.groundColor.set('#5a5240');hemi.intensity=0.55;
+    moon.color.set('#ffeac6');moon.intensity=1.15;
+    moonOff.set(-14,20,11);moon.position.set(-14,20,11);
+    fill.color.set('#93a7c4');fill.intensity=0.18;fill.position.set(9,7,-9);
+    scene.fog=new THREE.FogExp2('#b8cadd',0.0060);
+    scene.background=new THREE.Color('#7ea6cf');
+    sky.material.map=skyDayTex;sky.material.needsUpdate=true;
+    sky.visible=true;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure=0.86;
+    document.body.classList.remove('night');
+    document.body.classList.add('daylight');
   }else{
     hemi.color.set('#e8eeff');hemi.groundColor.set('#3a3844');hemi.intensity=0.80;
     moon.color.set('#fff6e8');moon.intensity=0.85;moonOff.set(5,9,4);moon.position.set(5,9,4);
@@ -3871,7 +3908,7 @@ function carLaunch(){
   const z=ST.roadZ+(CAR.dir>0?1.5:-1.5);
   // noCollide: a moving car is not a wall. Being hit by one is not in this game.
   CAR.active=parkedCar(CAR.x,z,CAR.dir>0?0:Math.PI,208+CAR.rng()*40,CAR.rng,true);
-  CAR.light=new THREE.PointLight('#fff0d0',2.2,CONST.CAR_LIGHT_R*2.0,1.6);
+  CAR.light=new THREE.PointLight('#fff0d0',S.daytime?0:2.2,CONST.CAR_LIGHT_R*2.0,1.6);
   CAR.light.position.set(CAR.x,0.9,z);CAR.light.userData.temporal=true;scene.add(CAR.light);
   CAR.zone={x:CAR.x,z:z,r:CONST.CAR_LIGHT_R,i:CONST.CAR_LIGHT_I};LIGHTS.push(CAR.zone);
   SFX.world('car',CAR.x,z,1.0,'road');
@@ -5835,18 +5872,13 @@ const ACTIONS={
       if(take<=0)return 'The account is empty.';
       GAME.bank-=take;GAME.cash+=take;GAME.bank-=CONST.CASH_FEE;
       return 'You withdrew $'+take.toFixed(0)+'. The machine charged you $'+CONST.CASH_FEE+' for the privilege.';}},
+  /* M20. This used to resolve the entire social layer in one click: every
+     resident's beat printed into a log at once, +3 HK each, from a menu. Now it
+     puts you outside on the street in daylight and you have to go and stand near
+     people - which is what GDD 5.4 says the beats are FOR. */
   walk:{block:'afternoon',label:'Walk the street',
-    desc:'Stand near people and watch what the night did.',
-    run(){
-      const seen=[];
-      Object.keys(RESIDENTS).forEach(id=>{
-        const r=RESIDENTS[id];
-        if(!objects.some(o=>o.owner===id))return;
-        const b=reactionBeat(r);
-        if(b){seen.push(b);hkGain(3);}
-      });
-      GAME.watched=true;
-      return seen.length?seen.join('\n'):'Nobody is behaving unusually. Yet.';}},
+    desc:'Out in the afternoon, where everybody can see you being normal.',
+    run(){GAME.watched=true;startWalk();return null;}},
   lawn:{block:'afternoon',label:'Mow the lawn',
     desc:'Humans judge each other by grass length. Unresolved.',
     run(){wifeAdd(-7);hkGain(1);
@@ -6046,6 +6078,100 @@ function buyVariant(objId,idx,storeId){
   INV.push({kind:it.kind,spec:it.spec,forId:objId,label:it.label,sim:it.sim,store:st.id});
   SFX.cue('buy');
   return how;
+}
+
+/* ═════════════════════════ DAYLIGHT (M20) ═════════════════════════
+   The day was fourteen text actions across five blocks, and walk — the only one
+   that touches the social layer at all — resolved the WHOLE street in one button:
+   every resident's reaction beat printed into a log at once, +3 Human Knowledge
+   each, nobody seen. §5.4 says watching a neighbour come apart is how you learn to
+   be human. You could not watch anybody. You could not see anybody: RESIDENTS have
+   never had bodies anywhere in this game except asleep in a bed.
+
+   So the afternoon happens on the street now. Same world, same collision, same
+   camera - a different rig on the lights and everybody home from work. */
+const DAYFOLK=[];
+/* Where each resident stands on their own lot. Authored per house in LOT-LOCAL
+   metres and offset by the lot origin, like everything else outdoors. */
+const FOLK_SPOTS=[
+  [ 3.2,-8.4,'in the driveway, not doing anything to the car'],
+  [-3.6,-7.0,'at the edge of the lawn'],
+  [ 0.0,-10.6,'by the gate'],
+  [-5.0,-9.2,'standing where the bins go'],
+];
+function clearFolk(){
+  for(let i=0;i<DAYFOLK.length;i++){
+    const f=DAYFOLK[i];
+    if(!f.group)continue;
+    scene.remove(f.group);
+    const e=envMeshes.indexOf(f.group);if(e>=0)envMeshes.splice(e,1);
+    f.group.traverse(o=>{if(o.isMesh&&o.geometry&&o.geometry!==UNIT_BOX)o.geometry.dispose();});
+  }
+  DAYFOLK.length=0;
+}
+/* Everyone who lives on this street, outside, in the afternoon. Seeded off the day
+   so where somebody is standing is a fact about today rather than a shuffle. */
+function buildFolk(){
+  clearFolk();
+  const rng=mulberry32((hashStr('folk|'+GAME.day)>>>0)||5);
+  const CLOTH=['#5d5170','#7b4289','#3f6fb0','#5d3b3c','#40422e','#3b505d','#6b4a32'];
+  let ci=0;
+  HOUSES.forEach(h=>{
+    if(h.yours)return;
+    const mine=Object.keys(RESIDENTS).filter(id=>RESIDENTS[id].house===h.id);
+    mine.forEach((id,k)=>{
+      const r=RESIDENTS[id];
+      if(r.collapsed)return;                      // they are not coming out today
+      const spot=FOLK_SPOTS[(k+Math.floor(rng()*FOLK_SPOTS.length))%FOLK_SPOTS.length];
+      const g=makeWalker(CLOTH[(ci++)%CLOTH.length],null);
+      const x=h.x+spot[0],z=spot[1];
+      g.position.set(x,0,z);g.rotation.y=Math.PI+ (rng()-0.5)*0.9;
+      scene.add(g);envMeshes.push(g);
+      DAYFOLK.push({res:id,name:r.name,x:x,z:z,group:g,where:spot[2],
+                    pos:[x,1.15,z],spoken:false});
+    });
+  });
+}
+/* Standing near somebody is the whole mechanic. A beat is worth Human Knowledge
+   because WATCHING one is the thing that teaches you, per GDD 5.4 - so it pays on
+   approach, once each, rather than being handed over by a menu. */
+function talkTo(f){
+  const r=RESIDENTS[f.res];
+  if(f.spoken){hint(f.name+' has said their piece for today.');return;}
+  f.spoken=true;
+  const beat=reactionBeat(r);
+  if(beat){hkGain(3);hint(beat);DAY.log.push(beat);}
+  else{
+    hkGain(1);
+    const line=f.name+' says something about the weather. You say it back, '+
+      'in the same order.';
+    hint(line);DAY.log.push(line);
+  }
+}
+let dayWalkBack='s-day';
+function startWalk(){
+  if(S.phase!=='house')return false;
+  S.daytime=true;
+  NIGHT.running=false;
+  buildFolk();
+  /* Nobody is in bed at four in the afternoon. */
+  for(let i=0;i<SLEEPERS.length;i++)if(SLEEPERS[i].group)SLEEPERS[i].group.visible=false;
+  setLighting('day');
+  player.position.set(HOME.x,0,HOME.z);player.rotation.set(0,0,0);
+  S.py=0;S.vy=0;S.grounded=true;S.mvx=0;S.mvz=0;
+  S.yaw=Math.PI;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
+  closeMenu();
+  hint('The afternoon. Walk up to somebody and stand near them — E.');
+  return true;
+}
+function endWalk(){
+  if(!S.daytime)return;
+  S.daytime=false;
+  clearFolk();
+  for(let i=0;i<SLEEPERS.length;i++)
+    if(SLEEPERS[i].group)SLEEPERS[i].group.visible=!SLEEPERS[i].absent;
+  setLighting('night');
+  showDay();
 }
 
 /* ═════════════════════════ DIALOGUE ═════════════════════════
@@ -6651,6 +6777,7 @@ function findTarget(){
      108 hertz, give or take" reads as somebody's. But scenery must never OUTBID a
      possession for the prompt — the examine loop is the game, and a fixture
      stealing E from the mug beside it would be the worst bug in this milestone. */
+  for(let i=0;i<DAYFOLK.length;i++)consider(DAYFOLK[i].pos,{t:'folk',f:DAYFOLK[i]});
   if(!best)for(let i=0;i<SCENERY.length;i++)consider(SCENERY[i].pos,{t:'scenery',s:SCENERY[i]});
   return best;
 }
@@ -6743,6 +6870,7 @@ function focusKey(k,e){
 function interact(){
   const t=findTarget();
   if(!t){hint('Nothing within reach.');return;}
+  if(t.t==='folk'){talkTo(t.f);return;}
   if(t.t==='prop')enterFocus(t.o);
   else if(t.t==='planter')searchPlanter(t.p);
   else if(t.t==='door')useDoor(t.d);
@@ -6759,6 +6887,7 @@ function updatePrompt(){
   else if(t.t==='door')txt='<b>E</b> '+(t.d.locked?'try the front door':(t.d.open?'close the door':'open the door'));
   /* Deliberately worded LOOK AT, never "examine": the prompt has to tell you, before
      you press it, that this is not a thing you can take a copy of. */
+  else if(t.t==='folk')txt='<b>E</b> '+(t.f.spoken?'you have already spoken to ':'stand near ')+t.f.name;
   else if(t.t==='scenery')txt='<b>E</b> look at '+t.s.label+' <span class="ds-dim">(not theirs to swap)</span>';
   el.innerHTML=txt;el.classList.add('on');
 }
@@ -7093,6 +7222,7 @@ addEventListener('keydown',e=>{
     if($('s-controls').classList.contains('on')){go('s-pause');return;}
     if($('s-intro').classList.contains('on')){return;}   // read it; it is four lines
     if(S.focus)exitFocus();
+    else if(S.daytime)endWalk();      // M20: the afternoon ends when you go back in
     else if(S.menuOpen)closeMenu();
     else if(PLAYABLE())openMenu();
     return;
@@ -7379,6 +7509,8 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   // - M14: the street hardens -
   HARDEN,streetAlert,fireHardening,hardenNight,hardenTick,isHardened,
   get DOGS(){return DOGS;}, get WATCH(){return WATCH;}, get MOTION(){return MOTION;},
+  // - M20: daylight -
+  DAYFOLK,buildFolk,clearFolk,talkTo,startWalk,endWalk,FOLK_SPOTS,
   // - M19: the threats have bodies -
   CAM_FX,HARD_FX,hardClear,makeWalker,makeDog,
   // ── M7: her ladder acting, fractures, marking ──
@@ -7407,7 +7539,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M19'};
+  version:'M20'};
 </script>
 
 </body>

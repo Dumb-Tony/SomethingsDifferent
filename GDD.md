@@ -1297,6 +1297,32 @@ previous one runs in a browser.**
     46 → 50** zones across six nights, so by the end of a run every porch was lit ten
     times over. `HARD_FX` now tracks, removes and disposes.
 
+20. ~~**Daylight.**~~ **DONE 2026-08-20.** *Verified: 31 assertions +
+    [docs/m20-daylight.png](docs/m20-daylight.png).*
+
+    `setLighting()` had been called with exactly two arguments in twenty
+    milestones: `'greybox'` at boot, and `'night'`. **The street has never been
+    seen in light.** 146 metres, ~2,000 meshes, five dressed houses, eight facades, a
+    turning circle, a tree line — all of it rendered at `toneMappingExposure` 0.52
+    through `FogExp2(0.038)`, and nothing else.
+
+    Meanwhile the day was fourteen text actions across five blocks, and `walk` —
+    the only one that touches the social layer at all — resolved the entire street in
+    a single click: every resident's reaction beat printed into a log at once, +3
+    Human Knowledge each, nobody actually seen. §5.4 says watching a neighbour come
+    apart in public is how you learn to be human. You could not watch anybody, and
+    you could not see anybody: **`RESIDENTS` have never had bodies** anywhere in
+    this game except asleep in a bed.
+
+    So the afternoon happens outdoors now. Same world, same collision, same camera, a
+    different rig on the lights and everybody home from work. Beats are paid **on
+    approach**, once each, for standing next to somebody — which is what they were
+    always for.
+
+    *Tuning:* the first day rig used exposure 1.05 with a 0.95 hemisphere and a 1.45
+    key, and ACES bleached the house walls to near-white and the lawns to mint. 0.86
+    with a 0.55 ambient keeps the midtones where the textures actually live.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
@@ -1868,6 +1894,7 @@ Carried over from the Chameleon project because they were learned the hard way:
 ---
 
 *End of v0.1. Sections are sockets — extend, don't restructure.*
+
 
 
 

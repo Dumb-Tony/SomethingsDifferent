@@ -145,7 +145,19 @@ Dev-wide catalog of what already exists and where to copy it from.
   before - MEASURED 30 -> 34 -> 38 -> 42 -> 46 -> 50 light zones over six nights, so by
   night ten every porch was lit ten times over. HARD_FX tracks and disposes everything.
   26 assertions + `docs/m19-watchman.png`.
-  **834 assertions across nineteen suites.**
+- 2026-08-20 - **M20 DONE - DAYLIGHT.** `setLighting()` had only ever been called with
+  'greybox' and 'night': a 146m street carrying ~2000 meshes, five dressed houses, eight
+  facades, a cul-de-sac and a tree line, and NO PLAYER HAD EVER SEEN ANY OF IT IN LIGHT.
+  The day was fourteen text actions across five blocks, and `walk` - the only one that
+  touches the social layer - resolved the WHOLE street in one click: every resident's
+  reaction beat into a log at once, +3 HK each, nobody seen. GDD 5.4 says watching a
+  neighbour come apart is how you learn to be human, and RESIDENTS had never had bodies
+  anywhere except asleep in a bed. Now the afternoon happens on the street: a real day
+  rig (warm key, thin fog, day sky, exposure 0.86 - the first pass at 1.05 bleached the
+  houses to white), everybody who lives here standing out on their own lot, and beats
+  paid on APPROACH, once each, by walking up to somebody. Esc goes back inside.
+  31 assertions + `docs/m20-daylight.png`.
+  **865 assertions across twenty suites.**
   WARNING: six milestones have now shipped without a verified human playthrough.
   WARNING: five milestones have now shipped without a verified human playthrough.
 
@@ -366,6 +378,7 @@ can assert on real pixels via `readPixels`. Don't inherit the Chameleon project'
 
 Keep collider/Doubt/noise/spec math pure (plain objects, no live `THREE` scene) so it
 stays testable without a GL context.
+
 
 
 

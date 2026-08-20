@@ -116,6 +116,15 @@ $setups = @{
   // moves and nobody sees.
   SD.NIGHT.running=false;
 "@
+  daylight = @"
+  SD.startHouse();
+  SD.RESIDENTS.walt.beats=2; SD.RESIDENTS.june.beats=1; SD.RESIDENTS.marisol.beats=3;
+  SD.startWalk();
+  SD.player.position.set(SD.houseById('hoyt').x-4.2,0,-10.2);
+  SD.S.yaw=Math.PI*1.16; SD.S.pitch=0.13; SD.S.dist=5.6;
+  SD.S.camP=null; SD.S.camL=null;
+  SD.run(20,1/60);
+"@
   harden = @"
   SD.startHouse(); $open
   // just under the first fracture threshold (25), so the STREET card is the event
