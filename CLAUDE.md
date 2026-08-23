@@ -428,7 +428,28 @@ Dev-wide catalog of what already exists and where to copy it from.
   is `canSee(s,px,pz)` - so every comparison ran against NaN. The same pass also called
   all seven sleepers "buried in geometry" because it counted **the beds they were lying
   in** as solids. Three false alarms in one diagnostic, before one real bug.
-  **1275 assertions across thirty-seven suites.**
+
+
+- 2026-08-23 - **M38 DONE - THE CUES THAT WERE NEVER THERE.** The game spends a whole
+  audio system on a creaking floorboard and then said nothing at all when the things
+  that can end your run happened. **Dana's ladder had exactly one sound on it, and it
+  fires when the run is already lost** - her tier-2 (she wakes and checks the bed) and
+  tier-4 (she comes out of the front door after you, on a `FOLLOW_GRACE` countdown)
+  were text-only, an invisible timer counting down to a loss. Both have cues now.
+  **The `light` event** drops a 6.4m zone at intensity 0.72 into `LIGHTS` - well over
+  `LIT_SEEN_MIN` - and made no sound whatsoever; it is the one event that changes where
+  you can be seen, and it arrived in silence. It is a **VOICE**, not a cue, so it is
+  positioned: a window two doors down is quieter than the one next to you, which is
+  exactly the information you want from it. **The fence paid with the shop's till
+  beep** - the same bright two notes as buying a mug in Bulwark Mart, for selling
+  somebody's possession two towns over. **The WORLD mixer slider previewed `CUES.ui`,
+  which is on the FOLEY bus**, directly underneath a comment saying each slider
+  previews its own bus - no cue in the bank routed to `world` at all. And M20's
+  afternoon, M25's familiarity payoff and M28's entire evening contained no `SFX` call
+  of any kind. Plus a refused `Q`, which was silent and so indistinguishable from a
+  dropped keypress on a four-second cooldown with no meter. 27 assertions, green first
+  run.
+  **1302 assertions across thirty-eight suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is

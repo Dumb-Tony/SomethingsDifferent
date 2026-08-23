@@ -255,7 +255,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M37 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M38 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -5285,6 +5285,15 @@ const SFX=(function(){
       tone(p,v*0.5,2360,3050,0.12,'foley','sine',0.03);
     },
     handle:function(p,mag,mtl){handleMtl(p,CONST.AUD_FOLEY_REF*p.g,mtl);},
+    /* M38. A window going on two doors down puts a 6.4m zone at intensity 0.72 into
+       LIGHTS - well over LIT_SEEN_MIN - and made no sound at all. It is the one event
+       that changes where you can be seen, and it arrived in silence. A VOICE and not
+       a cue, because it happens somewhere: it should get quieter the further down the
+       row it is, which is exactly the information you want from it. */
+    lightOn:function(p,mag){
+      const v=CONST.AUD_FOLEY_REF*p.g;
+      tone(p,v*0.85,2400,2400,0.03,'world','square');     // the switch
+      tone(p,v*0.45,120,118,0.90,'world','sine',0.03);},  // the filament settling
   /* M17. A car on the carriageway: a long tyre-roar that arrives before the light
      does. Deliberately the longest one-shot in the game — it is a warning, and the
      headlights behind it are a real light zone. */
@@ -5520,6 +5529,27 @@ const SFX=(function(){
       tone(HERE,0.26,f*2,     f*2,     0.55,'music','triangle',0.22);
       tone(HERE,0.24,f*2.5449,f*2.5449,0.70,'music','triangle',0.44);  // the sharp third
       tone(HERE,0.20,f*3,     f*3,     1.10,'music','sine',    0.66);},
+    /* M38. The fence paid with the SHOP'S cue - the same bright two-note till beep
+       you hear buying a mug in Bulwark Mart - for the act of selling somebody's
+       possession to a man two towns over. Duller, lower, and in notes. */
+    sell:function(){
+      tone(HERE,0.20,392,330,0.24,'foley','triangle');
+      tone(HERE,0.13,262,220,0.34,'foley','triangle',0.11);},
+    /* M38. The WORLD slider previewed CUES.ui, which is on the FOLEY bus - directly
+       under a comment claiming each slider previews its own bus. Nothing in CUES
+       routed to `world` at all, so the slider gave no feedback about the thing it
+       controls. A car two streets over, which is what that bus is full of. */
+    street:function(){
+      burst(HERE,0.26,300,1.3,0.95,'world');
+      tone(HERE,0.10,70,58,1.10,'world','sine',0.05);},
+    /* M38. Dana's ladder had exactly one sound on it, and it fires when the run is
+       already lost. These two are the warnings. */
+    danaUp:function(){                                      // she is awake and checking
+      tone(HERE,0.22,330,392,0.30,'music','triangle');
+      tone(HERE,0.14,392,330,0.42,'music','triangle',0.14);},
+    danaOut:function(){                                     // she is outside, looking
+      tone(HERE,0.30,262,196,0.55,'music','sawtooth');
+      tone(HERE,0.20,131, 98,0.85,'music','sine',0.12);},
     lose:function(){                // the same shape falling, and one octave under it
       for(let i=0;i<4;i++)
         tone(HERE,0.30,392-i*58,300-i*52,0.60+i*0.10,'music','sawtooth',i*0.20);
@@ -6110,13 +6140,15 @@ function wifeNightTick(dt){
     if(isHome())hint('A light goes on at home. You are in bed. She settles.');
     else{
       wifeAdd(CONST.CHECK_COST);
-      hint('A light goes on across the street. She has woken up, and you are not there.');
+      SFX.cue('danaUp');            // M38: this was text-only
+      hint('A light goes on down the row. She has woken up, and you are not there.');
     }
   }
   if(WIFE.follow>=0&&NIGHT.t>=WIFE.follow){
     WIFE.follow=-1;
     if(!isHome()){
       WIFE.following=true;WIFE.followT=CONST.FOLLOW_GRACE;
+      SFX.cue('danaOut');           // M38: FOLLOW_GRACE was an invisible countdown
       hint('Your own front door opens. Dana is outside, looking down the street.');
     }
   }
@@ -6227,6 +6259,7 @@ function fireEvent(e){
     L.position.set(x,1.9,z);L.userData.temporal=true;scene.add(L);
     const zone={x:x,z:z,r:6.4,i:0.72};LIGHTS.push(zone);
     e.light=L;e.zone=zone;e.until=NIGHT.t+0.42;      // ~25 real seconds
+    SFX.world('lightOn',x,z,1.0,'plastic');          // M38: it used to arrive silently
     if(player&&Math.hypot(player.position.x-x,player.position.z-z)<22)
       hint('A light goes on at '+h.name+'. Somebody is up.');
     return;
@@ -6719,6 +6752,7 @@ function talkTo(f){
   f.spoken=true;
   /* M25: this is what the afternoon is FOR. */
   const gained=famAdd(f.res,CONST.FAM_TALK);
+  SFX.cue('morning');   // M38: the payoff of the afternoon was silent
   const beat=reactionBeat(r);
   if(beat){hkGain(3);hint(beat);DAY.log.push(beat);}
   else{
@@ -6795,6 +6829,7 @@ function startEvening(){
   player.position.set(home.x+1.2,0,-3.2);player.rotation.set(0,0,0);
   S.py=0;S.vy=0;S.grounded=true;S.mvx=0;S.mvz=0;
   S.yaw=Math.PI*0.5;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
+  SFX.cue('morning');   // M38: M28's whole evening was silent
   for(var i=0;i<SLEEPERS.length;i++)if(SLEEPERS[i].group)SLEEPERS[i].group.visible=false;
   closeMenu();
   hint(sp?sp.line+' \u2014 E to talk to her.':'You are home.');
@@ -6823,6 +6858,8 @@ function startWalk(){
   S.py=0;S.vy=0;S.grounded=true;S.mvx=0;S.mvz=0;
   S.yaw=Math.PI;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
   closeMenu();
+  /* M38: M20's whole afternoon contained no SFX.cue of any kind. */
+  SFX.cue('day');
   hint('The afternoon. Walk up to somebody and stand near them — E.');
   return true;
 }
@@ -6933,7 +6970,7 @@ function sellItem(idx,storeId){
   if(st.local&&isRecognisable(it)){
     WINDOW.push({owner:it.owner,label:it.label,store:st.id,paid:paid});
   }
-  SFX.cue('buy');
+  SFX.cue('sell');                  // M38: was the shop's till beep
   return 'sold '+paid;
 }
 /* Things sitting in the antique shop window that somebody is going to recognise. */
@@ -7543,7 +7580,9 @@ function markState(o){
 }
 function scanPulse(){
   if(!player||S.phase!=='house')return null;
-  if(S.scanCd>0){hint('The scanner is still cycling.');return null;}
+  /* M38: a refused Q was silent, so on a cooldown with no meter it was
+     indistinguishable from a dropped keypress. */
+  if(S.scanCd>0){SFX.cue('ui');hint('The scanner is still cycling.');return null;}
   S.scanCd=CONST.SCAN_CD;S.scanT=CONST.SCAN_T;
   GAME.everPulsed=true;              // M29: the guide teaches this now
   GAME.stats.pulses++;                                         // M32
@@ -8315,7 +8354,9 @@ $('mx-mute').addEventListener('change',function(){
 /* Each slider previews its OWN bus, so you can hear what you are setting. Preview
    fires on 'change' (pointer released), not on 'input' - previewing every pixel of
    a drag is a machine-gun. */
-[['music','mx-music','doubt'],['world','mx-world','ui'],['foley','mx-foley','buy']]
+/* M38: the world row previewed 'ui', which is a FOLEY cue - the slider gave no
+   feedback at all about the bus it moves. */
+[['music','mx-music','doubt'],['world','mx-world','street'],['foley','mx-foley','buy']]
 .forEach(function(p){
   $(p[1]).addEventListener('input',function(){
     SFX.set(p[0],(+this.value)/100);
@@ -8535,6 +8576,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M37'};
+  version:'M38'};
 </script>
 

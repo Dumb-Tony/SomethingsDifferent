@@ -1602,6 +1602,12 @@ previous one runs in a browser.**
   `CONST.HIDE_R` and `GAME.watched` deleted: both described behaviour the game does not
   have.
 
+
+- **M38 — the cues that were never there.** Dana's tier-2 check and tier-4 follow, the
+  `light` event (as a positioned VOICE, so it is quieter further down the row), the
+  fence, the afternoon, the familiarity beat, the evening, and a refused scan all make
+  a sound now. The WORLD mixer slider previews a cue that is actually on the world bus.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
