@@ -11,3 +11,6 @@ _scratch/
 
 # separate repo: GitHub Pages playtest build (Dumb-Tony/somethings-different)
 dist/
+
+# temp control builds used to A/B a suspected regression against the last commit
+_prev.html
