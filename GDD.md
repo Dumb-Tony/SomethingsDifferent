@@ -1535,6 +1535,25 @@ previous one runs in a browser.**
     it is the same `SCENES` dialogue the menu used to open — the difference is that
     you had to cross the room to get to it.
 
+
+- **M29 — the rail tells the truth.** `GUIDE_STEPS` 9 → 12. The chain now teaches the
+  scanner, fencing and the afternoon, and no longer claims the house has an upstairs.
+  `read` accepts a catalogue entry as well as a pulse: Q is optional, and a step that
+  blocks on an optional ability strands the player. `m29` is a drift detector — every
+  bound key must be documented, no guide string may name a room that does not exist.
+
+- **M30 — the day screen keeps its promises.** `doAction()` repainted `s-day`
+  unconditionally, covering the shop, the afternoon and the evening one statement after
+  they opened; an action that opens a screen now owns the frame. `s-day`, `s-report`
+  and `s-end` are modal — Escape used to drop the player into a frozen street with the
+  run gone. `m30` drives real click events on visible elements only.
+
+- **M31 — the world is the world you left.** `eventFxClear()` puts out a light event
+  the night ended on top of; `loadGame()` re-derives the night after the saved state
+  lands, so a loaded save keeps its dogs, watchman and cameras; `startWalk`/
+  `startEvening` tear down last night's installations; `startHouse` clears
+  `S.daytime`/`S.evening`/`scanCd`/`lastWindow`.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

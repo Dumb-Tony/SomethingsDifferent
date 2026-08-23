@@ -257,7 +257,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M28 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M29 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -4743,6 +4743,14 @@ function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remo
   if(id){document.getElementById(id).classList.add('on');
          if(typeof releaseMouse==='function')releaseMouse();}}
 const $=id=>document.getElementById(id);
+/* M30. What the player is actually looking at. doAction could not tell the
+   difference between an action that printed a line of text and one that opened a
+   whole screen, so it repainted over both - see the comment there. */
+function screenNow(){const s=document.querySelector('.screen.on');return s?s.id:null;}
+/* The screens Escape must NOT dismiss. Each one is the only route onward and the 3D
+   world behind it is not running, so closing it strands the player in a frozen
+   street: NIGHT.running false, M inert, no report, no day, no ending. */
+const MODAL_SCREENS=['s-day','s-report','s-end'];
 
 function openMenu(){S.menuOpen=true;S.orbiting=false;go('s-pause');}
 function closeMenu(){S.menuOpen=false;go(null);}
@@ -4878,9 +4886,22 @@ const GUIDE_STEPS=[
    done:()=>Object.keys(GAME.keys).length>0||DOORS.some(d=>d.open&&!d.locked)},
   {id:'in',
    t:'Let yourself in &mdash; <b>E</b> at the front door',
-   why:'Hold <b>Ctrl</b> to sneak once you are inside. Two of them are asleep upstairs '+
-       'and sound carries through a doorway.',
+   /* M29: this used to say "asleep upstairs" in a single-storey house, which has
+      been wrong since the house was built. It also predates the wardrobe. */
+   why:'Hold <b>Ctrl</b> to sneak. They are asleep in the back bedroom and sound '+
+       'carries through a doorway &mdash; and if somebody stirs, there is a wardrobe.',
    done:()=>DOORS.some(d=>d.open&&!d.locked)},
+  {id:'read',
+   t:'Read the room &mdash; <b>Q</b>',
+   why:'The scanner marks everything of theirs you can see, and tells you which ones '+
+       'you have already recorded. It goes through glass and not through walls. It is '+
+       'also louder than looking at one thing, and they can hear it.',
+   /* Satisfied by cataloguing too. The pulse is the only OPTIONAL ability the rail
+      teaches - you can play the whole game without ever pressing Q - and a step that
+      blocks on something optional is a step that strands the player. Same precedent
+      as `key`, which is satisfied by already being inside: a step asserts the STATE
+      it wanted, never the route taken. */
+   done:()=>!!GAME.everPulsed||Object.keys(CATALOG).length>0},
   {id:'scan',
    t:'Find something of theirs and scan it &mdash; <b>E</b>, then <b>F</b>',
    why:'You cannot order a copy of a thing you have not recorded. That gate is the '+
@@ -4909,6 +4930,25 @@ const GUIDE_STEPS=[
    t:'Get home before dawn &mdash; <b>M</b>',
    why:'Then read the morning report. That is where you find out what they made of it.',
    done:()=>!NIGHT.running},
+  /* M29 - the two steps the guide has been missing since the game changed under it.
+     FENCING IS NOT OPTIONAL: measured, a whole slice affords fifteen swaps on wages
+     alone and reaches collapse 32 against a bar of 40. A player who follows this
+     rail without ever selling anything runs out of money and loses, which is exactly
+     what the guide is supposed to prevent. */
+  {id:'fence',
+   t:'Sell what you took &mdash; at <b>Second Chances</b> or <b>Ardsley Antiques</b>',
+   why:'You kept their original. It is the only thing you own worth anything, and the '+
+       'wages do not cover this on their own. The shop on this street pays more than '+
+       'twice what the one two towns over does &mdash; and puts it in the window, '+
+       'where the people you took it from walk past.',
+   done:()=>!!GAME.everSold},
+  {id:'meet',
+   t:'Stand next to a neighbour in the afternoon &mdash; <b>E</b>',
+   why:'A man they know is a man they explain away. Every afternoon you spend out '+
+       'there makes a sighting at three in the morning cost you less. It wears off if '+
+       'you stop showing your face, and it counts for almost nothing once you are '+
+       'inside their house.',
+   done:()=>Object.keys(RESIDENTS).some(id=>(RESIDENTS[id].familiar||0)>0)},
 ];
 const GUIDE=(function(){
   const pref={on:true,introSeen:false};
@@ -5953,6 +5993,8 @@ function endNight(reason,text){
      setLighting is the only writer of those values, which is why this is a call and
      not five assignments. */
   if(S._dawnOn){S._dawnOn=false;setLighting('night');}
+  /* M31: and put out anything still burning. The night can end mid-event. */
+  eventFxClear();
   /* Every night out costs you with her, and the longer you stay the worse it is.
      This is the ratchet: the only way to keep her calm is to waste good nights. */
   const outFrac=Math.min(1,NIGHT.t/(NIGHT.budget||NIGHT_HOURS));
@@ -6006,7 +6048,23 @@ function wifeNightTick(dt){
    SEEDED PER NIGHT off the day number, so which night the phone rings is a FACT you
    can learn and plan around rather than a dice roll at the worst moment. */
 const EVENTS=[];
+/* M31. A 'light' event parks a 6.4m zone at intensity 0.72 - well over LIT_SEEN_MIN -
+   and a PointLight to match, and eventTick removes them when it expires. If the night
+   ENDS while one is burning (curfew, seen, followed), nothing removed them and
+   EVENTS.length=0 dropped the only reference: the zone stayed welded to a random
+   window for the rest of the run with no visible lamp on it, one per night,
+   cumulative. canSee() and the watchman's litAt() both agreed you were standing in a
+   lit patch that did not exist, in a game whose entire mechanic is where you can be
+   seen. LIGHTS was only ever emptied by a full clearWorld. */
+function eventFxClear(){
+  for(let i=0;i<EVENTS.length;i++){
+    const e=EVENTS[i];
+    if(e.light){scene.remove(e.light);e.light=null;}
+    if(e.zone){const z=LIGHTS.indexOf(e.zone);if(z>=0)LIGHTS.splice(z,1);e.zone=null;}
+  }
+}
 function planNightEvents(){
+  eventFxClear();                 // M31: before the references go
   EVENTS.length=0;
   const rng=mulberry32((hashStr('night|'+GAME.day+'|'+GAME.week)>>>0)||7);
   const budget=NIGHT.budget||NIGHT_HOURS;
@@ -6330,9 +6388,18 @@ function doAction(id){
   const a=ACTIONS[id];
   if(!a||DAY.actions<=0)return;
   DAY.actions--;
+  const before=screenNow();
   const r=a.run();
   if(r)DAY.log.push(r);
-  if(S.phase==='house')showDay();
+  /* M30. An action that opened its own screen - or walked you out into the daylight
+     world - OWNS the frame. This line used to be an unconditional showDay(), which
+     put the day screen straight back on top of the shop ONE STATEMENT after
+     openShop() drew it. The shop, the afternoon (M20) and the evening with Dana
+     (M28) were each opened and then buried by the screen you clicked them from, so
+     five milestones of content sat behind buttons that undid themselves. Every test
+     missed it for twenty-nine milestones by calling openShop() directly instead of
+     clicking the button. */
+  if(S.phase==='house'&&!S.daytime&&!S.evening&&screenNow()===before)showDay();
 }
 function nextBlock(){
   // leaving a block with actions unspent is fine; leaving family blocks empty is not
@@ -6608,6 +6675,13 @@ function startEvening(){
   if(S.phase!=='house')return false;
   S.evening=true;S.daytime=false;
   NIGHT.running=false;
+  /* M31: hardClear() had exactly one caller - the top of hardenNight(), which runs
+     only from nightReset() - so last night's installations froze in place through
+     the whole of the next day. The evening was watched from your own front window
+     by a motionless man in a hi-vis jacket with a lit torch cone on him, four dogs
+     stopped mid-turn and four porch lamps glowing at dinnertime. It read as a
+     rendering fault and it undercut the two newest visual milestones. */
+  hardClear();DOGS.length=0;MOTION.length=0;WATCH=null;
   var sp=buildDana();
   /* Your own house, lit, from the inside. Not the day rig - it is dinnertime, the
      lamps are on, and the point is that this is the one room in the game that is
@@ -6639,6 +6713,7 @@ function startWalk(){
   if(S.phase!=='house')return false;
   S.daytime=true;
   NIGHT.running=false;
+  hardClear();DOGS.length=0;MOTION.length=0;WATCH=null;   // M31 - see startEvening
   buildFolk();
   /* Nobody is in bed at four in the afternoon. */
   for(let i=0;i<SLEEPERS.length;i++)if(SLEEPERS[i].group)SLEEPERS[i].group.visible=false;
@@ -6748,6 +6823,7 @@ function sellItem(idx,storeId){
   if(!st.buys)return 'nobuy';
   const paid=offerFor(it,st.id);
   GAME.cash+=paid;                    // cash, not bank: a shop counter pays in notes
+  GAME.everSold=true;                 // M29
   HAUL.splice(idx,1);
   /* Sold on the street it came off. It goes in the window; the owner walks past.
      Resolved at doMorning() with the rest of the night's consequences rather than
@@ -7240,6 +7316,17 @@ function loadGame(){
   HAUL.length=0;(d.haul||[]).forEach(i=>HAUL.push(i));
   WINDOW.length=0;(d.window||[]).forEach(i=>WINDOW.push(i));
   PENDING.length=0;(d.pending||[]).forEach(p=>PENDING.push(p));
+  /* M31. startHouse() at the top of this function ran nightReset() against DAY 1 and
+     an EMPTY GAME.hardened, and only then was the saved GAME copied over the top -
+     so a loaded save carried the hardening IDS with none of the BODIES. No dogs, no
+     watchman, no cameras, no porch lights; and because fireHardening skips anything
+     already in the list, they could never re-install. Loading permanently disarmed
+     M14 and M19, and seeded tonight's events off day 1 rather than the saved day,
+     scrambling the one system the game documents as learnable. Re-derive the night
+     now that GAME.day and GAME.hardened are the SAVED ones - then put the saved
+     clock back, because nightReset rewinds it. */
+  nightReset();
+  NIGHT.t=d.night.t;NIGHT.budget=d.night.budget;NIGHT.running=d.night.running;
   return true;
 }
 
@@ -7273,6 +7360,7 @@ function scanPulse(){
   if(!player||S.phase!=='house')return null;
   if(S.scanCd>0){hint('The scanner is still cycling.');return null;}
   S.scanCd=CONST.SCAN_CD;S.scanT=CONST.SCAN_T;
+  GAME.everPulsed=true;              // M29: the guide teaches this now
   clearMarks();
   const px=player.position.x,pz=player.position.z;
   let n=0;
@@ -7844,6 +7932,13 @@ addEventListener('keydown',e=>{
     if($('s-sound').classList.contains('on')){go(soundBack);return;}
     if($('s-controls').classList.contains('on')){go('s-pause');return;}
     if($('s-intro').classList.contains('on')){return;}   // read it; it is four lines
+    /* M30: the shop has a LEAVE button and Escape is the same door. */
+    if($('s-shop').classList.contains('on')){showDay();return;}
+    /* M30: and these three cannot be dismissed at all. They fell through to
+       closeMenu() -> go(null), so ONE Escape on the final ending card left the
+       player standing in a frozen 3am street with the whole run gone and no way
+       back to it. Each has its own button; that is the way out. */
+    if(MODAL_SCREENS.some(id=>$(id).classList.contains('on')))return;
     if(S.focus)exitFocus();
     else if(S.daytime)endWalk();      // M20: the afternoon ends when you go back in
     else if(S.evening)endEvening();   // M28: ...and the evening when you go up
@@ -7905,6 +8000,20 @@ function startHouse(){
   S.camP=null;S.camL=null;
   S.yaw=Math.PI;S.pitch=CONST.CAM_PITCH0;S.dist=CONST.CAM_DIST;
   S.menuOpen=false;
+  /* M31. The run-state reset was incomplete, and RUN IT AGAIN goes through here.
+     Reaching an ending during the evening and pressing it started night 1 with
+     S.evening still true, so Escape called endEvening() and dumped the player on a
+     day screen before they had played a night. A stale lastWindow made the first
+     morning of a brand-new street report a neighbour spotting an item in a shop
+     window you never took. And the first Q of a fresh run answered "the scanner is
+     still cycling", counting down a cooldown from the run before. */
+  /* Torn down directly rather than through endWalk()/endEvening(), because those
+     finish by calling showDay() - which would paint a day screen into the middle of
+     a world rebuild, off a DAY block this function has not reset yet. */
+  S.daytime=false;S.evening=false;
+  clearFolk();clearDana();
+  S.scanCd=0;S.scanT=0;
+  GAME.lastWindow=null;
   exitFocus();
   Object.keys(CATALOG).forEach(k=>{delete CATALOG[k];});
   INV.length=0;PENDING.length=0;HAUL.length=0;WINDOW.length=0;
@@ -7913,6 +8022,7 @@ function startHouse(){
   GAME.wagePenalty=0;GAME.bought={};GAME.scenesSeen={};GAME.watched=false;GAME.keys={};
   GAME.over=null;GAME.lastFractures=[];
   GAME.guideStep=0;GAME.guideDone=false;GAME.glossed={};   // a new run re-teaches (M11)
+  GAME.everPulsed=false;GAME.everSold=false;               // ...from scratch (M29)
   GAME.hardened=[];GAME.lastHarden=[];                     // ...on a soft street (M14)
   GAME.lastGossip=[];
   RESIDENTS.ray.credibility=0.10;RESIDENTS.ray.attention=1.6;   // his fractures move both
@@ -8187,10 +8297,12 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M28'};
+  version:'M29'};
 </script>
 </body>
 </html>
+
+
 
 
 

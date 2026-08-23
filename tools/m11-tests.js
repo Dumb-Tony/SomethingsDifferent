@@ -1,4 +1,4 @@
-/* ─────────────────────────────────────────────────────────────────────────────
+﻿/* ─────────────────────────────────────────────────────────────────────────────
    Milestone 11 — onboarding.
 
    Ten milestones in, nobody had played this end to end, and everything a new player
@@ -38,7 +38,10 @@ if(SD&&G){
        frames+' frames, fps '+SD.S.fps.toFixed(0));
     var lbl=document.getElementById('guide-lbl').textContent;
     ok('THE GUIDE ADVANCES DURING ORDINARY PLAY, with nothing poking it',
-       /2\/9/.test(lbl),
+       /* Derived from the chain, not written into the assertion. This said /2\/9/
+          and went red the moment M29 made the rail twelve steps - the claim was
+          never "the chain is nine long", it was "it moved off step one on its own". */
+       lbl.indexOf('2/'+SD.GUIDE_STEPS.length)>=0,
        lbl+' — '+document.getElementById('guide-step').textContent);
     info('updateHUD -> GUIDE.tick sits on the requestAnimationFrame path, not only');
     info('on the path a test can reach. Without this, the rail could be permanently');
@@ -103,7 +106,7 @@ try{
   // in -> open the door
   SD.useDoor(SD.frontDoor);
   note('opened');
-  ok('OPENING THE DOOR advances it',at()==='scan',at());
+  ok('OPENING THE DOOR advances it',at()==='read',at());
 
   // scan -> catalogue something
   var mug=SD.objects.filter(function(o){return o.kind==='coffeeMug';})[0];
@@ -138,14 +141,40 @@ try{
   ok('...and it is really on tonight\'s ledger',SD.PENDING.length>0,
      SD.PENDING.length+' pending');
 
-  // out -> home again, chain complete
+  // out -> home again
   SD.endNight('home','Back on your own path before the sky changes.');
   note('home again');
+
+  /* M29 - the loop got bigger, so the walk that proves the rail completes has to walk
+     more of it. Fencing is not a flourish: measured, a slice on wages alone affords
+     fifteen swaps and reaches collapse 32 against a bar of 40, so a player who never
+     sells anything loses. A rail that stopped before teaching it would be teaching
+     the wrong game. */
+  ok('...and the rail now asks you to sell what you took',at()==='fence',at());
+  SD.sellItem(SD.HAUL.length-1,'thrift');
+  note('fenced');
+  ok('FENCING ADVANCES IT',at()==='meet',at());
+
+  // meet -> stand next to somebody in the afternoon
+  SD.startWalk();
+  var folk=SD.DAYFOLK[0];
+  SD.talkTo(folk);
+  SD.endWalk();
+  note('met a neighbour');
   ok('THE CHAIN COMPLETES BY PLAYING THE GAME',SD.GAME.guideDone===true,at());
   info('walked: '+trace.join(' > ')+' > DONE');
   ok('...and every step was reached in order',
-     trace.join(',')==='leave,key,in,scan,home,shop,back,swap,out,DONE',
+     /* `scan` does not appear, and that is the rail working rather than failing.
+        Cataloguing satisfies BOTH `read` (which accepts a catalogue entry so it can
+        never strand a player who ignores the optional pulse) and `scan` itself, so
+        two steps collapse in one tick - the same behaviour section 5 celebrates when
+        four go at once. What must hold is that every step is either REACHED or
+        SATISFIED, and that the chain finishes. */
+     trace.join(',')==='leave,key,in,read,home,shop,back,swap,out,fence,meet,DONE',
      trace.join(','));
+  ok('...and nothing was skipped WITHOUT being satisfied',
+     SD.GUIDE_STEPS.every(function(s){return trace.indexOf(s.id)>=0||s.done();}),
+     'the only step not shown was scan, and it is done');
 
   /* ── 4. it gets out of the way ─────────────────────────────────────────────*/
   /* endNight() leaves the morning report up, and the rail hides behind it — clear the
@@ -183,8 +212,9 @@ try{
   G.tick();
   ok('DOING THINGS OUT OF ORDER SKIPS AHEAD rather than getting stuck',
      G.step()&&G.step().id==='home',G.step()?G.step().id:'DONE');
-  info('four steps collapsed in one tick, including a "find the key" step satisfied by');
-  info('never finding a key - a step asserts the STATE it wanted, not the route taken');
+  info('five steps collapsed in one tick - including "find the key", satisfied by');
+  info('never finding a key, and "read the room", satisfied by not needing to');
+  info('a step asserts the STATE it wanted, not the route taken');
 
   /* ── 6. the guide is skippable, and the preference outlives the run ────────*/
   G.setOn(false);
@@ -281,3 +311,5 @@ function flush(){
   document.title=summary;
 }
 })();
+
+

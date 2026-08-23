@@ -256,8 +256,49 @@ Dev-wide catalog of what already exists and where to copy it from.
   at 65, at the front window with the light off behind her at 85. Walk up and press E
   and it is the same SCENES dialogue the menu used to open. 22 assertions.
   **1048 assertions across twenty-eight suites.**
-  WARNING: six milestones have now shipped without a verified human playthrough.
-  WARNING: five milestones have now shipped without a verified human playthrough.
+
+- 2026-08-21 - **M29 DONE - THE RAIL TELLS THE TRUTH.** The guide was written at M11
+  and the game moved on without it for eighteen milestones. It still told players the
+  residents were **"asleep upstairs"** in a single-storey house, and it never once
+  mentioned the scanner, hiding, the afternoon, Dana - or **fencing, which the economy
+  requires**: measured at M18, a whole slice on wages alone affords fifteen swaps and
+  reaches collapse 32 against a bar of 40, so a player following the old rail exactly
+  ran out of money and lost. The chain is now twelve steps. `read` is satisfied by
+  cataloguing as well as by pulsing, because Q is optional and a step that blocks on
+  something optional strands the player. New `m29` is mostly a **drift detector**:
+  every key the game binds must appear in a controls panel, and no guide string may
+  promise a room the house does not have. 22 assertions.
+- 2026-08-21 - **M30 DONE - THE DAY SCREEN KEEPS ITS PROMISES.** The warning above was
+  right, and this is what it was hiding. `doAction()` ended with an unconditional
+  `showDay()`, which repainted the day screen **one statement after** `openShop()`
+  drew the shop. The shop, the afternoon walk (M20) and the evening with Dana (M28)
+  were each opened and then buried by the screen you clicked them from - **five
+  milestones of content behind buttons that undid themselves**, including the only
+  honest route to the guide's `shop` step. Twenty-nine suites missed it because every
+  one of them called `SD.openShop()` directly instead of clicking the button. Escape
+  was the second half: `s-day`, `s-report` and `s-end` fell through to `closeMenu()`,
+  so **one keypress on the final ending card** left you in a frozen 3am street with
+  the run gone. Those three are now modal; Escape in the shop is LEAVE. `m30` touches
+  nothing through the API - it dispatches real clicks on **visible** elements, because
+  the first draft clicked buy buttons sitting in the DOM underneath the day screen and
+  reported the shop as reachable, which is the same mistake the game was making.
+  **11 failures before the fix, 0 after.** 27 assertions.
+- 2026-08-21 - **M31 DONE - THE WORLD IS THE WORLD YOU LEFT.** Four bugs of one shape:
+  state outliving its owner, none of them throwing, all of them changing where you can
+  be **seen**. (1) A `light` event's 6.4m zone at i=0.72 was removed only by
+  `eventTick`'s expiry branch, so a night ending early welded it to the map with no
+  lamp on it - one per night, cumulative; `canSee` and the watchman agreed you stood in
+  a lit patch that did not exist. (2) `loadGame()` ran `startHouse()` **first**, so
+  `nightReset()` fired against day 1 and an empty hardened list and the saved ids
+  landed on top - **every loaded save carried the hardening ids with none of the
+  bodies**, and `fireHardening` skips anything already listed, so they could never
+  re-install: loading permanently disarmed M14 and M19. (3) `hardClear()` had one
+  caller, so the afternoon was four dogs frozen mid-turn and a motionless watchman with
+  a lit torch cone at 15:00. (4) `startHouse` never cleared `S.evening`, so RUN IT
+  AGAIN from an evening ending began night 1 already in the evening. 26 assertions.
+  **1126 assertions across thirty-one suites.**
+  WARNING: nine milestones have now shipped without a verified human playthrough -
+  and M30 is exactly what that costs.
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
