@@ -121,8 +121,12 @@ body.night #grade{opacity:1}
 #clock{font-family:var(--font-mono);letter-spacing:1px}
 #clock.late b{color:var(--coral)}
 #noise-pill b{color:var(--alien)}
-#noise-pill.warn b{color:var(--warm)}
-#noise-pill.hot b{color:var(--coral)}
+/* M36: was #noise-pill.warn / #noise-pill.hot, so the ONLY pill that could look
+   urgent was the noise one. updateHUD has been adding .hot to #wife-pill since M6 -
+   the pill that says Dana is outside, right now, looking for you - and it rendered in
+   the calm colour because no rule matched it. Keyed to .pill instead. */
+.pill.warn b{color:var(--warm)}
+.pill.hot b{color:var(--coral)}
 #seen-pill b{color:var(--coral)}
 #flash{position:fixed;inset:0;z-index:40;pointer-events:none;opacity:0;
   background:radial-gradient(circle at 50% 45%,rgba(255,90,90,.42),rgba(255,90,90,0) 62%);
@@ -251,12 +255,12 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M35 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M36 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
   <div class="pill" id="noise-pill">NOISE <b id="noise-v">0%</b></div>
-  <div class="pill" id="seen-pill">SEEN <b id="seen-v">0</b>/3</div>
+  <div class="pill" id="seen-pill">SEEN <b id="seen-v">0</b>/<span id="seen-max">3</span></div>
   <div class="pill" id="wife-pill" style="display:none">DANA <b id="wife-v"></b></div>
   <div class="pill" id="mode-pill">MODE <b id="mode-v">WALK</b></div>
 </div>
@@ -295,9 +299,10 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>Space</b><span>jump</span>
     <b>Mouse</b><span>look around (click once to capture the cursor)</span>
     <b>Wheel</b><span>zoom</span>
-    <b>E</b><span>examine / search / open</span>
+    <!-- M36: E was listed twice here with Q between the two rows. Same key, one row. -->
+    <b>E</b><span>examine / search / open &mdash; and at a wardrobe, a hedge or a shed,
+      hide, and again to come out</span>
     <b>Q</b><span>scan pulse &mdash; marks their things, and is heard</span>
-    <b>E</b><span>at a wardrobe, a hedge, a shed &mdash; hide, and again to come out</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; end the night, see the morning</span>
     <b>F3</b><span>toggle debug readout</span>
@@ -374,14 +379,22 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     His neighbours have not noticed. You would like to find out what else they
     would not notice.</div>
   <div class="intro-rule">
-    <div><b>Every night, change one thing in somebody&rsquo;s house.</b></div>
+    <!-- M36: this said "change ONE thing", which CONST records as the LOSING line -
+         one object a night reaches Collapse 19.3 against a bar of 40. The intro was
+         teaching the strategy the game is balanced to defeat. -->
+    <div><b>Every night, change a few things &mdash; in different houses.</b></div>
     <div><span class="k-miss">TOO SIMILAR</span> and they walk straight past it. Nothing happens.</div>
     <div><span class="k-cert">TOO DIFFERENT</span> and they are <b>certain</b> something is wrong.
       That is Suspicion, and Suspicion is how you lose.</div>
     <div><span class="k-doubt">IN BETWEEN</span> and they doubt <b>themselves</b>.
       That is the entire game.</div>
+    <!-- M36: the old line promised a forecast the game withholds. predict() returns
+         "???" below Human Knowledge 20 and a bare first name below 50, and every run
+         starts at 0 - so the first shop trip showed nothing but ??? immediately after
+         the intro said the scanner does not lie. Say what calibrates it instead. -->
     <div class="ds-dim">The scanner will tell you which one you are about to cause,
-      before you buy it. It does not lie.</div>
+      before you buy it &mdash; once it knows these people well enough to guess. It
+      reads <b>???</b> until then, and watching them is what calibrates it.</div>
   </div>
   <button class="big-btn" id="btn-intro-go">GO OUT</button>
   <button class="ghost-btn" id="btn-intro-skip">I&rsquo;d rather work it out myself</button>
@@ -397,20 +410,30 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>Space</b><span>jump</span>
     <b>Mouse</b><span>look around (click once to capture the cursor)</span>
     <b>Wheel</b><span>zoom</span>
-    <b>E</b><span>examine / search a planter / open a door</span>
+    <!-- M36: hiding is the only counterplay in the game and this screen - the one you
+         can reach mid-run from the pause menu - never mentioned it; it was on the
+         title screen only, which you see once. It goes on the E row rather than in a
+         second E row, because it is the same key. -->
+    <b>E</b><span>examine / search a planter / open a door &mdash; and at a wardrobe,
+      under a bed, behind a sofa, in a shed or a hedge, <b>hide</b>. You cannot climb
+      in while somebody is already looking at you, and the clock keeps running while
+      you are in there</span>
     <b>Q</b><span>scan pulse &mdash; marks everything of theirs you can see. It goes through glass, not through walls, and they can hear it</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; ends the night, shows you the morning</span>
-    <b>Esc</b><span>pause</span>
+    <b>Esc</b><span>pause &mdash; and the way out of an object, the afternoon, or the
+      evening</span>
     <b>F3</b><span>debug readout</span>
   </div>
   <div class="sub" style="font-size:13px">Holding an object &mdash; that is, once you press <b>E</b> on one:</div>
   <div class="keys">
     <b>F</b><span>scan it into the catalog (you cannot buy what you have not recorded)</span>
-    <b>Z / X</b><span>turn it in place</span>
-    <b>1 &hellip; 9</b><span>swap in one of the matches in your bag</span>
+    <!-- M36: Z / X was listed TWICE - M33 added a row here when it removed the R key
+         without noticing the original four lines down. -->
+    <b>1 &hellip; 9</b><span>swap in one of the matches in your bag &mdash; <b>you keep
+      their original</b>, and it is the only thing you own worth selling</span>
     <b>&larr; &uarr; &darr; &rarr;</b><span>nudge it 3cm &mdash; moving a thing counts too</span>
-    <b>Z / X</b><span>turn it</span>
+    <b>Z / X</b><span>turn it in place</span>
     <b>E</b><span>step back</span>
   </div>
   <button class="ghost-btn" id="btn-controls-back">BACK</button>
@@ -4786,7 +4809,12 @@ function updateHUD(dt){
   hudT-=dt;if(hudT>0)return;hudT=0.1;
   updatePrompt();
   GUIDE.tick();          // reads game state; never drives it
-  $('mode-v').textContent=S.moveMode.toUpperCase();
+  /* M36. The pill read WALK or SNEAK while you were shut inside a wardrobe with
+     movement forced to zero - the one state where what it says matters most, and the
+     only counterplay in the game had no readout at all. */
+  $('mode-v').textContent=
+    S.hidden?(S.hideT>0?'HIDING…':'HIDDEN'):S.moveMode.toUpperCase();
+  $('mode-pill').classList.toggle('warn',S.hidden?true:false);
   if(S.phase==='house'){
     $('clock-v').textContent=clockString();
     $('clock').classList.toggle('late',NIGHT.t>CONST.NIGHT_CURFEW-0.5);
@@ -4796,6 +4824,7 @@ function updateHUD(dt){
     np.classList.toggle('warn',heat>=0.45&&heat<0.8);
     np.classList.toggle('hot',heat>=0.8);
     $('seen-v').textContent=GAME.sightings;
+    $('seen-max').textContent=CONST.SEEN_LIMIT;   // M36: was hardcoded in the markup
     const wp=$('wife-pill');
     if(WIFE.following){
       wp.style.display='';wp.classList.add('hot');
@@ -7817,7 +7846,10 @@ function showReport(reason,text){
        '</div><div class="rp-say">'+f.text+'</div></div>';
   });
   (GAME.lastWindow||[]).forEach(w=>{
-    h+='<div class="rp-row rp-win"><div class="rp-band">SEEN IN THE WINDOW</div>'+
+    /* M36: this said "rp-row", which has no rule anywhere in the stylesheet, so the
+       fence's one moment of consequence rendered as flush unpadded text with no
+       spine. rp-item is the class every other report row uses. */
+    h+='<div class="rp-item rp-win"><div class="rp-band">SEEN IN THE WINDOW</div>'+
        '<div class="rp-say">'+w.name+' walked past Ardsley Antiques and saw '+w.label+
        ' in it. You got $'+w.paid+' for it. Suspicion +'+w.amt.toFixed(1)+'.</div></div>';
   });
@@ -8399,7 +8431,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,
   showReport,showDossier,showEnding,hashStr,
   collapseIndex,streetSuspicion,activeResidents,fracturedCount,checkEnding,
-  houseLight,moveSleeper,endShift,audibleNight,
+  houseLight,moveSleeper,endShift,audibleNight,updateHUD,
   saveGame,loadGame,hasSave,SAVE_KEY,
   // ── M5: the night ──
   NIGHT,SLEEPERS,LIGHTS,BEDS,NIGHT_HOURS,
@@ -8485,6 +8517,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M35'};
+  version:'M36'};
 </script>
 

@@ -373,7 +373,33 @@ Dev-wide catalog of what already exists and where to copy it from.
   per-voice reference, reaching all of them in one place. **(4) Leaving a hiding place
   was free** while entering cost `N_HANDLE*0.6`, so hide-wait-walk-out was strictly
   dominant. Both ends now cost **1.861**. 20 assertions.
-  **1231 assertions across thirty-five suites.**
+
+
+- 2026-08-23 - **M36 DONE - THE GAME EXPLAINS ITSELF.** The screens a first-time player
+  reads were teaching them to lose. The intro's statement of the rules said *"Every
+  night, change **one** thing in somebody's house"* - which CONST records, from its own
+  measurement, as the losing line: one object a night reaches Collapse **19.3** against
+  a bar of **40**. Two lines later it promised the scanner *"will tell you which one you
+  are about to cause, before you buy it. **It does not lie**"* - while `predict()`
+  returns `???` below Human Knowledge 20 and **every run starts at 0**, so a new
+  player's first shop trip shows nothing but `???` immediately after being told the
+  instrument is honest. Both rewritten: change a few things in different houses, and
+  the scanner reads `???` until watching people calibrates it.
+  **Two CSS classes were written and never defined.** `rp-row`, on the fence's one
+  moment of consequence, rendered as flush unpadded text with no spine. And `.hot` -
+  added to `#wife-pill` since M6, the pill that says **Dana is outside right now** -
+  only ever had a `#noise-pill.hot` rule, so the most urgent thing the HUD can say
+  rendered in the calm colour. Keyed to `.pill` now. m36's last section is a permanent
+  **drift detector**: every class the page uses must have a rule behind it.
+  Plus: the MODE pill read WALK while you were shut in a wardrobe with movement forced
+  to zero (now HIDING…/HIDDEN, marked urgent); the SEEN pill's `/3` was typed into the
+  markup and is now written from `CONST.SEEN_LIMIT`; the controls screen never
+  mentioned hiding, described Esc as only "pause", and never said **a swap leaves you
+  holding their original** - which is why the fence exists and why the run is
+  unaffordable without it. And `E` was listed twice on the title grid with `Q` between
+  the rows, and `Z / X` twice on the controls screen - the second one added by M33's
+  own edit. 23 assertions.
+  **1254 assertions across thirty-six suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is

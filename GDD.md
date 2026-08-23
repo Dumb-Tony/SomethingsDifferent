@@ -1585,6 +1585,15 @@ previous one runs in a browser.**
   scales every voice by `mag` against a per-voice reference; leaving a hiding place
   costs the same noise as entering one.
 
+
+- **M36 — the game explains itself.** The intro no longer teaches one-a-night (the
+  measured losing line) or promises a forecast `predict()` withholds until HK 20. The
+  MODE pill admits you are hidden; the SEEN pill reads `CONST.SEEN_LIMIT`; the controls
+  screen documents hiding, Esc, and the fact that a swap leaves you holding the
+  original. `.hot` keyed to `.pill` so Dana-is-outside renders urgent, and `rp-row`
+  (defined nowhere) replaced with `rp-item`. m36 asserts every class in use has a rule
+  behind it, and that no key list repeats a key.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
