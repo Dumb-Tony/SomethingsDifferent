@@ -1594,6 +1594,14 @@ previous one runs in a browser.**
   (defined nowhere) replaced with `rp-item`. m36 asserts every class in use has a rule
   behind it, and that no key list repeats a key.
 
+
+- **M37 — the world keeps the promises the fiction makes.** `relocate()` takes an owner
+  and a house-local position, so a fracture happens to the person it names rather than
+  to whoever's object was built first. Grace's collapse no longer puts her body inside
+  the partition wall — measured with `tools/_fractures.js` and `tools/_gracespot.js`.
+  `CONST.HIDE_R` and `GAME.watched` deleted: both described behaviour the game does not
+  have.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

@@ -261,7 +261,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M36 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M37 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -688,7 +688,9 @@ const CONST={
      The two rules that keep it honest: you cannot climb into a wardrobe while
      somebody is already looking at you, and hiding costs you the thing the night is
      actually short of, which is time. */
-  HIDE_R      : 1.6,        // how close you must be to use one
+  /* M37: HIDE_R is GONE. It documented a rule the game does not have - nothing ever
+     read it, and the real range is INTERACT_RANGE, which is the game's one reach
+     rule. A constant that describes imaginary behaviour is worse than no constant. */
   HIDE_SETTLE : 1.1,        // seconds before it actually works: getting in is not free
   // -- familiarity (GDD Phase 2 "social camouflage", M25) -------------------
   /* The afternoon walk (M20) paid Human Knowledge and nothing else, so spending a
@@ -6438,7 +6440,7 @@ const ACTIONS={
      people - which is what GDD 5.4 says the beats are FOR. */
   walk:{block:'afternoon',label:'Walk the street',
     desc:'Out in the afternoon, where everybody can see you being normal.',
-    run(){GAME.watched=true;startWalk();return null;}},
+    run(){startWalk();return null;}},   // M37: GAME.watched was written and never read
   lawn:{block:'afternoon',label:'Mow the lawn',
     desc:'Humans judge each other by grass length. Unresolved.',
     run(){wifeAdd(-7);hkGain(1);
@@ -6465,7 +6467,6 @@ function blockActions(){
 function startDay(){
   SFX.cue('day');
   DAY.block=0;DAY.actions=CONST.ACTIONS_PER_BLOCK;DAY.log=[];
-  GAME.watched=false;
   // payday / bills, once a week
   GAME.weekday=(GAME.weekday+1)%7;
   if(GAME.weekday===0){GAME.week++;GAME.bought={};}   // new week: shop stock rotates
@@ -6950,7 +6951,7 @@ function windowTick(lines){
 }
 const GAME={day:1,hasSpareKey:false,sightings:0,
   bank:140,cash:0,hk:0,week:1,weekday:0,wagePenalty:0,
-  bought:{},scenesSeen:{},watched:false,keys:{},
+  bought:{},scenesSeen:{},keys:{},        // M37: watched was written and never read
   /* M32. WHAT YOU DID, as opposed to what it did to them. The ending screen reported
      six abstract meters and not one thing the player had actually done - no count of
      objects swapped or scanned, nothing about the money, and no trace at all of the
@@ -7056,11 +7057,20 @@ function markOwned(id){
 }
 /* The RESIDENT moving their own possession — deliberately not through applyChange,
    because this is not something you did. It resets their baseline honestly. */
-function relocate(kind,pos){
-  const o=objects.filter(x=>x.kind===kind)[0];
+/* M37. This took a KIND and grabbed objects.filter(kind)[0] - the first object of
+   that kind ON THE WHOLE STREET, whoever owned it - then wrote an ABSOLUTE position
+   with no house offset. June's fracture moves "the family photo"; there are three
+   pictureFrames on the street, belonging to June, Marisol and Grace, and it happened
+   to pick June's only because of the order the houses are built in. Add a house and
+   June's fracture starts moving Marisol's photograph, to coordinates computed for
+   somebody else's floorplan. Take the OWNER, and treat the position as local to
+   their house, which is how every other authored coordinate in the file works. */
+function relocate(owner,kind,localPos){
+  const o=objects.filter(x=>x.kind===kind&&x.owner===owner)[0];
   if(!o)return false;
+  const h=houseById(o.house);
   const s=JSON.parse(JSON.stringify(o.spec));
-  s._pos=pos.slice();
+  s._pos=[(h?h.x:0)+localPos[0],localPos[1],localPos[2]];
   o.spec=s;respawnObject(o);
   return true;
 }
@@ -7129,7 +7139,12 @@ const FRACTURES={
      apply(){[RESIDENTS.walt,RESIDENTS.marisol].forEach(r=>{
        if(r)r.suspicion=clamp(r.suspicion+8,0,100);});}},
     {at:100,text:'Grace has started sleeping in the front room, facing the door.',
-     apply(){RESIDENTS.grace.collapsed=true;moveSleeper('grace',0,-0.8);}},
+     /* M37: dx=0 is the CENTRE of the house, which is exactly where the partition
+        runs - measured, she landed inside a collider 0.76m wide and 8.66m deep, and a
+        body in a wall is a pair of eyes that can never look at anything. Scanned the
+        front room (tools/_gracespot.js): the partition is the only obstruction in the
+        band, and everything from dx=-1.5 west of it is clear in every house. */
+     apply(){RESIDENTS.grace.collapsed=true;moveSleeper('grace',-1.5,-1.0);}},
   ],
   walt:[
     {at:25,text:'Walt has started leaving a note by the door listing what he is taking with him.',
@@ -7146,7 +7161,10 @@ const FRACTURES={
     {at:25,text:'June photographs the kitchen shelf before bed.',
      apply(){markOwned('june');}},
     {at:50,text:'June has moved the family photo somewhere she thinks is safer.',
-     apply(){relocate('pictureFrame',[1.35,0.60,2.95]);}},   // across to the other nightstand
+     /* M37: was relocate('pictureFrame',[1.35,0.60,2.95]) - the wrong signature AND
+        the wrong place. The bed runs x 2.86..5.20 with June on the far side at 4.73,
+        so "the other nightstand" is just west of it, not 3.6m away across the room. */
+     apply(){relocate('june','pictureFrame',[2.60,0.60,4.30]);}},
     {at:75,text:'June has started asking the neighbours whether they have seen anyone about.',
      apply(){const w=RESIDENTS.walt;w.suspicion=clamp(w.suspicion+10,0,100);}},
     {at:100,text:'June has stopped believing what she remembers. She believes the photographs instead.',
@@ -8227,7 +8245,7 @@ function startHouse(){
   INV.length=0;PENDING.length=0;HAUL.length=0;WINDOW.length=0;
   GAME.day=1;GAME.hasSpareKey=false;GAME.sightings=0;
   GAME.bank=140;GAME.cash=0;GAME.hk=0;GAME.week=1;GAME.weekday=0;
-  GAME.wagePenalty=0;GAME.bought={};GAME.scenesSeen={};GAME.watched=false;GAME.keys={};
+  GAME.wagePenalty=0;GAME.bought={};GAME.scenesSeen={};GAME.keys={};
   GAME.over=null;GAME.lastFractures=[];
   GAME.guideStep=0;GAME.guideDone=false;GAME.glossed={};   // a new run re-teaches (M11)
   GAME.everPulsed=false;GAME.everSold=false;               // ...from scratch (M29)
@@ -8515,7 +8533,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M36'};
+  version:'M37'};
 </script>
 </body>
 </html>

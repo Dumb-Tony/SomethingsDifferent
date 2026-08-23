@@ -399,7 +399,36 @@ Dev-wide catalog of what already exists and where to copy it from.
   unaffordable without it. And `E` was listed twice on the title grid with `Q` between
   the rows, and `Z / X` twice on the controls screen - the second one added by M33's
   own edit. 23 assertions.
-  **1254 assertions across thirty-six suites.**
+
+
+- 2026-08-23 - **M37 DONE - THE WORLD KEEPS THE PROMISES THE FICTION MAKES.** `FRACTURES`
+  says in its own header that *"Every entry is a WORLD CHANGE, not a cutscene"*. Two
+  entries move a body or an object by writing coordinates, and neither had ever been
+  checked against the world it writes into. **Grace @100** - *"started sleeping in the
+  front room, facing the door"* - was `moveSleeper('grace',0,-0.8)`, and **dx=0 is the
+  centre of the house, which is exactly where the partition runs**. Measured
+  (`tools/_fractures.js`): she landed inside a collider 0.76m wide and 8.66m deep. A
+  body in a wall is a pair of eyes that can never look at anything, so *collapsing
+  Grace silently deleted a threat*. Scanned the front room (`tools/_gracespot.js`) and
+  moved her to dx=-1.5, which is clear in every house on the street. **June @50** - the
+  family photo - was `relocate('pictureFrame',[...])`: a KIND with no owner, taking
+  `objects.filter(kind)[0]`, the first of that kind **on the whole street**. There are
+  three pictureFrames - June's, Marisol's and Grace's - and it picked June's *only by
+  the order the houses happen to be built in*. `relocate` now takes the owner and
+  treats the position as local to their house, the way every other authored coordinate
+  in the file does. The destination was also wrong: 3.63m across the room, where the
+  bed is 2.34m wide and "the other nightstand" is 2.13m.
+  Plus two pieces of state that described nothing: `CONST.HIDE_R` documented a 1.6m
+  reach rule **nothing ever read**, and `GAME.watched` had been set by the afternoon
+  walk since M20 and read nowhere. Both deleted. 21 assertions.
+  **A note on method.** The first pass of this measurement reported that *no sleeper
+  could see a man standing a metre away* and I nearly filed it as a bug. Two things
+  were wrong with the probe, not the game: it stood in an unlit bedroom (invisible
+  beyond 2.2m is the rule, not a fault), and it called `canSee(s)` when the signature
+  is `canSee(s,px,pz)` - so every comparison ran against NaN. The same pass also called
+  all seven sleepers "buried in geometry" because it counted **the beds they were lying
+  in** as solids. Three false alarms in one diagnostic, before one real bug.
+  **1275 assertions across thirty-seven suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
