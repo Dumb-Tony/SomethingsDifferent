@@ -1577,6 +1577,14 @@ previous one runs in a browser.**
   at the worst rung passes it by night three, so the ending is reachable and the old
   "peaks near 33" note was stale, not the constant.
 
+
+- **M35 — the night stops when the night does.** `e.repeat` guard in focus mode (a
+  held arrow was emitting ~86 noise units/sec against a threshold near 45);
+  `audibleNight()` extracted as a pure predicate so the night bed ends with the night
+  instead of playing through the report, the afternoon and the evening; `world()`
+  scales every voice by `mag` against a per-voice reference; leaving a hiding place
+  costs the same noise as entering one.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

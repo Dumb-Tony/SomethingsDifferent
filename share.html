@@ -251,7 +251,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M34 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M35 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -4762,6 +4762,14 @@ const $=id=>document.getElementById(id);
    difference between an action that printed a line of text and one that opened a
    whole screen, so it repainted over both - see the comment there. */
 function screenNow(){const s=document.querySelector('.screen.on');return s?s.id:null;}
+/* M35. IS THE NIGHT BED SUPPOSED TO BE PLAYING? Pulled out of SFX.update as a plain
+   predicate, because update() returns early without an AudioContext and the headless
+   harness never has one - so the rule was untestable while it lived in there. Same
+   reason the collider, Doubt and noise math is kept free of a live THREE scene.
+   The old gate was `S.phase!=='house'`, true only on the title and the greybox. */
+function audibleNight(){
+  return S.phase==='house'&&NIGHT.running&&!S.daytime&&!S.evening;
+}
 /* The screens Escape must NOT dismiss. Each one is the only route onward and the 3D
    world behind it is not running, so closing it strands the player in a frozen
    street: NIGHT.running false, M inert, no report, no day, no ending. */
@@ -5279,13 +5287,27 @@ const SFX=(function(){
 
   /* The public emitter. Returns whether anything was actually scheduled — that is
      what the tests assert on: audibility, not "did a function get called". */
+  /* M35. What a thing SOUNDS like now tracks what it is worth in the simulation.
+     Eight of the nine voices took `mag` and ignored it, so a scanner pulse (2.6) was
+     indistinguishable from cataloguing one object (0.6) and the watchman's half-weight
+     footstep was as loud as a full one - in a game whose whole risk model is "how
+     loud was that". Each voice is normalised against the loudest thing it represents;
+     `step` already did this internally and keeps its own curve. */
+  const VOICE_REF={door:CONST.N_DOOR,search:CONST.N_SEARCH,scan:CONST.SCAN_NOISE,
+                   handle:CONST.N_HANDLE,phone:CONST.N_DOOR,fox:CONST.N_SEARCH};
   function world(name,x,z,mag,mtl){
     if(!ctx)return false;
     const fn=VOICES[name];
     if(!fn)return false;
     const p=place(x,z);
     if(p.g<=0.002)return false;           // out of earshot; don't build a graph for nothing
-    try{fn(p,mag===undefined?1:mag,mtl);}catch(e){return false;}
+    const m=mag===undefined?1:mag;
+    const ref=VOICE_REF[name];
+    /* Scaled onto p.g, which every voice already multiplies by, so this reaches all
+       of them without editing nine functions. `step` is excluded because it does its
+       own N_STEP_RUN normalisation and would otherwise be scaled twice. */
+    if(ref&&name!=='step')p.g*=Math.max(0.25,Math.min(1,m/ref));
+    try{fn(p,m,mtl);}catch(e){return false;}
     return true;
   }
 
@@ -5372,7 +5394,15 @@ const SFX=(function(){
     if(!ctx)return;
     if(!isFinite(dt)||dt<=0)dt=1/60;
     const t=ctx.currentTime;
-    if(S.phase!=='house'){
+    /* M35. This used to read `S.phase!=='house'` alone, which is true only on the
+       title and the greybox - so the NIGHT BED kept playing everywhere else. The
+       tension drone is driven by loudestHeat(), which reads sleeper noise: once the
+       night ended nothing cleared it, so it held at whatever heat the night finished
+       on, through the morning report, the shop, the whole day. And M20's afternoon
+       and M28's evening both keep S.phase==='house', so crickets, the night
+       air-conditioner and a distant dog played at three in the afternoon and over
+       dinner. The bed belongs to the night, so it is gated on the night. */
+    if(!audibleNight()){
       setHeat(0);
       if(amb){amb.g.gain.setTargetAtTime(0,t,0.4);amb.acG.gain.setTargetAtTime(0,t,0.4);}
       for(let i=0;i<hums.length;i++)hums[i].g.gain.setTargetAtTime(0,t,0.4);
@@ -7545,6 +7575,9 @@ function enterHide(hd){
   hint(hd.line||('You get into '+hd.label+'. E to come out.'));
   return true;
 }
+/* M35: getting IN costs N_HANDLE*0.6 and getting OUT was free and silent - so the
+   dominant play was to climb into a wardrobe, wait for the heat to fall, and step
+   straight back out without paying for it. A door makes the same noise both ways. */
 function exitHide(){
   if(!S.hidden)return;
   const hd=S.hidden;
@@ -7553,6 +7586,7 @@ function exitHide(){
     player.visible=true;
     player.position.set(hd.pos[0],player.position.y,hd.pos[2]+0.7);
   }
+  emitNoise(hd.pos[0],hd.pos[2],CONST.N_HANDLE*0.6,'handle','wood');   // M35
   hint('You come out.');
 }
 /* While you are in there the night still runs: the clock, the sleepers settling,
@@ -7671,6 +7705,13 @@ function renderFocus(){
 }
 function focusKey(k,e){
   const o=S.focus;if(!o)return true;
+  /* M35. NO KEY REPEAT IN FOCUS MODE. Every mutating key down here runs
+     nudgeObject/rotateObject -> applyChange -> emitNoise(N_HANDLE = 3.5), and the OS
+     repeats a held key about thirty times a second. Holding an arrow to line a mug up
+     was emitting roughly EIGHTY-SIX noise units a second against a wake threshold of
+     forty-five: the signature verb of the game, silently losing you the night while
+     you were being careful with it. One placement is one sound. */
+  if(e&&e.repeat)return true;
   if(k==='e'||k==='escape'){exitFocus();return true;}
   if(k==='f'){scanObject(o);renderFocus();return true;}
   /* M33 - THE 'R' KEY IS GONE. It handed you three matched variants (97/92/80%)
@@ -8358,7 +8399,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,
   showReport,showDossier,showEnding,hashStr,
   collapseIndex,streetSuspicion,activeResidents,fracturedCount,checkEnding,
-  houseLight,moveSleeper,endShift,
+  houseLight,moveSleeper,endShift,audibleNight,
   saveGame,loadGame,hasSave,SAVE_KEY,
   // ── M5: the night ──
   NIGHT,SLEEPERS,LIGHTS,BEDS,NIGHT_HOURS,
@@ -8444,6 +8485,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M34'};
+  version:'M35'};
 </script>
 

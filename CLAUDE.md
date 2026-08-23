@@ -351,7 +351,29 @@ Dev-wide catalog of what already exists and where to copy it from.
   one**. The note was stale (written at 30 objects, not 80); the number was right. The
   constant stands, the comment is corrected, and m34 pins the measurement so nobody
   lowers it on the strength of a comment again. 23 assertions.
-  **1211 assertions across thirty-four suites.**
+
+
+- 2026-08-23 - **M35 DONE - THE NIGHT STOPS WHEN THE NIGHT DOES.** Four defects living
+  in the gap between what the simulation thought was happening and what the player
+  could hear or get away with. **(1) No key-repeat guard in focus mode.** Every
+  mutating key runs `nudgeObject -> applyChange -> emitNoise(N_HANDLE 3.5)`, and the OS
+  repeats a held key ~30x/sec: **~86 noise units a second against a wake threshold near
+  45**. The signature verb of the whole game - lining a mug up exactly - silently lost
+  you the night while you were being careful with it. Measured after the fix: a held
+  arrow costs **3.28**, exactly what one press costs. **(2) The night bed never
+  stopped.** The gate was `S.phase!=='house'`, which is true only on the title and the
+  greybox - so the tension drone held at whatever heat the night ended on all through
+  the report and the day, and crickets played at three in the afternoon (M20) and over
+  dinner with Dana (M28). The rule is now `audibleNight()`, a plain predicate pulled
+  OUT of the audio module because `SFX.update()` returns early without an AudioContext
+  and headless never has one - the same reason collider/Doubt/noise math is kept free
+  of a live scene. **(3) Eight of nine voices took `mag` and ignored it**, so a scanner
+  pulse (2.6) was indistinguishable from cataloguing one object (0.6) in a game whose
+  entire risk model is *how loud was that*. `world()` now scales on `p.g` against a
+  per-voice reference, reaching all of them in one place. **(4) Leaving a hiding place
+  was free** while entering cost `N_HANDLE*0.6`, so hide-wait-walk-out was strictly
+  dominant. Both ends now cost **1.861**. 20 assertions.
+  **1231 assertions across thirty-five suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
