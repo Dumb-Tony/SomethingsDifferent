@@ -136,8 +136,18 @@ try{
   ok('three sightings ends the run',SD.checkEnding().kind==='watch');
   fresh();SD.activeResidents().forEach(function(r){r.suspicion=90;});
   ok('a suspicious street ends the run',SD.checkEnding().kind==='street');
+  /* M34: the win RESOLVES AT THE DEADLINE now, or when the player calls it in.
+     Crossing the bar used to end the run that morning, which deleted nights 6-10 for
+     anybody playing well. The claim here is unchanged - a collapsed street wins - so
+     it is asserted where the win is decided, and again on the player's own terms. */
   fresh();SD.activeResidents().forEach(function(r){r.doubt=100;});
-  ok('a collapsed street WINS',SD.checkEnding().kind==='win');
+  G.day=C.SLICE_NIGHTS+1;
+  ok('a collapsed street WINS at the deadline',SD.checkEnding().kind==='win');
+  fresh();SD.activeResidents().forEach(function(r){r.doubt=100;});
+  ok('...and does not end the run early',SD.checkEnding()===null,
+     'day '+G.day+' of '+C.SLICE_NIGHTS+' - the assignment runs its length');
+  G.callingIn=true;
+  ok('...unless you call it in',SD.checkEnding().kind==='win');
   fresh();G.day=C.SLICE_NIGHTS+1;
   ok('running out of nights loses',SD.checkEnding().kind==='timeout');
   fresh();

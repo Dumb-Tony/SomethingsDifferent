@@ -1568,6 +1568,15 @@ previous one runs in a browser.**
   the shops, the money and the whole fence economy optional, and it could not go until
   M30 made the shop reachable.
 
+
+- **M34 — the last night.** The win resolves at the deadline, or when the player
+  chooses to end the assignment (CALL IT IN on the morning report); crossing the bar
+  no longer deletes nights 6–10. The last night is marked as the last night, and
+  Dana's suspicion is visible during the run rather than only on the ending screen.
+  `LOSE_STREET` re-measured and **kept** at 70 — `tools/_street.js` shows four a night
+  at the worst rung passes it by night three, so the ending is reachable and the old
+  "peaks near 33" note was stale, not the constant.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

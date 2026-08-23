@@ -260,7 +260,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M33 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M34 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -322,6 +322,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
   <h1>THE NEXT <span>MORNING</span></h1>
   <div id="report-body"></div>
   <button class="big-btn" id="btn-report-ok">CONTINUE</button>
+  <button class="ghost-btn" id="btn-report-callin">CALL IT IN &mdash; END THE ASSIGNMENT</button>
 </div>
 
 <!-- DAY -->
@@ -632,6 +633,17 @@ const CONST={
      careful player's street suspicion stays at exactly 0.0 for a whole run, and even
      sloppy play peaks near 33 — so three of those five tiers can never fire, and 70
      is the instant-loss line anyway. It would have been dead content.
+
+     RE-MEASURED M34 (tools/_street.js), and the "peaks near 33" half is now WRONG —
+     it dates from 30 objects, and it survived into two separate audits, both of which
+     concluded from it that LOSE_STREET was unreachable dead content that should be
+     lowered. It is not. Against the current street (80 objects, 7 residents) a player
+     working the MEASURED WINNING PACE of four a night, but always buying the worst
+     match on the ladder, reaches mean 17.5 / 47.2 / 82.9 on nights one to three —
+     past the bar of 70 by night THREE. At eight a night it is 75.1 on night ONE.
+     LOSE_STREET stays at 70: the ending is reachable, and it is reached by exactly
+     the mistake it exists to punish. What was stale was the note, not the number.
+     The careful-player half still holds, which is why the tiers below key off DOUBT.
      ALERTNESS is therefore mostly DOUBT, which is the meter that actually moves
      (8.8 -> 41.2 across a winning run). A street that hardens as it doubts punishes
      success, which is the pressure this milestone exists to create. Suspicion and
@@ -6454,7 +6466,10 @@ function beginNight(){
   S.yaw=Math.PI;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
   for(let i=0;i<DOORS.length;i++)if(DOORS[i].open)setDoor(DOORS[i],false);
   GAME.stats.nightsOut++;                                      // M32
-  hint('Night '+GAME.day+'. '+wifeTier().note);
+  /* M34: night ten used to open with exactly the same line as night one. A run with
+     a hard deadline never built toward it; it just stopped. */
+  hint('Night '+GAME.day+
+       (GAME.day>=CONST.SLICE_NIGHTS?' — the last one. ':'. ')+wifeTier().note);
 }
 
 /* ═════════════════════════ SHOP ═════════════════════════
@@ -7223,6 +7238,14 @@ function checkEnding(){
      INSUFFICIENT. You did the thing; it cost you everything; the screen should say
      both. */
   const won=ci>=winBar();
+  /* M34. Crossing the bar used to END THE RUN THAT MORNING. CONST's own measurement
+     says the intended-strength player crosses on night 5 of 10, so playing well
+     deleted half the game: nights 6-10, the late hardening tiers and the back half
+     of the fence economy were content only a LOSING player ever saw. The assignment
+     now runs its full length unless you choose to end it early - see CALL IT IN on
+     the morning report - so `won` is decisive only at the deadline. A LOSS still
+     ends it the same morning, because a loss is not a choice. */
+  const early=won&&GAME.day<=CONST.SLICE_NIGHTS&&!GAME.callingIn;
   const lost=WIFE.susp>=100?'wife'
             :GAME.sightings>=CONST.SEEN_LIMIT?'watch'
             :ss>=CONST.LOSE_STREET?'street':null;
@@ -7247,7 +7270,7 @@ function checkEnding(){
   if(ss>=CONST.LOSE_STREET)return mk('street','THEY COMPARED NOTES',
     'The neighbourhood stopped wondering and started checking. Doors, cameras, a rota. '+
     'Certainty is the opposite of the assignment.');
-  if(ci>=winBar())return mk('win','UNEXPLAINED PSYCHOLOGICAL EVENT',
+  if(won && !early)return mk('win','UNEXPLAINED PSYCHOLOGICAL EVENT',
     'Nothing was stolen. Nothing was broken. No crime has been committed, and '+
     (fracturedCount()?
       (fracturedCount()===1?'one person on Ardsley Court has stopped trusting their own '+
@@ -7790,6 +7813,13 @@ function showReport(reason,text){
      reason this one was not. checkEnding() has already run above, so GAME.over is
      settled by the time we get here. */
   $('btn-report-ok').textContent=GAME.over?'SEE HOW IT ENDED':'CONTINUE';
+  /* M34. Over the bar, before the deadline: the run does not end itself any more, so
+     the player gets the decision instead. Stay out and the number keeps climbing -
+     and so does everything that can take it off you. */
+  const overBar=!GAME.over&&collapseIndex()>=winBar()&&GAME.day<=CONST.SLICE_NIGHTS;
+  $('btn-report-callin').style.display=overBar?'':'none';
+  if(overBar)$('btn-report-callin').textContent=
+    'CALL IT IN — END THE ASSIGNMENT AT '+collapseIndex().toFixed(1);
   exitFocus();
   go('s-report');S.menuOpen=true;
 }
@@ -7811,9 +7841,13 @@ function showDay(){
        '<div class="dy-bar"><i style="width:'+pct.toFixed(1)+'%"></i></div>'+
        '<b>'+ci.toFixed(1)+' / '+bar.toFixed(0)+'</b></div>'+
        '<div class="dy-prow2">'+
-       '<span><b>'+left+'</b> night'+(left===1?'':'s')+' left</span>'+
+       '<span>'+(left===1?'<b>LAST NIGHT</b>'
+                         :('<b>'+left+'</b> night'+(left===1?'':'s')+' left'))+'</span>'+
        '<span>seen <b>'+GAME.sightings+'</b>/'+CONST.SEEN_LIMIT+'</span>'+
        '<span>street <b>'+streetSuspicion().toFixed(0)+'</b>/'+CONST.LOSE_STREET+'</span>'+
+       /* M34: Dana has ended runs since M6 and her number appeared NOWHERE during
+          one - the ending screen was the first time the player ever saw it. */
+       '<span>Dana <b>'+WIFE.susp.toFixed(0)+'</b>/100</span>'+
        '</div>';
     const inst=(GAME.hardened||[]).map(function(id){
       const H=HARDEN.filter(function(x){return x.id===id;})[0];return H?H.name:id;});
@@ -8137,6 +8171,7 @@ function startHouse(){
   GAME.everPulsed=false;GAME.everSold=false;               // ...from scratch (M29)
   GAME.stats={swapped:0,scanned:0,pulses:0,nightsOut:0,    // ...with a blank ledger (M32)
               sold:0,earned:0,hidden:0};
+  GAME.callingIn=false;                                    // M34
   GAME.hardened=[];GAME.lastHarden=[];                     // ...on a soft street (M14)
   GAME.lastGossip=[];
   RESIDENTS.ray.credibility=0.10;RESIDENTS.ray.attention=1.6;   // his fractures move both
@@ -8218,6 +8253,12 @@ $('btn-report-ok').addEventListener('click',function(){
 });
 $('btn-end-again').addEventListener('click',startHouse);
 $('btn-end-title').addEventListener('click',toTitle);   // M32: the card had one exit
+/* M34: end the assignment now, on a number you chose to stop at. */
+$('btn-report-callin').addEventListener('click',function(){
+  GAME.callingIn=true;
+  checkEnding();
+  if(GAME.over)showEnding();
+});
 $('btn-save').addEventListener('click',function(){
   hint(saveGame()?'Saved.':'Could not save - storage is blocked.');
 });
@@ -8412,7 +8453,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M33'};
+  version:'M34'};
 </script>
 
 </body>

@@ -296,7 +296,7 @@ Dev-wide catalog of what already exists and where to copy it from.
   caller, so the afternoon was four dogs frozen mid-turn and a motionless watchman with
   a lit torch cone at 15:00. (4) `startHouse` never cleared `S.evening`, so RUN IT
   AGAIN from an evening ending began night 1 already in the evening. 26 assertions.
-  **1186 assertions across thirty-three suites.**
+  
   WARNING: nine milestones have now shipped without a verified human playthrough -
   and M30 is exactly what that costs.
 
@@ -330,6 +330,28 @@ Dev-wide catalog of what already exists and where to copy it from.
   player ever seeing a shop. It could not be removed until M30 made the shop reachable
   - before that it was the only reason the game was completable. `requisition()` itself
   stays; m4 has tested its scan-gate since the first house. 28 assertions.
+
+- 2026-08-23 - **M34 DONE - THE LAST NIGHT.** Crossing the collapse bar used to end the
+  run **that morning** - and CONST's own measurement says the intended-strength player
+  crosses on **night 5 of 10**, so playing well deleted half the game: nights 6-10, the
+  late hardening tiers and the back half of the fence economy were content only a
+  *losing* player ever saw. The assignment now runs its full length and the player gets
+  the decision instead: a **CALL IT IN** button appears on the morning report the day
+  you cross, labelled with the number you would be stopping at. Stay out and the number
+  climbs - so does everything that can take it off you. A loss still ends the run the
+  same morning, because a loss is not a choice. Night ten also no longer opens with the
+  same line as night one, and **Dana's number is on the day screen** - she has ended
+  runs since M6 and the ending screen was the first time you ever saw the meter.
+  **AND ONE THING THAT WAS NOT BROKEN.** Two separate audits concluded that
+  `LOSE_STREET: 70` was unreachable dead content, both reasoning from CONST's own note
+  that *"even sloppy play peaks near 33"*. `tools/_street.js` measured it against the
+  real street and the real economy: four objects a night - the measured *winning* pace -
+  always buying the worst match on the ladder reaches **17.5 / 47.2 / 82.9** on nights
+  one to three, past the bar by night **three**; at eight a night it is **75.1 on night
+  one**. The note was stale (written at 30 objects, not 80); the number was right. The
+  constant stands, the comment is corrected, and m34 pins the measurement so nobody
+  lowers it on the strength of a comment again. 23 assertions.
+  **1211 assertions across thirty-four suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is

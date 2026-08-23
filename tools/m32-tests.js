@@ -24,6 +24,10 @@ function title(){return document.getElementById('end-title').textContent;}
 function forceEnding(f){
   SD.startHouse();
   SD.GAME.over=null;
+  /* M34: the win resolves at the DEADLINE (or when the player calls it in), so the
+     endings are forced where they are actually decided. Losses fire on any morning,
+     and still do here. */
+  SD.GAME.day=C.SLICE_NIGHTS+1;
   f();
   return SD.checkEnding();
 }
@@ -72,6 +76,7 @@ function allDoubt(v){
   SD.GAME.stats={swapped:11,scanned:19,pulses:6,nightsOut:7,
                  sold:4,earned:317,hidden:2};
   allDoubt(90);
+  SD.GAME.day=C.SLICE_NIGHTS+1;          // M34: the win lands at the deadline
   var e=SD.checkEnding();
   ok('a thoroughly fractured street wins',e&&e.kind==='win',e?e.kind:'no ending');
   SD.showEnding();
@@ -98,6 +103,7 @@ function allDoubt(v){
   /* A win with NOBODY fractured: doubt spread evenly, just over the bar. */
   SD.startHouse();
   allDoubt(60);
+  SD.GAME.day=C.SLICE_NIGHTS+1;          // M34
   var e=SD.checkEnding();
   ok('an even spread of doubt can win with nobody past 75',
      e&&e.kind==='win'&&SD.fracturedCount()===0,
@@ -113,6 +119,7 @@ function allDoubt(v){
   /* ...and a win where people really did come apart says so, with the real count. */
   SD.startHouse();
   allDoubt(92);
+  SD.GAME.day=C.SLICE_NIGHTS+1;          // M34
   SD.checkEnding();SD.showEnding();
   var t2=txt(),n=SD.fracturedCount();
   ok('a win with '+n+' people past 75 names that number',
@@ -188,6 +195,7 @@ function allDoubt(v){
 
   SD.startHouse();
   allDoubt(90);
+  SD.GAME.day=C.SLICE_NIGHTS+1;          // M34: the LAST morning, which is the claim
   SD.showReport('home','Back before anyone stirs.');
   ok('THE LAST MORNING SAYS WHAT THE BUTTON ACTUALLY DOES',
      document.getElementById('btn-report-ok').textContent!=='CONTINUE',

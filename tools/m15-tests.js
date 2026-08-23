@@ -78,23 +78,26 @@ try{
     Object.keys(SD.RESIDENTS).forEach(function(id){
       if(SD.objects.some(function(o){return o.owner===id;}))SD.RESIDENTS[id].doubt=v;});
   }
-  SD.OPT.setDiff('standard');
-  collapseTo(36);
-  ok('36 collapse does not win at STANDARD',SD.checkEnding()===null,
+  /* M34: the win resolves AT THE DEADLINE, so these are evaluated there - otherwise
+     every one of them returns null and "does not win" would pass for the wrong
+     reason. Below the bar at the deadline is a TIMEOUT, not the absence of an
+     ending, and asserting that is strictly stronger than asserting null was. What is
+     under test here is untouched: where the bar sits at each difficulty. */
+  function endAt(diff,ci){
+    SD.OPT.setDiff(diff);
+    collapseTo(ci);
+    SD.GAME.day=C.SLICE_NIGHTS+1;SD.GAME.over=null;
+    var e=SD.checkEnding();
+    return e?e.kind:'none';
+  }
+  ok('36 collapse does not win at STANDARD',endAt('standard',36)==='timeout',
      'bar '+SD.winBar().toFixed(0));
-  SD.OPT.setDiff('gentle');
-  collapseTo(36);
-  var g=SD.checkEnding();
-  ok('...but it DOES at GENTLE',!!g&&g.kind==='win',
-     'bar '+SD.winBar().toFixed(0)+' -> '+(g?g.kind:'none'));
-  SD.OPT.setDiff('harsh');
-  collapseTo(44);
-  ok('...and 44 is not enough at HARSH',SD.checkEnding()===null,
+  ok('...but it DOES at GENTLE',endAt('gentle',36)==='win',
      'bar '+SD.winBar().toFixed(0));
-  SD.OPT.setDiff('standard');
-  collapseTo(44);
-  var st=SD.checkEnding();
-  ok('...though it wins at STANDARD',!!st&&st.kind==='win');
+  ok('...and 44 is not enough at HARSH',endAt('harsh',44)==='timeout',
+     'bar '+SD.winBar().toFixed(0));
+  ok('...though it wins at STANDARD',endAt('standard',44)==='win',
+     'bar '+SD.winBar().toFixed(0));
 
   // and the hardening ladder moves with it
   SD.OPT.setDiff('harsh');
@@ -177,6 +180,7 @@ try{
   SD.startHouse();SD.GAME.over=null;
   Object.keys(SD.RESIDENTS).forEach(function(id){
     if(SD.objects.some(function(o){return o.owner===id;}))SD.RESIDENTS[id].doubt=90;});
+  SD.GAME.day=SD.CONST.SLICE_NIGHTS+1;      // M34: the win resolves at the deadline
   SD.checkEnding();SD.showEnding();
   var end=document.getElementById('end-body').innerHTML;
   ok('the ending screen quotes the bar you actually played against',
