@@ -34,8 +34,22 @@ if(SD&&G){
   SD.S.py=0;SD.S.grounded=true;SD.S.mvx=0;SD.S.mvz=0;
   var frames=0;(function c(){frames++;requestAnimationFrame(c);})();
   setTimeout(function(){
-    ok('the render loop is actually running',frames>10,
+    /* This asserted `frames>10` and was MEASURING THE MACHINE, not the game. With
+       ~30 foreign headless Chromes holding the box at 66% it reported "3 frames,
+       fps 0" - and the previous commit, checked out to a temp file and run under the
+       same load, failed identically, while the same bytes had passed at 92 frames /
+       26 fps an hour earlier. A test that goes red because something else on the
+       computer is busy tells you nothing about the code.
+
+       The claim this exists to support has never been "the loop is FAST". It is "the
+       loop is ALIVE and updateHUD -> GUIDE.tick sits on the rAF path" - and that is
+       proven by the assertion immediately below, which cannot pass if the loop is
+       detached, and which passed at three frames. So: alive, plus the rail moved.
+       The rate stays as diagnostic output, where a number that depends on the host
+       belongs. */
+    ok('the render loop is actually running',frames>0,
        frames+' frames, fps '+SD.S.fps.toFixed(0));
+    info('frame RATE is host-dependent and is reported, not asserted - see above');
     var lbl=document.getElementById('guide-lbl').textContent;
     ok('THE GUIDE ADVANCES DURING ORDINARY PLAY, with nothing poking it',
        /* Derived from the chain, not written into the assertion. This said /2\/9/
@@ -280,9 +294,12 @@ try{
   var ctl=document.getElementById('s-controls');
   ok('there is a controls panel',!!ctl);
   ok('...reachable from the pause menu',!!document.getElementById('btn-controls'));
+  /* M33 retired the R key, so "requisition" is no longer on this panel and should
+     not be - the claim was never "the word requisition appears", it was "this screen
+     explains what focus mode is FOR". Turning it in place is what replaced it. */
   ok('...and it documents FOCUS mode, which the title screen never did',
      /scan it into the catalog|scan it/i.test(ctl.textContent)&&
-     /requisition/i.test(ctl.textContent)&&/nudge/i.test(ctl.textContent));
+     /turn it/i.test(ctl.textContent)&&/nudge/i.test(ctl.textContent));
   ok('the title screen no longer claims to be Milestone 4',
      !/Milestone 4/i.test(document.getElementById('s-title').textContent),
      document.getElementById('s-title').querySelector('.sub').textContent.trim().slice(0,60)+'...');

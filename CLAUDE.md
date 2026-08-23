@@ -296,9 +296,40 @@ Dev-wide catalog of what already exists and where to copy it from.
   caller, so the afternoon was four dogs frozen mid-turn and a motionless watchman with
   a lit torch cone at 15:00. (4) `startHouse` never cleared `S.evening`, so RUN IT
   AGAIN from an evening ending began night 1 already in the evening. 26 assertions.
-  **1126 assertions across thirty-one suites.**
+  **1186 assertions across thirty-three suites.**
   WARNING: nine milestones have now shipped without a verified human playthrough -
   and M30 is exactly what that costs.
+
+- 2026-08-23 - **M32 DONE - THE ENDING SCREEN.** The last thing you saw in a ten-night
+  run was six abstract meters, in silence, under a headline that contradicted the panel
+  printed directly beneath it, reached by a button that still said CONTINUE. The win
+  text claimed *"Nobody on Ardsley Court trusts what they remember"* sitting above
+  **"Fractured past 75: 0"** - because `winBar()` is a credibility-weighted MEAN of
+  40/100 and a run crosses it with nobody past 75 at all. It now describes the win it
+  actually had. **The win is checked FIRST**: every loss test used to precede it and
+  short-circuit it, so crossing the bar on the same morning Dana opened the folder was
+  reported as a flat failure with a winning Collapse Index under the word INSUFFICIENT
+  - that morning now has its own ending, `pyrrhic`. `GAME.stats` records what you DID
+  (swaps, catalogue, pulses, nights out, hides, sold, earned) and the screen prints it
+  next to what it did to them; the whole M18 fence economy used to leave no trace at
+  all. Plus `win`/`lose` cues - the bank had neither, so the last sound of a winning
+  run was the `doubt` ping that fires when a neighbour pauses at a mug. 32 assertions.
+- 2026-08-23 - **M33 DONE - THE STREET MAKES SENSE.** Two things the game said that
+  were untrue and one thing it let you do that made the rest pointless. **The map:**
+  the opening objective read *"Cross the street to 12 Ardsley Ct"* - there is nothing
+  across the street, all five houses sit in one row along x at z=0; the Hoyts were
+  *"two doors down"* (next door); *"any of the three will do"* (there are four); the
+  closing card said *"Six neighbours"* while `activeResidents()` counts **seven**. And
+  the addresses ran **10, 14, 12, 16, 18** west to east, so your own house sat between
+  number 10 and number 12. They now run **8, 10, 12, 14, 16**, with the tutorial house
+  keeping 12 so every doc that names it stays true. **The cheat:** `R` in focus mode
+  handed you three matched variants (97/92/80%) free, in the victim's house, at 03:00.
+  Its own comment called it an M6 stub; M6 shipped nineteen milestones earlier. It made
+  money, the three shops, the weekly stock roll, the card-or-cash decision and the
+  entire M18 fence **optional**, and it satisfied the guide's `shop` step without the
+  player ever seeing a shop. It could not be removed until M30 made the shop reachable
+  - before that it was the only reason the game was completable. `requisition()` itself
+  stays; m4 has tested its scan-gate since the first house. 28 assertions.
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
@@ -516,6 +547,16 @@ In the browser console: `__SD.doubt()` prints the band maps + histogram;
   `<script src>`. `tools/_probe.js` is a standing load-check that follows this rule.
 - `smoketest.ps1` passes `--autoplay-policy=no-user-gesture-required`; without it a
   headless AudioContext stays `suspended` forever.
+
+
+- **The live frame-rate assertions are invalid while agents are running.** m11's
+  "the render loop is actually running" counts real `requestAnimationFrame` ticks. With
+  a 5-agent workflow saturating the CPU it reported **3 frames, fps 0** three runs in a
+  row - and the *previous commit*, checked out to a temp file and run under the same
+  load, failed identically. "A real failure fails twice" is not enough on its own here:
+  when a timing assertion goes red, re-run the LAST GREEN BUILD before believing the
+  diff caused it. Cheap: `git show HEAD:somethingsdifferent.html > _prev.html` then
+  `smoketest.ps1 -Game "_prev.html"`.
 
 ## Non-negotiables (full list in GDD §14)
 - Doubt (win) and Suspicion (lose) are separate meters. Never merge them.

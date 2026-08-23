@@ -260,7 +260,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M29 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M33 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -349,6 +349,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
   <h1 id="end-title">THE END</h1>
   <div id="end-body"></div>
   <button class="big-btn" id="btn-end-again">RUN IT AGAIN</button>
+  <button class="ghost-btn" id="btn-end-title">BACK TO TITLE</button>
 </div>
 
 <!-- DOSSIER -->
@@ -414,7 +415,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
   <div class="sub" style="font-size:13px">Holding an object &mdash; that is, once you press <b>E</b> on one:</div>
   <div class="keys">
     <b>F</b><span>scan it into the catalog (you cannot buy what you have not recorded)</span>
-    <b>R</b><span>requisition variants of it</span>
+    <b>Z / X</b><span>turn it in place</span>
     <b>1 &hellip; 9</b><span>swap in one of the matches in your bag</span>
     <b>&larr; &uarr; &darr; &rarr;</b><span>nudge it 3cm &mdash; moving a thing counts too</span>
     <b>Z / X</b><span>turn it</span>
@@ -3481,7 +3482,7 @@ const LOT_PITCH=16*CONST.ROOM_SCALE;   // the yards grew with the houses (M13)
    identical to the pixel. `pal` is what buildHouse actually reads now, and `keeper`
    is whose habits dress the place (dressInterior). */
 const HOUSES=[
-  {id:'marek',x:-LOT_PITCH,name:'14 Ardsley Ct',yours:true,wall:'#cfc3b0',
+  {id:'marek',x:-LOT_PITCH,name:'10 Ardsley Ct',yours:true,wall:'#cfc3b0',
    pal:{wall:'#cfc3b0',wallHue:32,floor:26,ceil:34,tile:[40,34],roof:'#4a3228',
         cab:'#c8bda6',cab2:'#b9ae94'}},
   {id:'hoyt', x:0,name:'12 Ardsley Ct',wall:'#c9bda6',keeper:'walt',
@@ -3525,7 +3526,7 @@ const HOUSES=[
      {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'walt',attach:1.0,label:'the coasters'},
      {kind:'potPlant',    m:[ 3.40,0.00,-3.40],rot:0,  owner:'june',attach:0.8,label:'the hall plant'},
    ]},
-  {id:'vance',x:LOT_PITCH,name:'16 Ardsley Ct',wall:'#e0d6c6',keeper:'marisol',
+  {id:'vance',x:LOT_PITCH,name:'14 Ardsley Ct',wall:'#e0d6c6',keeper:'marisol',
    pal:{wall:'#e6dccb',wallHue:44,floor:36,ceil:42,tile:[46,40],roof:'#5d3b3c',
         cab:'#e0d6c6',cab2:'#cfc0a8'},
    beds:[{who:'marisol',x:2.15},{who:'aaron',x:3.05}],
@@ -3561,7 +3562,7 @@ const HOUSES=[
      {kind:'alarmClock',  m:[ 2.86,0.55, 5.145],rot:-6,owner:'aaron',  attach:1.0,label:'the alarm'},
      {kind:'teaBox',      m:[-6.58,0.92, 1.80],rot:8,  owner:'marisol',attach:0.8,label:'the tea'},
    ]},
-  {id:'okonkwo',x:LOT_PITCH*2,name:'18 Ardsley Ct',wall:'#bfc7ce',keeper:'grace',
+  {id:'okonkwo',x:LOT_PITCH*2,name:'16 Ardsley Ct',wall:'#bfc7ce',keeper:'grace',
    pal:{wall:'#bfc7ce',wallHue:205,floor:18,ceil:208,tile:[200,206],roof:'#33404e',
         cab:'#a6b0bb',cab2:'#8f9aa8'},
    /* Grace works nights. Some nights the bed is half empty — which is recon you can
@@ -3601,7 +3602,7 @@ const HOUSES=[
      fool, and almost harmless when he is right. His things are chosen so some are
      reachable from Bulwark's finest rung and some only from the antique shop -
      attachment is what decides which, since perceived delta scales by it. */
-  {id:'pittman',x:-LOT_PITCH*2,name:'10 Ardsley Ct',wall:'#b9b3a4',keeper:'ray',
+  {id:'pittman',x:-LOT_PITCH*2,name:'8 Ardsley Ct',wall:'#b9b3a4',keeper:'ray',
    pal:{wall:'#b9b3a4',wallHue:62,floor:22,ceil:60,tile:[30,26],roof:'#3a3630',
         cab:'#b3ab98',cab2:'#9c937f'},
    beds:[{who:'ray',x:2.60}],
@@ -4884,9 +4885,14 @@ const GUIDE_HIDE_ON=['s-title','s-pause','s-sound','s-controls','s-intro',
                      's-report','s-end','s-dossier','s-talk'];
 const GUIDE_STEPS=[
   {id:'leave',
-   t:'Cross the street to <b>12 Ardsley Ct</b>',
-   why:'You are standing outside your own house. The Hoyts are two doors down &mdash; '+
-       'but any of the three will do.',
+   /* M33: this described a street that does not exist. There is nothing across the
+      road - all five houses sit in one row along x at z=0 - the Hoyts are the
+      ADJACENT lot rather than two doors down, and there are four workable houses,
+      not three. The addresses were out of order until this milestone too. */
+   t:'Go next door, to <b>12 Ardsley Ct</b>',
+   why:'You are standing outside your own house at number 10. The Hoyts are the next '+
+       'lot along &mdash; but any house on the row will do, and Ray at number 8 '+
+       'already believes in you.',
    done:()=>!!player&&HOUSES.some(h=>!h.yours&&Math.abs(player.position.x-h.x)<5.5)},
   {id:'key',
    t:'Search the planters by the porch &mdash; <b>E</b>',
@@ -5003,7 +5009,11 @@ const GUIDE=(function(){
       el.classList.add('done');
       $('guide-lbl').textContent='THAT IS THE LOOP';
       $('guide-step').innerHTML='Now do it to the whole street.';
-      $('guide-why').innerHTML='Ten nights. Six neighbours. Collapse enough of them '+
+      /* M33: seven residents own objects, and all seven are counted by
+         activeResidents(), collapseIndex() and the ending screen. The night count is
+         CONST's to state, not this string's. */
+      $('guide-why').innerHTML=CONST.SLICE_NIGHTS+' nights. '+activeResidents().length+
+         ' neighbours. Collapse enough of them '+
         'and you win &mdash; get caught being <i>certain</i> too often and you do not.';
     }else{
       el.classList.remove('done');
@@ -5436,7 +5446,20 @@ const SFX=(function(){
     buy:function(){
       tone(HERE,0.22,1046,1568,0.12,'foley','square');
       tone(HERE,0.16,1568,2093,0.10,'foley','square',0.07);},
-    ui:function(){tone(HERE,0.10,880,880,0.05,'foley','sine');}
+    ui:function(){tone(HERE,0.10,880,880,0.05,'foley','sine');},
+    /* M32. THE ENDING USED TO PLAY IN SILENCE. The last sound of a winning run was
+       the 'doubt' ping - the same two-note sine fired when a neighbour paused at a
+       mug - and then nothing at all under the card that ends the game. */
+    win:function(){                 // the 1960s-advert cadence, resolved and slowed
+      const f=523.25;
+      tone(HERE,0.30,f*1.5,   f*1.5,   0.55,'music','triangle');
+      tone(HERE,0.26,f*2,     f*2,     0.55,'music','triangle',0.22);
+      tone(HERE,0.24,f*2.5449,f*2.5449,0.70,'music','triangle',0.44);  // the sharp third
+      tone(HERE,0.20,f*3,     f*3,     1.10,'music','sine',    0.66);},
+    lose:function(){                // the same shape falling, and one octave under it
+      for(let i=0;i<4;i++)
+        tone(HERE,0.30,392-i*58,300-i*52,0.60+i*0.10,'music','sawtooth',i*0.20);
+      tone(HERE,0.24,98,66,1.60,'music','sine',0.55);}
   };
   function cue(name){
     if(!ctx)return false;
@@ -5956,7 +5979,7 @@ function flash(){
   setTimeout(()=>f.classList.remove('on'),420);
 }
 /* ---------------------------- FAMILIARITY (M25) ----------------------------
-   How well a given resident knows the man from number 14. Raised by standing next
+   How well a given resident knows the man from number 10. Raised by standing next
    to them in the afternoon, spent when they catch sight of you at night. */
 function familiar(id){const r=RESIDENTS[id];return r?(r.familiar||0):0;}
 function famAdd(id,n){
@@ -6430,6 +6453,7 @@ function beginNight(){
   S.py=0;S.vy=0;S.grounded=true;S.mvx=0;S.mvz=0;
   S.yaw=Math.PI;S.pitch=CONST.CAM_PITCH0;S.camP=null;S.camL=null;
   for(let i=0;i<DOORS.length;i++)if(DOORS[i].open)setDoor(DOORS[i],false);
+  GAME.stats.nightsOut++;                                      // M32
   hint('Night '+GAME.day+'. '+wifeTier().note);
 }
 
@@ -6835,6 +6859,7 @@ function sellItem(idx,storeId){
   const paid=offerFor(it,st.id);
   GAME.cash+=paid;                    // cash, not bank: a shop counter pays in notes
   GAME.everSold=true;                 // M29
+  GAME.stats.sold++;GAME.stats.earned+=paid;              // M32
   HAUL.splice(idx,1);
   /* Sold on the street it came off. It goes in the window; the owner walks past.
      Resolved at doMorning() with the rest of the night's consequences rather than
@@ -6863,6 +6888,13 @@ function windowTick(lines){
 const GAME={day:1,hasSpareKey:false,sightings:0,
   bank:140,cash:0,hk:0,week:1,weekday:0,wagePenalty:0,
   bought:{},scenesSeen:{},watched:false,keys:{},
+  /* M32. WHAT YOU DID, as opposed to what it did to them. The ending screen reported
+     six abstract meters and not one thing the player had actually done - no count of
+     objects swapped or scanned, nothing about the money, and no trace at all of the
+     haul and the fence, which is a whole milestone of economy thrown away by
+     startHouse without ever being shown. A run with no story to retell gives you
+     nothing to beat next time. */
+  stats:{swapped:0,scanned:0,pulses:0,nightsOut:0,sold:0,earned:0,hidden:0},
   /* M11 — run state, so the guide and the one-off explanations survive a save.
      The player's PREFERENCE (guide on/off, intro seen) is not here: that lives in
      localStorage like the audio mix, because it must outlive any single run. */
@@ -6879,6 +6911,7 @@ function scanObject(o){
   CATALOG[o.id]={kind:o.kind,spec:JSON.parse(JSON.stringify(o.spec)),
                  day:GAME.day,owner:o.owner,label:o.label};
   emitNoise(o.spec._pos[0],o.spec._pos[2],CONST.N_SCAN,'scan');
+  GAME.stats.scanned++;                                        // M32
   hint('Catalogued: '+PROP_KINDS[o.kind].alienName);
 }
 /* Shop stub. Real stores (stock rotation, money, travel, familiarity) are M6; the
@@ -6928,6 +6961,7 @@ function swapWith(o,idx){
   HAUL.push({kind:o.kind,spec:JSON.parse(JSON.stringify(o.spec)),owner:o.owner,
              label:o.label,attach:o.attach,house:o.house,day:GAME.day,
              value:itemValue(o.kind,o.spec)});
+  GAME.stats.swapped++;                                        // M32
   applyChange(o,s,defeated?'replaced the marked one with an identical copy'
                           :'swapped in a '+it.sim.toFixed(1)+'% match');
   if(defeated)hint('The mark goes in your pocket with the old one. It is clean again.');
@@ -7181,29 +7215,58 @@ function checkEnding(){
   if(GAME.over)return GAME.over;
   const ci=collapseIndex(),ss=streetSuspicion();
   const mk=(kind,title,text)=>{GAME.over={kind,title,text,ci,ss};return GAME.over;};
+  /* M32. THE WIN IS CHECKED FIRST NOW, and a loss landing on the same morning does
+     not erase it - it complicates it. Every loss test used to precede the win test
+     and short-circuit it, so a run that had already crossed the collapse bar on the
+     night Dana finally opened the folder was reported as a flat failure, with the
+     ending screen printing a Collapse Index above the bar underneath the word
+     INSUFFICIENT. You did the thing; it cost you everything; the screen should say
+     both. */
+  const won=ci>=winBar();
+  const lost=WIFE.susp>=100?'wife'
+            :GAME.sightings>=CONST.SEEN_LIMIT?'watch'
+            :ss>=CONST.LOSE_STREET?'street':null;
+  if(won&&lost)return mk('pyrrhic','RECALLED, AND FOUND OUT',
+    'Ardsley Court cannot agree on what its own kitchens looked like a fortnight ago '+
+    '&mdash; the method works, and your species logs it. '+
+    (lost==='wife'?'Dana worked it out on the same morning. She is not in the folder; '+
+                   'you are. You are recalled from a house you can no longer go back into.'
+    :lost==='watch'?'And on the same morning the street settled on a simpler story: a man. '+
+                    'They are frightened of a burglar, which is the one thing that stops '+
+                    'anybody doubting anything.'
+    :'And on the same morning they stopped wondering and started checking. You leave '+
+     'with the result and a street that will never be uncertain again.'));
   if(WIFE.susp>=100)return mk('wife','SHE STOPPED ASKING',
     'Dana has a folder. Photographs, times, a receipt for curtains you do not own. '+
     'She does not shout. She asks who you are, and you find you have no sentence ready.');
   if(GAME.sightings>=CONST.SEEN_LIMIT)return mk('watch','A HUMAN EXPLANATION',
-    'Three people have seen a man in their house at night. The street has a name for '+
-    'him now, and a WhatsApp group. They are frightened of a burglar — which means '+
-    'nobody doubts anything at all. Your species files the experiment as contaminated.');
+    CONST.SEEN_LIMIT+' times somebody has got a look at a man who should not have been '+
+    'there. The street has a name for him now, and a WhatsApp group. They are frightened '+
+    'of a burglar — which means nobody doubts anything at all. Your species files the '+
+    'experiment as contaminated.');
   if(ss>=CONST.LOSE_STREET)return mk('street','THEY COMPARED NOTES',
     'The neighbourhood stopped wondering and started checking. Doors, cameras, a rota. '+
     'Certainty is the opposite of the assignment.');
   if(ci>=winBar())return mk('win','UNEXPLAINED PSYCHOLOGICAL EVENT',
-    'Nobody on Ardsley Court trusts what they remember. Nothing was stolen. Nothing '+
-    'was broken. No crime has been committed and everyone is certain something happened. '+
-    'Your species logs the method as viable and recalls you.');
+    'Nothing was stolen. Nothing was broken. No crime has been committed, and '+
+    (fracturedCount()?
+      (fracturedCount()===1?'one person on Ardsley Court has stopped trusting their own '+
+                            'memory of their own kitchen'
+                          :fracturedCount()+' people on Ardsley Court have stopped '+
+                            'trusting their own memory of their own houses')
+      :'the whole street has quietly agreed to stop mentioning the little things')+
+    '. Your species logs the method as viable and recalls you.');
   if(GAME.day>CONST.SLICE_NIGHTS)return mk('timeout','INSUFFICIENT',
-    'Ten nights. Some pausing in doorways, some tired arguments, nothing that '+
-    'did not settle by the weekend. People are more robust than the briefing said.');
+    CONST.SLICE_NIGHTS+' nights. Some pausing in doorways, some tired arguments, '+
+    'nothing that did not settle by the weekend. People are more robust than the '+
+    'briefing said.');
   return null;
 }
 function showEnding(){
   const o=GAME.over;if(!o)return;
   const win=o.kind==='win';
-  $('end-title').innerHTML=win?('UNEXPLAINED <span>EVENT</span>'):o.title;
+  $('end-title').innerHTML=win?('UNEXPLAINED <span>EVENT</span>')
+    :o.kind==='pyrrhic'?('RECALLED, <span>AND FOUND OUT</span>'):o.title;
   let h='<div class="rp-item '+(win?'rp-doubt':'rp-cert')+'">'+
         '<div class="rp-band">'+o.title+'</div>'+
         '<div class="rp-say">'+o.text+'</div></div>';
@@ -7222,7 +7285,27 @@ function showEnding(){
      '<div class="ds-row">Sightings <b>'+GAME.sightings+'</b> / '+CONST.SEEN_LIMIT+'</div>'+
      '<div class="ds-row">Nights <b>'+Math.min(GAME.day-1,CONST.SLICE_NIGHTS)+'</b> / '+
        CONST.SLICE_NIGHTS+'</div></div></div>';
+  /* M32 - WHAT YOU DID. The panel above is what it did to THEM; this is the run you
+     actually had, and it is the half that was missing. Ten nights of scanning,
+     buying near-matches, hauling originals and fencing them two towns over used to
+     leave no trace on the screen that ends the game. */
+  const st=GAME.stats||{},row=(k,v)=>'<div class="ds-row">'+k+' <b>'+v+'</b></div>';
+  h+='<div class="ds-cols"><div><div class="ds-h">WHAT YOU DID</div>'+
+     row('Objects swapped',st.swapped|0)+
+     row('Objects catalogued',st.scanned|0)+
+     row('Scanner pulses',st.pulses|0)+
+     row('Nights out',st.nightsOut|0)+
+     (st.hidden?row('Times you hid',st.hidden):'')+
+     '</div><div><div class="ds-h">THE MONEY</div>'+
+     row('Sold to a fence',st.sold|0)+
+     row('Made from it','$'+(st.earned|0))+
+     row('Left in hand','$'+money().toFixed(0))+
+     row('Still in the bag',HAUL.length)+
+     (WINDOW.length?row('In the antique window',WINDOW.length):'')+
+     '</div></div>';
   $('end-body').innerHTML=h;
+  /* The run ends with a sound now. */
+  SFX.cue(win||o.kind==='pyrrhic'?'win':'lose');
   go('s-end');S.menuOpen=true;
 }
 
@@ -7372,6 +7455,7 @@ function scanPulse(){
   if(S.scanCd>0){hint('The scanner is still cycling.');return null;}
   S.scanCd=CONST.SCAN_CD;S.scanT=CONST.SCAN_T;
   GAME.everPulsed=true;              // M29: the guide teaches this now
+  GAME.stats.pulses++;                                         // M32
   clearMarks();
   const px=player.position.x,pz=player.position.z;
   let n=0;
@@ -7441,6 +7525,7 @@ function enterHide(hd){
   const seenBy=watchedNow();
   if(seenBy){hint(seenBy+' is looking straight at you. Not now.');return false;}
   S.hidden=hd;S.hideT=CONST.HIDE_SETTLE;
+  GAME.stats.hidden++;                                         // M32
   if(player)player.visible=false;
   emitNoise(hd.pos[0],hd.pos[2],CONST.N_HANDLE*0.6,'handle','wood');
   hint(hd.line||('You get into '+hd.label+'. E to come out.'));
@@ -7560,7 +7645,9 @@ function renderFocus(){
   const act=(key,txt)=>'<div class="fx-act"><b>'+key+'</b> '+txt+'</div>';
   h+='<div class="fx-acts">';
   h+=act('F',c?'re-scan':'scan into the catalog');
-  h+=act('R',c?'requisition variants':'<span class="ds-dim">requisition (scan first)</span>');
+  /* M33: no R row. What you do with a scan now is drive to a shop and pay for it. */
+  h+=act('&nbsp;',c?'<span class="ds-dim">recorded &mdash; the shops can match it</span>'
+                  :'<span class="ds-dim">scan it before you can match it</span>');
   mine.forEach((m,i)=>{h+=act(''+(i+1),'swap in the '+m.sim.toFixed(1)+'% match');});
   h+=act('&larr;&uarr;&darr;&rarr;','nudge 3cm');
   h+=act('Z / X','turn '+ROT_STEP+'&deg;');
@@ -7572,7 +7659,15 @@ function focusKey(k,e){
   const o=S.focus;if(!o)return true;
   if(k==='e'||k==='escape'){exitFocus();return true;}
   if(k==='f'){scanObject(o);renderFocus();return true;}
-  if(k==='r'){requisition(o);renderFocus();return true;}
+  /* M33 - THE 'R' KEY IS GONE. It handed you three matched variants (97/92/80%)
+     free, standing in the victim's house at three in the morning, and its own comment
+     called it an "M6 stub" that M6 was supposed to replace. M6 shipped nineteen
+     milestones ago. It made money, the three shops, the weekly stock roll, the
+     card-or-cash decision and the ENTIRE M18 fence economy optional, and it silently
+     satisfied the guide's `shop` step (done:()=>INV.length>0) without the player ever
+     seeing a shop. It could not go until M30 made the shop reachable at all - before
+     that it was the only reason the game was completable. requisition() itself stays:
+     m4 has tested its scan-gate contract since the first house was built. */
   if(k>='1'&&k<='9'){swapWith(o,+k-1);renderFocus();return true;}
   if(k==='z'){rotateObject(o,-ROT_STEP);renderFocus();return true;}
   if(k==='x'){rotateObject(o, ROT_STEP);renderFocus();return true;}
@@ -7689,6 +7784,12 @@ function showReport(reason,text){
   SFX.cue(lines.some(L=>L.r.band==='CERTAINTY')?'certain'
          :lines.some(L=>L.r.band==='DOUBT')  ?'doubt':'morning');
   $('report-body').innerHTML=h;
+  /* M32. The button under this report is the last thing the player presses in a run,
+     and it used to be a static CONTINUE that silently meant "go to the game over
+     screen". btn-day-next has been rewritten on every paint since M6; there is no
+     reason this one was not. checkEnding() has already run above, so GAME.over is
+     settled by the time we get here. */
+  $('btn-report-ok').textContent=GAME.over?'SEE HOW IT ENDED':'CONTINUE';
   exitFocus();
   go('s-report');S.menuOpen=true;
 }
@@ -8034,6 +8135,8 @@ function startHouse(){
   GAME.over=null;GAME.lastFractures=[];
   GAME.guideStep=0;GAME.guideDone=false;GAME.glossed={};   // a new run re-teaches (M11)
   GAME.everPulsed=false;GAME.everSold=false;               // ...from scratch (M29)
+  GAME.stats={swapped:0,scanned:0,pulses:0,nightsOut:0,    // ...with a blank ledger (M32)
+              sold:0,earned:0,hidden:0};
   GAME.hardened=[];GAME.lastHarden=[];                     // ...on a soft street (M14)
   GAME.lastGossip=[];
   RESIDENTS.ray.credibility=0.10;RESIDENTS.ray.attention=1.6;   // his fractures move both
@@ -8114,6 +8217,7 @@ $('btn-report-ok').addEventListener('click',function(){
   if(GAME.over)showEnding();else startDay();
 });
 $('btn-end-again').addEventListener('click',startHouse);
+$('btn-end-title').addEventListener('click',toTitle);   // M32: the card had one exit
 $('btn-save').addEventListener('click',function(){
   hint(saveGame()?'Saved.':'Could not save - storage is blocked.');
 });
@@ -8308,7 +8412,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M29'};
+  version:'M33'};
 </script>
 
 </body>

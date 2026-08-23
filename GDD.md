@@ -566,7 +566,7 @@ One cul-de-sac. Four houses. Seven nights.
 
 | # | House | Residents | Seed | Role in the slice |
 |---|---|---|---|---|
-| 0 | **Your house** — 14 Ardsley Ct | You (Steve Marek), Dana (wife), 2 kids (background) | — | Home base, garage stash, the exit puzzle |
+| 0 | **Your house** — 10 Ardsley Ct | You (Steve Marek), Dana (wife), 2 kids (background) | — | Home base, garage stash, the exit puzzle |
 | 1 | **The Hoyts** — 12 Ardsley Ct | Walt (78) & June (75), retired | `precision` (Walt) / `memory` (June) | **Tutorial house.** Huge floors, huge bands — safe. Teaches the loop. The keys-on-the-hook chain. |
 | 2 | **Marisol Vance** — 16 Ardsley Ct | Marisol (34), Aaron (36), infant | `order` | **The meat.** Low floor, wide band — the ideal victim. Photos, symmetry, sleep-deprivation. |
 | 3 | **The Okonkwos** — 18 Ardsley Ct | Dev (16), his mother Grace (nights shift) | `tech` (Dev) | **Comedy + low risk.** Empty house half the night. Wallpaper, keycaps, cable colours. Dev blames malware; nobody investigates a teenager. |
@@ -1144,7 +1144,7 @@ previous one runs in a browser.**
 16. ~~**Ray Pittman, and gossip.**~~ **DONE 2026-08-13.** The first Phase 2 milestone.
     *Verified: 36 assertions + [docs/m16-gossip.png](docs/m16-gossip.png).*
 
-    **Ray gets a house.** 10 Ardsley Ct, the fifth lot, at the dead end next door to
+    **Ray gets a house.** 8 Ardsley Ct (10 when this was written; renumbered in M33), the fifth lot, at the dead end next door to
     yours — ten possessions, his own fracture ladder, asleep alone. He has been a row
     in `RESIDENTS` since M2 with nowhere to live, and he is the design's own argument
     that *a personality is a tuple, never a special case* (§4.5): nothing in the Doubt
@@ -1553,6 +1553,20 @@ previous one runs in a browser.**
   lands, so a loaded save keeps its dogs, watchman and cameras; `startWalk`/
   `startEvening` tear down last night's installations; `startHouse` clears
   `S.daytime`/`S.evening`/`scanCd`/`lastWindow`.
+
+
+- **M32 — the ending screen.** The win is evaluated before the losses, and a run that
+  crosses the bar on a losing morning gets its own `pyrrhic` ending instead of being
+  reported as a flat failure. `GAME.stats` records what the player did and the screen
+  prints it beside what it did to them. Win and lose cues added to `CUES`; the prose
+  reads its numbers out of `CONST` rather than restating them.
+
+- **M33 — the street makes sense.** Addresses renumbered to run in order (8, 10, 12,
+  14, 16 west to east), with the tutorial house keeping 12. The guide describes the row
+  that exists rather than a street with something across it, and counts the seven
+  residents `activeResidents()` returns. The `R` free-variants key is retired — it made
+  the shops, the money and the whole fence economy optional, and it could not go until
+  M30 made the shop reachable.
 
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
