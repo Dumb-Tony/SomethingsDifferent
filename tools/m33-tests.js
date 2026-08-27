@@ -104,8 +104,18 @@ SD.stopLoop();SD.startHouse();
   /* Press R the way a player would - through the real keydown handler, not through
      an exported function. focusKey owns the keyboard while S.focus is set. */
   window.dispatchEvent(new KeyboardEvent('keydown',{key:'r',bubbles:true}));
-  ok('PRESSING R NO LONGER FILLS YOUR BAG FOR FREE',SD.INV.length===0,
-     SD.INV.length+' free variants');
+  /* M39 GAVE R BACK, on terms that keep this milestone's point intact. What M33
+     removed was three MATCHED variants (97/92/80%), chosen, instant, free, unlimited
+     - which made money, the shops, the stock roll and the fence optional. What R does
+     now is print ONE copy at a similarity you do not choose, capped below anything a
+     shop sells, paid for in noise, once per object per night. The claim this suite has
+     always made is that R cannot hand you a free shortcut past the economy, and that
+     is still exactly true. */
+  ok('PRESSING R DOES NOT HAND YOU THE FREE 97/92/80 SET',SD.INV.length<=1,
+     SD.INV.length+' item, not three');
+  ok('...and what it does print is capped below the shops',
+     SD.INV.length===0||SD.INV[0].sim<=SD.CONST.FAB_SIM[1]+2,
+     SD.INV.length?SD.INV[0].sim.toFixed(1)+'% vs a shop ceiling of 100%':'nothing');
   SD.exitFocus();
 
   /* Scoped to the PANELS, not to document.body.innerHTML - the game's script tag
@@ -115,8 +125,10 @@ SD.stopLoop();SD.startHouse();
           .map(function(e){return e?e.innerHTML:'';}).join(' ');
   ok('...and neither the controls screen nor the focus panel advertises it',
      !/requisition/i.test(ui),'no "requisition" on any panel the player reads');
-  ok('...and the controls screen no longer lists an R key at all',
-     !/<b>R<\/b>/i.test(document.getElementById('s-controls').innerHTML));
+  /* The R ROW is back with the key (M39). What must never come back is the word that
+     described the free shortcut. */
+  ok('...and nothing on any panel offers to requisition anything',
+     !/requisition/i.test(document.getElementById('s-controls').innerHTML));
 
   /* The bag can still only be filled by paying for something. */
   SD.startHouse();
@@ -147,12 +159,12 @@ SD.stopLoop();SD.startHouse();
   SD.startHouse();
   var o=SD.objects[1];
   SD.INV.length=0;
-  ok('requisition still refuses an unscanned object',
-     SD.requisition(o)===null&&SD.INV.length===0);
+  ok('the printer still refuses an unscanned object',
+     SD.fabricate(o)===null&&SD.INV.length===0);
   SD.scanObject(o);
-  var made=SD.requisition(o);
-  ok('...and still yields three variants once it is recorded',
-     !!made&&made.length===3,made?made.length:'null');
+  var made=SD.fabricate(o);
+  ok('...and yields exactly one copy once it is recorded',
+     !!made&&SD.INV.length===1,made?'1 at '+made.sim.toFixed(1)+'%':'null');
 })();
 
 var eb=document.getElementById('err-banner');

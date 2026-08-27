@@ -108,10 +108,13 @@ try{
   ok('nothing in reach across the room',(function(){
       var x=SD.findTarget();return !x||x.t!=='prop'||x.o.id!==keys.id;})());
 
-  /* ── 6. THE LOOP: scan -> requisition -> swap -> morning ───────────────── */
+  /* ── 6. THE LOOP: scan -> print -> swap -> morning ──────────────────────
+     M39 replaced requisition() (three chosen variants, free) with fabricate() (one
+     unaimed print, paid for in noise). The claim this section has always made is
+     unchanged and is the important one: ACQUISITION IS GATED ON RECON. */
   ok('acquisition is gated on recon',
-     SD.requisition(keys)===null&&SD.INV.length===0,
-     'requisition before scan returns null');
+     SD.fabricate(keys)===null&&SD.INV.length===0,
+     'printing before scanning returns null');
 
   SD.scanObject(keys);
   ok('scanning records the spec',!!SD.CATALOG[keys.id]&&
@@ -119,23 +122,23 @@ try{
   ok('the catalog snapshot is a COPY, not a live reference',
      SD.CATALOG[keys.id].spec!==keys.spec);
 
-  var made=SD.requisition(keys);
-  ok('requisition yields three variants',!!made&&made.length===3&&SD.INV.length===3,
-     made?made.map(function(m){return m.sim.toFixed(1)+'%';}).join(' '):'none');
-  ok('the variants ladder down in similarity',
-     made[0].sim>made[1].sim&&made[1].sim>made[2].sim);
-  ok('every variant is for this object',
-     SD.invFor(keys.id).length===3);
+  var made=SD.fabricate(keys);
+  ok('printing yields a usable variant',!!made&&SD.INV.length===1,
+     made?made.sim.toFixed(1)+'%':'none');
+  ok('...within the printer band, never a perfect copy',
+     made.sim>=C.FAB_SIM[0]-2&&made.sim<=C.FAB_SIM[1]+2,
+     made.sim.toFixed(1)+'% vs band '+C.FAB_SIM[0]+'-'+C.FAB_SIM[1]);
+  ok('the variant is for this object',SD.invFor(keys.id).length===1);
 
   var before=JSON.parse(JSON.stringify(keys.spec));
   var posBefore=keys.spec._pos.slice();
-  var chosen=made[2];                        // the least similar of the three
-  SD.swapWith(keys,2);
+  var chosen=made;                           // M39: the printer makes one, not three
+  SD.swapWith(keys,0);
   ok('swapping changes the spec',JSON.stringify(keys.spec)!==JSON.stringify(before));
   ok('swapping does NOT move the object',
      keys.spec._pos[0]===posBefore[0]&&keys.spec._pos[2]===posBefore[2],
      'stayed at '+keys.spec._pos.map(function(v){return v.toFixed(2);}).join(','));
-  ok('the swapped variant leaves the bag',SD.INV.length===2);
+  ok('the swapped variant leaves the bag',SD.INV.length===0);
   ok('the world mesh was rebuilt',keys.group&&keys.group.userData.objId===keys.id&&
      near(keys.group.position.x,posBefore[0],1e-9));
   ok('the change is on tonight\'s ledger, unresolved',
@@ -184,9 +187,16 @@ try{
   var cereal=SD.objects.filter(function(o){return o.kind==='cerealBox';})[0];
   ok('the cereal belongs to June',cereal.owner==='june');
   SD.scanObject(cereal);
-  var cMade=SD.requisition(cereal);
+  /* M39: this needs a VERY close match to make its point, and the printer cannot aim
+     that high - its ceiling is FAB_SIM[1]. Buy the closest rung instead, which is
+     what a shop is for and what the assertion has always been about. */
+  SD.GAME.bank=100000;SD.GAME.hk=99;
+  var cStock=SD.shopStock(cereal.id,'bulwark')||[];
+  var bestIdx=0;
+  cStock.forEach(function(v,i){if(v.sim>cStock[bestIdx].sim)bestIdx=i;});
+  SD.buyVariant(cereal.id,bestIdx,'bulwark');
   var juneBefore=R.june.doubt;
-  SD.swapWith(cereal,0);                     // the 97% match
+  SD.swapWith(cereal,0);                     // the closest match the shop sells
   var l3=SD.doMorning();
   info('morning: '+l3[0].label+' -> '+l3[0].r.band+'  '+l3[0].r.similarity.toFixed(1)+
        '% similar, delta '+l3[0].r.delta.toFixed(1)+' vs floor '+l3[0].r.floor);

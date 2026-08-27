@@ -26,7 +26,7 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
   var docs=document.body.innerHTML;
   /* The keys the handler actually acts on, gathered from the source rather than
      from a list somebody has to remember to update. */
-  var bound=['e','q','tab','m','z','x'];
+  var bound=['e','q','tab','m','z','x','f','r'];   // f,r added M39
   /* Keys are written the way a person reads them, so the panel says <b>Z / X</b> for
      a pair and <b>Tab</b> in title case. Match the key INSIDE any <b> block rather
      than demanding an exact tag - the first version of this check reported Z and X
@@ -46,9 +46,14 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
 (function(){
   var ids=SD.GUIDE_STEPS.map(function(s){return s.id;});
   info('the chain: '+ids.join(' > '));
-  ok('the original nine steps are all still there',
-     ['leave','key','in','scan','home','shop','back','swap','out']
-       .every(function(id){return ids.indexOf(id)>=0;}));
+  /* M39 retired `home` ("go home, nothing else can happen tonight") because the loop
+     now closes before dawn - `out` is the going-home step, and `fab` took the slot
+     where the player used to have to wait a whole day. */
+  ok('the original chain is all still there, less the step that stopped being true',
+     ['leave','key','in','scan','shop','back','swap','out']
+       .every(function(id){return ids.indexOf(id)>=0;}),
+     ids.join(' > '));
+  ok('...and `home` is gone on purpose',ids.indexOf('home')<0);
   ok('THE RAIL TEACHES THE SCANNER',ids.indexOf('read')>=0);
   ok('THE RAIL TEACHES FENCING',ids.indexOf('fence')>=0,
      'without it a player follows the tutorial into bankruptcy');

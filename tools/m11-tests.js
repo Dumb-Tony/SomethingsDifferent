@@ -78,7 +78,10 @@ try{
      Object.keys(SD.GUIDE_STEPS.reduce(function(a,s){a[s.id]=1;return a;},{})).length
        ===SD.GUIDE_STEPS.length);
   ok('the chain covers the whole loop, not just the break-in',
-     ['leave','key','in','scan','home','shop','back','swap','out']
+     /* M39: `home` is gone - it was "go home, nothing else can happen tonight", which
+        stopped being true the moment the loop closed before dawn. `out` covers going
+        home, and `fab` is the step that replaced the wait. */
+     ['leave','key','in','scan','fab','swap','out','shop','back']
        .every(function(id){return SD.GUIDE_STEPS.some(function(s){return s.id===id;});}),
      SD.GUIDE_STEPS.map(function(s){return s.id;}).join(' > '));
 
@@ -126,28 +129,20 @@ try{
   var mug=SD.objects.filter(function(o){return o.kind==='coffeeMug';})[0];
   SD.scanObject(mug);
   note('scanned');
-  ok('SCANNING advances it',at()==='home',at());
+  ok('SCANNING advances it',at()==='fab',at());
 
-  // home -> end the night
-  SD.endNight('home','You are back before anyone stirs.');
-  note('went home');
-  ok('GOING HOME advances it',at()==='shop',at());
+  /* M39 - THE WHOLE LOOP NOW HAPPENS ON NIGHT ONE. This walk used to go
+     scan -> go home -> shop -> come back -> swap, which is two nights and a day
+     before the player learns whether anybody noticed anything. The rail teaches
+     print-and-swap first now, and the shops afterwards as the upgrade. */
+  // fab -> print a copy on the spot
+  var printed=SD.fabricate(mug);
+  note('printed');
+  ok('PRINTING A COPY advances it',at()==='swap',at());
+  ok('...and there is something in the bag',SD.INV.length>0,
+     SD.INV.length+' item at '+(printed?printed.sim.toFixed(1)+'%':'?'));
 
-  // shop -> buy something
-  SD.GAME.bank=500000;SD.GAME.hk=99;
-  var stock=SD.shopStock(mug.id,'bulwark');
-  SD.buyVariant(mug.id,2,'bulwark');
-  note('bought');
-  ok('BUYING advances it',at()==='back',at());
-  ok('...and there is something in the bag',SD.INV.length>0,SD.INV.length+' items');
-
-  // back -> the next night begins
-  SD.S.menuOpen=false;
-  SD.beginNight();
-  note('night 2');
-  ok('THE NEXT NIGHT advances it',at()==='swap',at());
-
-  // swap -> plant it
+  // swap -> plant it, the same night
   var mine=SD.invFor(mug.id);
   SD.swapWith(mug,mine.length-1);
   note('swapped');
@@ -155,7 +150,22 @@ try{
   ok('...and it is really on tonight\'s ledger',SD.PENDING.length>0,
      SD.PENDING.length+' pending');
 
-  // out -> home again
+  // out -> home before dawn, and the morning resolves it
+  SD.endNight('home','You are back before anyone stirs.');
+  note('went home');
+  ok('GOING HOME advances it',at()==='shop',at());
+
+  // shop -> buy a better one
+  SD.GAME.bank=500000;SD.GAME.hk=99;
+  SD.buyVariant(mug.id,2,'bulwark');
+  note('bought');
+  ok('BUYING advances it',at()==='back',at());
+
+  // back -> the next night begins
+  SD.S.menuOpen=false;
+  SD.beginNight();
+  note('night 2');
+  ok('THE NEXT NIGHT advances it',at()==='fence',at());
   SD.endNight('home','Back on your own path before the sky changes.');
   note('home again');
 
@@ -184,7 +194,7 @@ try{
         two steps collapse in one tick - the same behaviour section 5 celebrates when
         four go at once. What must hold is that every step is either REACHED or
         SATISFIED, and that the chain finishes. */
-     trace.join(',')==='leave,key,in,read,home,shop,back,swap,out,fence,meet,DONE',
+     trace.join(',')==='leave,key,in,read,fab,swap,out,shop,back,fence,meet,DONE',
      trace.join(','));
   ok('...and nothing was skipped WITHOUT being satisfied',
      SD.GUIDE_STEPS.every(function(s){return trace.indexOf(s.id)>=0||s.done();}),
@@ -225,9 +235,10 @@ try{
   SD.scanObject(SD.objects.filter(function(o){return o.kind==='keyring';})[0]);
   G.tick();
   ok('DOING THINGS OUT OF ORDER SKIPS AHEAD rather than getting stuck',
-     G.step()&&G.step().id==='home',G.step()?G.step().id:'DONE');
+     G.step()&&G.step().id==='fab',G.step()?G.step().id:'DONE');
   info('five steps collapsed in one tick - including "find the key", satisfied by');
-  info('never finding a key, and "read the room", satisfied by not needing to');
+  info('never finding a key, and "read the room", satisfied by not needing to.');
+  info('M39: it now lands on "print a copy", which is the first thing left to DO');
   info('a step asserts the STATE it wanted, not the route taken');
 
   /* ── 6. the guide is skippable, and the preference outlives the run ────────*/

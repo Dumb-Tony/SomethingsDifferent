@@ -449,7 +449,40 @@ Dev-wide catalog of what already exists and where to copy it from.
   of any kind. Plus a refused `Q`, which was silent and so indistinguishable from a
   dropped keypress on a four-second cooldown with no meter. 27 assertions, green first
   run.
-  **1302 assertions across thirty-eight suites.**
+
+
+- 2026-08-27 - **M39 DONE - THE LOOP CLOSES BEFORE DAWN.** *Playtest feedback: "it's
+  still a pretty unplayable game."* I drove the live build and measured why. Buying
+  anything requires a prior scan, and the shops are a **daytime** action - so the loop
+  was **scan tonight, buy tomorrow midday, swap tomorrow night, learn the result the
+  morning after**. Two full cycles and about twenty-six minutes of night between
+  touching an object and finding out whether anybody noticed, in a game whose entire
+  subject is whether anybody noticed. On night one you could not play the game at all;
+  you could only take inventory.
+  **The scanner prints now.** Scan a thing, run off a rough match on the spot, swap it
+  the same night. Measured after: **1 night from first touch to answer** (was 2), **$0
+  spent** (a shop trip was mandatory before), and a full night of printing produces
+  **12 swaps landing 6 DOUBT / 5 MISSED / 1 CERTAINTY**, collapse 17.6 of 40.
+  **What keeps the shops alive is that the printer cannot aim.** It lands somewhere in
+  `FAB_SIM` and you do not choose where - measured across forty prints: **75.3 to 94.0,
+  mean 83.6**. Against Walt's keys his DOUBT window is similarity 80-93, so it lands
+  inside often, overshoots sometimes, and sometimes prints something he walks straight
+  past. Shops sell **precision**: a chosen rung, a known number, a forecast to read it
+  against, and an antique-shop ceiling of 99%. That is what money is for now.
+  `variantNear` aims and misses - the first version delivered **98.0%**, within a point
+  of a $48 antique-shop match, which would have made the shops pointless. It now
+  retries up to eight times for a result inside the band.
+  **THIS DELIBERATELY REVERSES PART OF M33**, and the terms are the whole design:
+  M33 removed a key giving **three matched variants (97/92/80%), chosen, free, silent,
+  unlimited**. This gives **one copy, a similarity you do not choose, paid for in
+  noise, once per object per night, capped below anything a shop sells**. m33's suite
+  still asserts the thing it always asserted - that R cannot hand you a free shortcut
+  past the economy.
+  The rail was restructured to match: `fab` after `scan`, `swap` and `out` moved ahead
+  of `shop`, and `home` ("nothing else can happen tonight") retired, because it stopped
+  being true. m4, m11, m29 and m33 all encoded the old contract and were updated to
+  state the new one. 32 assertions.
+  **1337 assertions across thirty-nine suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is

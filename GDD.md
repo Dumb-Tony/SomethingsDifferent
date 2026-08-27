@@ -1608,6 +1608,14 @@ previous one runs in a browser.**
   fence, the afternoon, the familiarity beat, the evening, and a refused scan all make
   a sound now. The WORLD mixer slider previews a cue that is actually on the world bus.
 
+
+- **M39 — the loop closes before dawn.** `fabricate()` replaces `requisition()`: the
+  scanner prints one unaimed rough match on the spot, so scan → print → swap → morning
+  all happen in a single night. Measured: 1 night from first touch to answer, down from
+  2, with no money spent. The printer's band (`FAB_SIM` 74–94, measured 75.3–94.0) sits
+  deliberately below the shops, which sell a *chosen* rung up to 99% — precision is
+  what money buys now. Guide chain restructured so night one reaches a swap.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

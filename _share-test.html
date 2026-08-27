@@ -264,7 +264,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M38 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M39 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -312,6 +312,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>E</b><span>examine / search / open &mdash; and at a wardrobe, a hedge or a shed,
       hide, and again to come out</span>
     <b>Q</b><span>scan pulse &mdash; marks their things, and is heard</span>
+    <b>F</b> / <b>R</b><span>on a held object: record it, then print a rough copy</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; end the night, see the morning</span>
     <b>F3</b><span>toggle debug readout</span>
@@ -436,7 +437,10 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
   </div>
   <div class="sub" style="font-size:13px">Holding an object &mdash; that is, once you press <b>E</b> on one:</div>
   <div class="keys">
-    <b>F</b><span>scan it into the catalog (you cannot buy what you have not recorded)</span>
+    <b>F</b><span>scan it into the catalog (you cannot copy what you have not recorded)</span>
+    <b>R</b><span>print a rough copy on the spot &mdash; the only kind you can get before
+      morning. It cannot aim, it is loud, and it runs once per object per night. A shop
+      sells you a <i>chosen</i> match instead</span>
     <!-- M36: Z / X was listed TWICE - M33 added a row here when it removed the R key
          without noticing the original four lines down. -->
     <b>1 &hellip; 9</b><span>swap in one of the matches in your bag &mdash; <b>you keep
@@ -726,6 +730,27 @@ const CONST={
   SCAN_T      : 6.0,        // seconds the marks stay up
   SCAN_CD     : 4.0,        // ...and before you can pulse again
   SCAN_NOISE  : 2.6,        // in sleeper-noise units: LOUDER than a single scan
+  /* ── THE FABRICATOR (M39) ────────────────────────────────────────────────
+     MEASURED, on the live build: buying anything requires a prior scan, and the
+     shops are a DAYTIME action - so the loop was scan tonight, buy tomorrow midday,
+     swap tomorrow night, learn the result the morning after. Two full cycles and
+     about twenty-six minutes of night between touching an object and finding out
+     whether anybody noticed, in a game whose entire subject is whether anybody
+     noticed. Night one you could not play the game at all; you could only take
+     inventory.
+
+     The alien has a scanner. Now it prints, too. Scan a thing, run off a rough
+     match, swap it tonight - the loop closes before dawn.
+
+     WHAT KEEPS THE SHOPS ALIVE is that the fabricator cannot AIM. It lands
+     somewhere in this band and you do not choose where; measured against Walt's
+     keys, his DOUBT window is similarity 80-93 (delta 16-60), so this band lands
+     inside it often, overshoots into CERTAINTY sometimes, and sometimes prints
+     something so close he walks straight past it. The shops sell PRECISION: a
+     chosen rung, a known number, and a forecast to read it against. That is what
+     money is for now. */
+  FAB_SIM     : [74,94],    // the band the on-board fabricator can hit, unaimed
+  FAB_NOISE   : 2.2,        // loud. Quieter than a pulse, far louder than a scan
   // -- the look (M21) ------------------------------------
   /* MEASURED before touching anything (tools/_look.js): 684 materials, of which 610
      are Lambert and 74 Basic and ZERO have a specular term - wood, ceramic, glass and
@@ -4975,22 +5000,19 @@ const GUIDE_STEPS=[
    why:'You cannot order a copy of a thing you have not recorded. That gate is the '+
        'whole reason this is a job and not a menu.',
    done:()=>Object.keys(CATALOG).length>0},
-  {id:'home',
-   t:'Go home &mdash; <b>M</b>',
-   why:'Nothing else can happen tonight. The shops open in the morning.',
-   done:()=>!NIGHT.running},
-  {id:'shop',
-   t:'Drive to a shop and buy something <i>almost</i> the same',
-   why:'Three shops, and they stock different amounts of wrong. The scanner forecasts '+
-       'what each one will do to its owner &mdash; you want the ones that say DOUBT.',
+  /* M39 - THE CHAIN NOW CLOSES ON NIGHT ONE. It used to run scan -> go home -> shop
+     -> come back -> swap, which is two nights and a day before the player ever found
+     out whether anybody noticed anything. The fabricator lets the whole loop happen
+     before dawn, so the rail teaches it in that order and the shops come afterwards,
+     as the upgrade they now are. */
+  {id:'fab',
+   t:'Print a copy of it &mdash; <b>R</b>',
+   why:'The scanner works both ways. It will run off a rough match on the spot, which '+
+       'is the only kind you can get before morning &mdash; but it cannot aim, and it '+
+       'is loud enough to be heard through a doorway.',
    done:()=>INV.length>0},
-  {id:'back',
-   t:'Get through the day, then go back out',
-   why:'Being a convincing husband costs you the time you wanted for other things. '+
-       'That is the trade.',
-   done:()=>NIGHT.running},
   {id:'swap',
-   t:'Swap it in &mdash; <b>E</b> on the object, then <b>1</b>',
+   t:'Swap it in &mdash; <b>1</b>',
    why:'Put the copy exactly where the original was. Nudging things with the arrow '+
        'keys counts as a change too.',
    done:()=>PENDING.length>0},
@@ -4998,6 +5020,17 @@ const GUIDE_STEPS=[
    t:'Get home before dawn &mdash; <b>M</b>',
    why:'Then read the morning report. That is where you find out what they made of it.',
    done:()=>!NIGHT.running},
+  {id:'shop',
+   t:'Buy a better one &mdash; at <b>Bulwark Mart</b>',
+   why:'The fabricator gambles; a shop lets you pick the number. Three of them, '+
+       'stocking different amounts of wrong, and the scanner forecasts what each will '+
+       'do to its owner &mdash; you want the ones that say DOUBT.',
+   done:()=>!!GAME.everBought},
+  {id:'back',
+   t:'Get through the day, then go back out',
+   why:'Being a convincing husband costs you the time you wanted for other things. '+
+       'That is the trade.',
+   done:()=>NIGHT.running},
   /* M29 - the two steps the guide has been missing since the game changed under it.
      FENCING IS NOT OPTIONAL: measured, a whole slice affords fifteen swaps on wages
      alone and reaches collapse 32 against a bar of 40. A player who follows this
@@ -6695,6 +6728,11 @@ function buyVariant(objId,idx,storeId){
   const how=spend(it.price);
   if(!how)return 'poor';
   GAME.bought[key]=true;
+  /* M39: the guide's `shop` step used to be done:()=>INV.length>0, which the
+     fabricator would now satisfy without the player ever seeing a shop - exactly the
+     hole M33 closed when it removed the free-variants key. The step asks whether you
+     BOUGHT something, because that is what it is teaching. */
+  GAME.everBought=true;
   INV.push({kind:it.kind,spec:it.spec,forId:objId,label:it.label,sim:it.sim,store:st.id});
   SFX.cue('buy');
   return how;
@@ -7006,7 +7044,7 @@ const GAME={day:1,hasSpareKey:false,sightings:0,
      haul and the fence, which is a whole milestone of economy thrown away by
      startHouse without ever being shown. A run with no story to retell gives you
      nothing to beat next time. */
-  stats:{swapped:0,scanned:0,pulses:0,nightsOut:0,sold:0,earned:0,hidden:0},
+  stats:{swapped:0,scanned:0,pulses:0,nightsOut:0,sold:0,earned:0,hidden:0,fabbed:0},
   /* M11 — run state, so the guide and the one-off explanations survive a save.
      The player's PREFERENCE (guide on/off, intro seen) is not here: that lives in
      localStorage like the audio mix, because it must outlive any single run. */
@@ -7014,7 +7052,6 @@ const GAME={day:1,hasSpareKey:false,sightings:0,
   /* M14. Which defences the street has installed. Part of GAME so save/load carries
      it for free - a loaded game must not forget it has doorbell cameras. */
   hardened:[],lastHarden:[],lastGossip:[]};
-const REQ_TARGETS=[97,92,80];
 
 function hashStr(s){let h=2166136261;
   for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
@@ -7026,20 +7063,55 @@ function scanObject(o){
   GAME.stats.scanned++;                                        // M32
   hint('Catalogued: '+PROP_KINDS[o.kind].alienName);
 }
-/* Shop stub. Real stores (stock rotation, money, travel, familiarity) are M6; the
-   important half — that acquisition is GATED ON RECON — is real here. */
-function requisition(o){
+/* THE FABRICATOR (M39). This replaces `requisition`, an M6 stub that M33 removed
+   because it handed you THREE matched variants (97/92/80%) instantly and free, which
+   made money, the three shops, the weekly stock roll and the whole fence economy
+   optional. Bringing a key back on that spot deserves saying plainly why it is not
+   the same thing:
+
+     requisition   three variants, chosen similarities, free, silent, unlimited
+     fabricate     ONE variant, a similarity you do NOT choose, costs noise,
+                   once per object per night, and worse than anything a shop sells
+
+   It exists because the loop was two nights long and the game could not be played on
+   the first one. It is deliberately the WORST way to get a copy: it is simply the
+   only way to get one before dawn.
+
+   The recon gate is untouched - you still cannot match what you have not recorded. */
+function fabricate(o){
   const c=CATALOG[o.id];
-  if(!c){hint('Scan it first. You cannot match what you have not recorded.');return null;}
-  const rng=mulberry32(hashStr(o.id)+GAME.day*131);
-  const made=REQ_TARGETS.map(t=>{
-    const v=variantNear(o.kind,c.spec,rng,t);
-    return {kind:o.kind,spec:v,forId:o.id,label:o.label,
-            sim:specDelta(o.kind,c.spec,v).similarity};
-  });
-  made.forEach(m=>INV.push(m));
-  hint('Requisitioned 3 variants of the '+PROP_KINDS[o.kind].alienName.toLowerCase());
-  return made;
+  if(!c){hint('Scan it first. The fabricator has nothing to work from.');return null;}
+  /* No rerolling. If you do not like the number, your options are to use it anyway or
+     to buy a proper match tomorrow - which is the decision this whole thing is for. */
+  if(o.fabDay===GAME.day){
+    hint('The fabricator has already run on this one tonight.');return null;}
+  o.fabDay=GAME.day;
+  const rng=mulberry32((hashStr(o.id+'|fab|'+GAME.day)>>>0)||9);
+  const lo=CONST.FAB_SIM[0],hi=CONST.FAB_SIM[1];
+  /* variantNear aims at a target and MISSES - it is best-effort over a random
+     mutation, not a solver. Measured across forty prints it delivered 73.9 to 98.0
+     against a requested 74-94, and a 98% print is within a point of what the antique
+     shop sells for $48, which would make the shops pointless. So: ask a few times and
+     take the first result that actually lands in the band, keeping the closest as a
+     fallback. The ceiling is the design - the printer must never rival a shop. */
+  let v=null,best=null,bestMiss=Infinity;
+  for(let t=0;t<8;t++){
+    const cand=variantNear(o.kind,c.spec,rng,lo+rng()*(hi-lo));
+    const sim=specDelta(o.kind,c.spec,cand).similarity;
+    if(sim>=lo&&sim<=hi){v=cand;break;}
+    const miss=sim>hi?sim-hi:lo-sim;
+    if(miss<bestMiss){bestMiss=miss;best=cand;}
+  }
+  if(!v)v=best;
+  const item={kind:o.kind,spec:v,forId:o.id,label:o.label,
+              sim:specDelta(o.kind,c.spec,v).similarity,fab:true};
+  INV.push(item);
+  GAME.stats.fabbed=(GAME.stats.fabbed||0)+1;
+  /* Loud. An alien device running off a copy of somebody's mug in their own kitchen
+     at three in the morning should not be free. */
+  emitNoise(o.spec._pos[0],o.spec._pos[2],CONST.FAB_NOISE,'scan');
+  hint('Printed a '+item.sim.toFixed(1)+'% match. It is in the bag &mdash; press 1.');
+  return item;
 }
 function invFor(id){return INV.filter(i=>i.forId===id);}
 
@@ -7430,6 +7502,7 @@ function showEnding(){
   h+='<div class="ds-cols"><div><div class="ds-h">WHAT YOU DID</div>'+
      row('Objects swapped',st.swapped|0)+
      row('Objects catalogued',st.scanned|0)+
+     row('Copies printed',st.fabbed|0)+
      row('Scanner pulses',st.pulses|0)+
      row('Nights out',st.nightsOut|0)+
      (st.hidden?row('Times you hid',st.hidden):'')+
@@ -7788,9 +7861,11 @@ function renderFocus(){
   const act=(key,txt)=>'<div class="fx-act"><b>'+key+'</b> '+txt+'</div>';
   h+='<div class="fx-acts">';
   h+=act('F',c?'re-scan':'scan into the catalog');
-  /* M33: no R row. What you do with a scan now is drive to a shop and pay for it. */
-  h+=act('&nbsp;',c?'<span class="ds-dim">recorded &mdash; the shops can match it</span>'
-                  :'<span class="ds-dim">scan it before you can match it</span>');
+  /* M39: the R row is back, on different terms - see fabricate(). */
+  h+=act('R',c?(o.fabDay===GAME.day
+                 ?'<span class="ds-dim">fabricator already run on this tonight</span>'
+                 :'print a rough copy &mdash; unaimed, and loud')
+             :'<span class="ds-dim">scan it first</span>');
   mine.forEach((m,i)=>{h+=act(''+(i+1),'swap in the '+m.sim.toFixed(1)+'% match');});
   h+=act('&larr;&uarr;&darr;&rarr;','nudge 3cm');
   h+=act('Z / X','turn '+ROT_STEP+'&deg;');
@@ -7809,6 +7884,7 @@ function focusKey(k,e){
   if(e&&e.repeat)return true;
   if(k==='e'||k==='escape'){exitFocus();return true;}
   if(k==='f'){scanObject(o);renderFocus();return true;}
+  if(k==='r'){fabricate(o);renderFocus();return true;}     // M39
   /* M33 - THE 'R' KEY IS GONE. It handed you three matched variants (97/92/80%)
      free, standing in the victim's house at three in the morning, and its own comment
      called it an "M6 stub" that M6 was supposed to replace. M6 shipped nineteen
@@ -8299,8 +8375,9 @@ function startHouse(){
   GAME.over=null;GAME.lastFractures=[];
   GAME.guideStep=0;GAME.guideDone=false;GAME.glossed={};   // a new run re-teaches (M11)
   GAME.everPulsed=false;GAME.everSold=false;               // ...from scratch (M29)
+  GAME.everBought=false;                                   // M39
   GAME.stats={swapped:0,scanned:0,pulses:0,nightsOut:0,    // ...with a blank ledger (M32)
-              sold:0,earned:0,hidden:0};
+              sold:0,earned:0,hidden:0,fabbed:0};
   GAME.callingIn=false;                                    // M34
   GAME.hardened=[];GAME.lastHarden=[];                     // ...on a soft street (M14)
   GAME.lastGossip=[];
@@ -8495,7 +8572,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   objects,objectById,placeObject,respawnObject,
   CATALOG,INV,PENDING,GAME,PLANTERS,DOORS,ceilAt,
   get frontDoor(){return FRONT_DOOR;},
-  scanObject,requisition,invFor,swapWith,nudgeObject,rotateObject,applyChange,
+  scanObject,fabricate,invFor,swapWith,nudgeObject,rotateObject,applyChange,
   doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,
   showReport,showDossier,showEnding,hashStr,
   collapseIndex,streetSuspicion,activeResidents,fracturedCount,checkEnding,
@@ -8585,7 +8662,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M38'};
+  version:'M39'};
 </script>
 
 </body>
