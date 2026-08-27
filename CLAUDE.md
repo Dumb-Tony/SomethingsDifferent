@@ -503,13 +503,43 @@ Dev-wide catalog of what already exists and where to copy it from.
   was dated to the night rather than the morning and nobody ever fretted. It is
   promoted to `fretting` after the increment now, and anything older than today is
   cleared - yesterday's worry is not today's. 21 assertions.
-  **1358 assertions across forty suites.**
+
   **A mistake worth recording:** the first attempt at this milestone terminated a perl
   heredoc with the wrong marker, and **the script's own source got written into the
   game file** - three `DAYFOLK.push` sites where there should be one. Caught by reading
   the result rather than the exit code. Restored from the M39 commit and redone. The
   retry then failed to match anything, because `git checkout` had restored the file
   with **CRLF** and the anchors were LF; normalise line endings before anchoring.
+
+- 2026-08-27 - **M41 DONE - THE NIGHT HAS A PULSE.** *And a correction: I told the user
+  to shrink the street.* 99m wide, 24.8m lots, 83 seconds to sneak across - it sounded
+  like dead time. Then I measured the footprints. **The gaps between neighbouring
+  houses are 2.4 metres.** The street is 99m because the houses and their yards are
+  21.6m wide and 39.7m deep - 108m of building across a 99m street - not because the
+  lots are spread out. There is no slack to remove, and moving `LOT_PITCH` would push
+  the houses into each other. Crossing is not the problem either: a lot is **10s at a
+  walk**, and a sneaked round trip to the farthest house is **16% of a night**. m41
+  pins all of that so nobody acts on the advice I gave.
+  **What the same measurement did find is that the night is empty of TIME.** Two to
+  four events across a 780-second night left gaps of **117s, 143s, 249s, 200s**, and
+  there is nothing else out there: no porch lights until night three, no dogs until
+  four, no watchman until five. The first two nights - the ones a new player forms
+  their whole opinion on - were four silent houses and a walk.
+  `EVENT_COUNT` is 6-8 now, and **the scheduler was the real fault**: it walked forward
+  from `EVENT_FIRST` adding a random step, so a night that drew small steps put
+  everything in the first half and left the tail silent - across ten nights the worst
+  stretch was **321s**, almost always at the end. Events are dealt into even slots
+  across the whole budget now and jittered inside the slot, so coverage is guaranteed
+  by construction. Measured across ten nights: worst silent stretch **249s -> 150s**,
+  mean **96s**.
+  **And a room with somebody asleep in it is no longer an empty room.** A sleeper did
+  nothing at all until *you* made a noise. They turn over now, on their own rhythm,
+  and the bed complains - 39 sounds in two minutes of standing still. It deliberately
+  touches neither `s.noise` nor `s.sinceStir`: being woken by something you did not do
+  would be unfair, and the point is **presence, not difficulty**. Asserted: five
+  minutes of a player doing nothing leaves noise at 0.0000 and the sleeper asleep.
+  15 assertions.
+  **1373 assertions across forty-one suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is

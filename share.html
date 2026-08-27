@@ -255,7 +255,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M40 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M41 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -783,7 +783,14 @@ const CONST={
      are seeded per night, so a night is a fact you can learn rather than a dice roll,
      and every one of them is a WORLD CHANGE - noise, light, or a body in a room -
      rather than a cutscene. */
-  EVENT_COUNT : [2,4],      // how many fire in one night, inclusive
+  /* M41. MEASURED: two to four events across a 780-second night left gaps of 117s,
+     143s, 249s and 200s - up to four minutes in which nothing whatsoever happens, on
+     the first two nights, which are the ones a new player forms their whole opinion
+     on. Nothing else is out there either: no porch lights until night three, no dogs
+     until four, no watchman until five. Raised so the night has a pulse. The ceiling
+     is set by EVENT_GAP against the budget: (6.5 - 0.55 - 0.35) / 0.65 is about
+     eight, so nine would silently clip. */
+  EVENT_COUNT : [6,8],      // how many fire in one night, inclusive
   EVENT_FIRST : 0.55,       // earliest, in game hours after 23:00
   EVENT_GAP   : 0.65,       // minimum game hours between two of them
   // ── the neighbourhood (M17) ───────────────────────────
@@ -6116,10 +6123,32 @@ function updateSleepers(dt){
       if(canSee(s,px,pz)){onSeen(s);return;}
       if(s.awake<=0&&s.noise<th*0.4){s.state='asleep';s.look=0;}
     }
+    /* M41. A HOUSE WITH SOMEBODY ASLEEP IN IT IS NOT AN EMPTY ROOM. Until now a
+       sleeper did nothing at all until YOU made a noise, so the first two nights -
+       before any hardening exists - were four silent houses and a walk. They turn
+       over now, on their own rhythm, and the bed complains.
+
+       It costs nothing. This deliberately does NOT touch s.noise or s.sinceStir:
+       being woken by something you did not do would be unfair, and the point is
+       PRESENCE, not difficulty. It is a sound and a movement, and the only thing it
+       changes is whether the room feels occupied. */
+    if(s.state==='asleep'){
+      s.turnT=(s.turnT===undefined)?2+((i*7)%11):(s.turnT-dt);
+      if(s.turnT<=0){
+        s.turnT=14+((hashStr(s.res+'|'+Math.floor(NIGHT.t*10))>>>0)%13);
+        s.turnPh=1.0;                                   // a second and a bit of it
+        SFX.world('handle',s.x,s.z,CONST.N_HANDLE*0.22,'cloth');
+      }
+      if(s.turnPh>0)s.turnPh=Math.max(0,s.turnPh-dt);
+    }else s.turnPh=0;
+
     const tor=s.group&&s.group.userData.torso;
     if(tor){
       const want=s.state==='asleep'?0:(s.state==='stirring'?-0.42:-1.15);
       tor.rotation.x+=(want-tor.rotation.x)*Math.min(1,dt*5);
+      /* the turn itself: a roll, not a sit-up */
+      if(s.turnPh>0)tor.rotation.z=Math.sin(s.turnPh*Math.PI)*0.30;
+      else tor.rotation.z+=(0-tor.rotation.z)*Math.min(1,dt*4);
     }
   }
 }
@@ -6256,11 +6285,20 @@ function planNightEvents(){
   const lo=CONST.EVENT_COUNT[0],hi=CONST.EVENT_COUNT[1];
   const n=lo+Math.floor(rng()*(hi-lo+1));
   const kinds=['phone','light','fox','water'];
-  let t=CONST.EVENT_FIRST,last=null;
+  /* M41. THE OLD SCHEDULER WALKED FORWARD FROM EVENT_FIRST, adding a random step
+     each time, so a night that drew small steps put everything in the first half and
+     left the rest silent - measured across ten nights, the worst stretch with nothing
+     in it was 321 REAL SECONDS, and it was almost always the tail. Deal the events
+     into even slots across the whole budget instead and jitter inside the slot: the
+     coverage is then guaranteed by construction rather than by luck, and the last
+     event lands near the end of the night where it belongs. */
+  const first=CONST.EVENT_FIRST,span=budget-0.35-first;
+  const slot=span/n;
+  let t=first,last=null;
   for(let i=0;i<n;i++){
     const room=budget-0.35-t;
     if(room<=0)break;
-    t+=rng()*Math.min(1.5,room);
+    t=Math.max(t,first+i*slot+rng()*slot*0.45);
     /* Never the same thing twice running. The first seeded night this produced was
        fox, light, light, light - which reads as a bug in the world rather than as a
        night. Drawing from what has NOT just happened costs one line. */
@@ -8723,6 +8761,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M40'};
+  version:'M41'};
 </script>
 

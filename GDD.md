@@ -1623,6 +1623,15 @@ previous one runs in a browser.**
   against +1 for a garden chat. `res.fretting` is promoted after `GAME.day++` so the
   worry belongs to the morning that revealed it, not the night that caused it.
 
+
+- **M41 — the night has a pulse.** `EVENT_COUNT` 2–4 → 6–8, and the scheduler deals
+  events into even slots across the budget instead of walking forward from the start,
+  which used to leave the tail of the night silent. Worst stretch with nothing
+  happening: 249s → 150s, mean 96s. Sleepers turn over on their own rhythm — audible
+  and visible, and deliberately not connected to the meters that wake them.
+  **Measured and NOT changed:** the street's 99m is 108m of building, with 2.4m gaps
+  between houses. There is no spacing to remove.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
