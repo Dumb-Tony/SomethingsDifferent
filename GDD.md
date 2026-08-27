@@ -1616,6 +1616,13 @@ previous one runs in a browser.**
   deliberately below the shops, which sell a *chosen* rung up to 99% — precision is
   what money buys now. Guide chain restructured so night one reaches a swap.
 
+
+- **M40 — doubt is something you watch.** A resident who doubted something spends the
+  next afternoon indoors standing over it, lifting it and putting it down on a loop,
+  visible from the street through the window (M23's glass). Approaching one pays +6 HK
+  against +1 for a garden chat. `res.fretting` is promoted after `GAME.day++` so the
+  worry belongs to the morning that revealed it, not the night that caused it.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

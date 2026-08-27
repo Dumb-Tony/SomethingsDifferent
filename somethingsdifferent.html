@@ -261,7 +261,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M39 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M40 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -4265,6 +4265,28 @@ function folkTick(dt){
     if(!f.group)continue;
     if(f.ph===undefined){f.ph=(i*1.7)%6.283;f.baseY=f.group.rotation.y;}
     const P=f.group.userData.parts;
+    /* M40. SOMEBODY WHO DOUBTED SOMETHING LAST NIGHT IS NOT WAITING IN A GARDEN.
+       They stand over the thing doing the same few seconds again and again: stoop to
+       it, lift it in both hands, look down at it, put it back, step off, come back.
+       It is a LOOP on purpose - the repetition IS the tell, and it reads from the
+       street through the window without a word of text. */
+    if(f.fret){
+      const c=(t*0.85+f.fret.phase)%6.283;
+      const reach=Math.max(0,Math.sin(c));
+      if(P){
+        P.armL.rotation.x=-reach*1.15;      // both hands, holding not waving
+        P.armR.rotation.x=-reach*1.15;
+        P.torso.rotation.x=reach*0.30;      // stoops to it, then straightens
+        P.torso.rotation.y=Math.sin(c*0.5)*0.10;
+        P.head.rotation.x=reach*0.34;       // ...and looks down at it
+      }
+      f.group.rotation.y=f.baseY+Math.sin(c*0.33)*0.22;
+      /* and steps back off it between goes, which is what makes it read as doubt
+         rather than as tidying up */
+      f.group.position.set(f.x,Math.abs(Math.sin(c))*0.010,
+                           f.z-Math.max(0,Math.sin(c*0.5))*0.30);
+      continue;
+    }
     const sway=Math.sin(t*0.7+f.ph);
     f.group.rotation.y=f.baseY+sway*0.10;
     f.group.position.y=Math.abs(Math.sin(t*0.55+f.ph))*0.012;
@@ -6769,13 +6791,30 @@ function buildFolk(){
     mine.forEach((id,k)=>{
       const r=RESIDENTS[id];
       if(r.collapsed)return;                      // they are not coming out today
-      const spot=FOLK_SPOTS[(k+Math.floor(rng()*FOLK_SPOTS.length))%FOLK_SPOTS.length];
       const g=makeWalker(id,null);                 // seeded off WHO they are
-      const x=h.x+spot[0],z=spot[1];
-      g.position.set(x,0,z);g.rotation.y=Math.PI+ (rng()-0.5)*0.9;
+      /* M40. IF THEY DOUBTED SOMETHING LAST NIGHT THEY ARE NOT IN THE GARDEN. They
+         are indoors, standing over the thing, picking it up and putting it down -
+         and M23 made sight pass through GLASS, so you can watch it from the street
+         through their front window. The best moment in this design - somebody who no
+         longer trusts their own kitchen - used to be a sentence on a report screen. */
+      const fret=(r.fretting&&r.fretting.day===GAME.day)?r.fretting:null;
+      const fo=fret?objectById(fret.objId):null;
+      let x,z,where,fretting=null;
+      if(fo&&fo.spec&&fo.spec._pos){
+        /* Just south of it, facing north into it, so somebody at the front window
+           sees the person and the object in the same glance. */
+        x=fo.spec._pos[0];z=fo.spec._pos[2]-0.75;
+        where='indoors, standing over '+fret.label;
+        fretting={objId:fret.objId,label:fret.label,phase:rng()*6.28};
+        g.position.set(x,0,z);g.rotation.y=0;
+      }else{
+        const spot=FOLK_SPOTS[(k+Math.floor(rng()*FOLK_SPOTS.length))%FOLK_SPOTS.length];
+        x=h.x+spot[0];z=spot[1];where=spot[2];
+        g.position.set(x,0,z);g.rotation.y=Math.PI+ (rng()-0.5)*0.9;
+      }
       scene.add(g);envMeshes.push(g);
-      DAYFOLK.push({res:id,name:r.name,x:x,z:z,group:g,where:spot[2],
-                    pos:[x,1.15,z],spoken:false});
+      DAYFOLK.push({res:id,name:r.name,x:x,z:z,group:g,where:where,
+                    pos:[x,1.15,z],spoken:false,fret:fretting});
     });
   });
 }
@@ -6789,6 +6828,19 @@ function talkTo(f){
   /* M25: this is what the afternoon is FOR. */
   const gained=famAdd(f.res,CONST.FAM_TALK);
   SFX.cue('morning');   // M38: the payoff of the afternoon was silent
+  /* M40. WATCHING SOMEBODY COME APART IS WORTH MORE THAN SMALL TALK OVER A FENCE.
+     GDD 5.4 says watching a neighbour is how you learn to be human; until now every
+     approach paid the same regardless of what you walked up to. Catching one of them
+     standing over the thing you swapped, doing it again, is the lesson. */
+  if(f.fret){
+    hkGain(6);
+    const line=f.name+' has '+f.fret.label+' in both hands. They put it down, step '+
+      'back, look at it, and pick it up again. They do not know you are there.';
+    hint(line);DAY.log.push(line);
+    if(gained>0)DAY.log.push('You stayed a while. '+f.name+' half-noticed you and '+
+      'did not mind.');
+    return;
+  }
   const beat=reactionBeat(r);
   if(beat){hkGain(3);hint(beat);DAY.log.push(beat);}
   else{
@@ -7520,11 +7572,28 @@ function doMorning(){
     const probe={kind:o.kind,spec:p.before,attach:o.attach,marked:o.marked,fresh:o.fresh};
     const r=DOUBT.resolve(res,probe,o.spec);
     DOUBT.commit(res,o,o.spec,r);
-    if(r.band==='DOUBT')res.beats=(res.beats||0)+1;   // drives the public reaction beat
+    if(r.band==='DOUBT'){
+      res.beats=(res.beats||0)+1;   // drives the public reaction beat
+      /* M40. WHICH object did it. Doubt has only ever existed as a number on a report
+         screen; this is the handle that lets the afternoon SHOW it - they spend the
+         next day at the thing, picking it up and putting it down. Stamped with the
+         day BELOW, after GAME.day++, because the afternoon they act it out on is the
+         one this morning belongs to, not the night that caused it. */
+      res._fretPending={objId:o.id,label:o.label};
+    }
     lines.push({label:o.label,kind:o.kind,owner:o.owner,name:res.name,r:r,
                 labels:p.labels.slice(),doubtNow:res.doubt,suspNow:res.suspicion});
   }
   PENDING.length=0;GAME.day++;
+  /* M40: now that the date is today's, the morning's doubts become this afternoon's
+     behaviour. Anybody who did not doubt anything this morning stops fretting. */
+  Object.keys(RESIDENTS).forEach(id=>{
+    const r=RESIDENTS[id];
+    if(r._fretPending){
+      r.fretting={objId:r._fretPending.objId,label:r._fretPending.label,day:GAME.day};
+      r._fretPending=null;
+    }else if(r.fretting&&r.fretting.day<GAME.day)r.fretting=null;
+  });
   /* Gossip runs BEFORE fractures so a fracture threshold can be crossed by what the
      street said about you, not only by what you did (M16). */
   GAME.lastGossip=gossip(lines);
@@ -8374,6 +8443,7 @@ function startHouse(){
   WIFE.susp=0;DAY.block=0;DAY.actions=CONST.ACTIONS_PER_BLOCK;DAY.log=[];
   Object.keys(RESIDENTS).forEach(id=>{
     const r=RESIDENTS[id];r.doubt=0;r.suspicion=0;r.stress=0;r.beats=0;
+    r.fretting=null;                                          // M40
     r.fired={};r.collapsed=false;r.familiar=0;});
   RESIDENTS.walt.sleepQuality=0.50;RESIDENTS.june.sleepQuality=0.40;
   GAME.lastFractures=[];
@@ -8651,7 +8721,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M39'};
+  version:'M40'};
 </script>
 </body>
 </html>

@@ -482,7 +482,34 @@ Dev-wide catalog of what already exists and where to copy it from.
   of `shop`, and `home` ("nothing else can happen tonight") retired, because it stopped
   being true. m4, m11, m29 and m33 all encoded the old contract and were updated to
   state the new one. 32 assertions.
-  **1337 assertions across thirty-nine suites.**
+
+
+- 2026-08-27 - **M40 DONE - DOUBT IS SOMETHING YOU WATCH.** The best moment in this
+  design is somebody standing in their own kitchen not trusting a mug, and for forty
+  milestones that moment has been **a sentence on a report screen**. Doubt existed only
+  as a number: you swapped a thing, went home, read a paragraph, and the number moved.
+  Now the person who doubted something spends the next afternoon **indoors, standing
+  over it** - stooping to it, lifting it in both hands, looking down at it, putting it
+  back, stepping off, coming back - and M23 made sight pass through **glass**, so you
+  can stand on the street and watch it through their front window. **The loop is the
+  tell**: somebody tidying does a thing once; somebody who no longer trusts their own
+  memory of a room does it, walks away, and comes back. Measured: they stand **0.75m**
+  from the object, their arms travel **1.15 radians** against **0.12** for a neighbour
+  with nothing on their mind, and they step **0.30m** back and return.
+  Walking up to one is worth **+6 Human Knowledge against +1** for small talk over a
+  fence - GDD 5.4 says watching a neighbour come apart is how you learn to be human,
+  and until now every approach paid the same regardless of what you walked up to.
+  `doMorning` increments `GAME.day` *after* its loop, so a worry recorded in the loop
+  was dated to the night rather than the morning and nobody ever fretted. It is
+  promoted to `fretting` after the increment now, and anything older than today is
+  cleared - yesterday's worry is not today's. 21 assertions.
+  **1358 assertions across forty suites.**
+  **A mistake worth recording:** the first attempt at this milestone terminated a perl
+  heredoc with the wrong marker, and **the script's own source got written into the
+  game file** - three `DAYFOLK.push` sites where there should be one. Caught by reading
+  the result rather than the exit code. Restored from the M39 commit and redone. The
+  retry then failed to match anything, because `git checkout` had restored the file
+  with **CRLF** and the anchors were LF; normalise line endings before anchoring.
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
