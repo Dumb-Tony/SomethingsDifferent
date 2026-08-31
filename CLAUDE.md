@@ -1236,3 +1236,37 @@ expensive.** m54 measures the window rather than assuming it.
 - `cue()` lives inside the SFX closure; the global handle is `SFX.cue`. And
   `updateHUD(dt)` *decrements a throttle with its argument*, so calling it bare would
   have set `hudT` to NaN and stopped the entire HUD updating for the rest of the run.
+
+## M55 — a power nobody presses is worth nothing
+
+M54 built Temporal Freeze and documented it in exactly one place: the controls screen,
+which a player reads once, before they know what any of it means. Nothing in the
+running game ever mentioned it. On the evidence of every milestone in this file that
+shipped a mechanic nobody could reach, that is the same as not building it.
+
+Two places, chosen for when a person actually looks:
+
+- **The moment somebody sits up.** The stir line has always said "go still". The first
+  time it fires in a run it now says what else there is — and never again, and never at
+  all to somebody who has already used it. That is the moment the power exists for, and
+  the same moment `enterHide()` starts refusing you the wardrobe.
+- **The dossier.** It held three columns about *them* — residents, catalog, what you
+  are carrying — and not one line about you, in a game whose whole premise is that you
+  are not a person. Tab is the key a curious player presses. It reads live state:
+  ready / holding / recharging / not in daylight.
+
+Deliberately **not** a `GUIDE_STEPS` entry: that is a linear rail, and a panic button
+taught at step seven of twelve is taught while there is nothing to panic about. The
+suite asserts it stays off the rail.
+
+### The harness could hand back a green result for a suite that never ran
+
+`smoketest.ps1` hard-coded **port 8399 and `_smoketest.html`** — both fixed. Two runs
+at once therefore shared one server and overwrote each other's page. Running m55 while
+`publish.sh` was working through its own fifty-odd suites returned **`ALL-PASS pass=23`
+for m36's assertions**: a green result for a file that had never been loaded.
+
+A false pass is far worse than a collision that errors. The port is now `8400 + (PID %
+900)` and the scratch file is `_smoketest-$PID.html`, so concurrent runs cannot see
+each other. m55 was then re-run *during* a publish and came back with its own
+assertions, which is the proof.

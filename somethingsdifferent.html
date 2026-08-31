@@ -307,7 +307,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M54 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M55 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -6522,7 +6522,20 @@ function updateSleepers(dt){
     const th=wakeThreshold(s);
     if(s.state==='asleep'){
       if(s.noise>th){s.state='stirring';s.stir=CONST.STIR_TIME;s.sinceStir=0;
-        SFX.cue('stir');hint(s.name+' stirs. Go still.');}
+        SFX.cue('stir');
+        /* M55. TAUGHT WHERE IT IS USEFUL, NOT ON A RAIL. The freeze is on the
+           controls screen and nowhere else, and a power nobody presses is worth
+           exactly nothing. It does not belong in GUIDE_STEPS either: that is a
+           linear rail, and a panic button taught at step seven of twelve is
+           taught while there is nothing to panic about.
+           So it is taught the first time somebody sits up in the dark - which is
+           the moment it exists for, and the same moment the wardrobe stops being
+           an option. Once per run, and never again once you have used it. */
+        const teach=!(GAME.stats&&GAME.stats.freezes>0)&&!GAME.taughtFreeze;
+        if(teach){
+          GAME.taughtFreeze=true;
+          hint(s.name+' stirs. Go still - or press G, and they get no further.');
+        }else hint(s.name+' stirs. Go still.');}
     }else if(s.state==='stirring'){
       s.stir-=dt;
       /* THE GRACE PERIOD. Escalation depends on what they hear WHILE sitting up —
@@ -9001,7 +9014,26 @@ function showDossier(){
   h+='</div><div><div class="ds-h">CARRIED</div>';
   if(!INV.length)h+='<div class="ds-dim">Bag is empty.</div>';
   INV.forEach(m=>{h+='<div class="ds-row">'+m.label+' &mdash; <b>'+m.sim.toFixed(1)+'%</b></div>';});
+  /* M55. WHAT YOU ARE, LISTED WHERE SOMEBODY WOULD LOOK FOR IT. The dossier held
+     three columns about THEM and nothing at all about you, and the two abilities
+     GDD 5.10 says the slice ships were documented on a controls screen you see once.
+     A power nobody presses is worth nothing, so it goes where a curious player
+     actually opens: the same key they press to check what they are carrying. */
+  h+='<div class="ds-h" style="margin-top:14px">WHAT YOU ARE</div>';
+  h+='<div class="ds-row"><b>Night vision</b> <span class="ds-dim">passive</span>'+
+     '<br><span class="ds-dim">You have never once needed a torch. Nobody has '+
+     'noticed, because nobody has seen you.</span></div>';
+  const cd=S.freeze>0?('holding &mdash; '+S.freeze.toFixed(1)+'s left')
+          :(S.freezeCd>0?('recharging &mdash; '+Math.ceil(S.freezeCd)+'s')
+          :(S.daytime||S.evening?'not in daylight':'ready'));
+  h+='<div class="ds-row"><b>Hold time</b> &mdash; <b>G</b> '+
+     '<span class="ds-dim">'+cd+'</span>'+
+     '<br><span class="ds-dim">'+CONST.FREEZE_T.toFixed(0)+' seconds in which nothing '+
+     'moves but you. Silent, and free &mdash; unless somebody is watching when you do '+
+     'it, and then they stop believing in burglars. Used '+
+     ((GAME.stats&&GAME.stats.freezes)||0)+' times.</span></div>';
   h+='</div></div>';
+
   $('dossier-body').innerHTML=h;
   go('s-dossier');S.menuOpen=true;
 }
@@ -9471,7 +9503,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M54'};
+  version:'M55'};
 </script>
 </body>
 </html>

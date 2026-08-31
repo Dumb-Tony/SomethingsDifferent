@@ -14,11 +14,23 @@
 param(
   [string]$Tests = "tools\m1-tests.js",
   [string]$Game  = "somethingsdifferent.html",
-  [int]$Port     = 8399,
+  [int]$Port     = 0,
   [switch]$Keep
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
+
+# M55 - ONE PORT AND ONE SCRATCH FILE PER RUN.
+#
+# Both were fixed constants (8399 and _smoketest.html), so two harness runs at once
+# shared a server and OVERWROTE EACH OTHER'S PAGE. Running a suite while publish.sh
+# was working through its own fifty-odd produced a green result for a file that had
+# never been loaded: I asked for m55 and got m36's assertions back, all passing.
+#
+# A false PASS is far worse than a collision that errors. Derive both from this
+# process, so concurrent runs cannot see each other at all.
+if ($Port -le 0) { $Port = 8400 + ($PID % 900) }
+
 
 $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 if (-not (Test-Path $chrome)) { Write-Host "Chrome not found at $chrome" -ForegroundColor Red; exit 2 }
@@ -30,7 +42,7 @@ if (-not (Test-Path $testPath)) { Write-Host "Tests not found: $testPath" -Foreg
 
 # build the scratch copy: game + injected tests, in the served root so the
 # relative asset paths still resolve
-$scratchName = "_smoketest.html"
+$scratchName = "_smoketest-$PID.html"
 $scratch = Join-Path $root $scratchName
 # -Encoding UTF8 is REQUIRED: PS 5.1's Get-Content defaults to ANSI, so a UTF-8
 # game file round-trips into double-encoded mojibake and the test runs against a

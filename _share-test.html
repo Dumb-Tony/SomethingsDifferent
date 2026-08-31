@@ -157,7 +157,32 @@ body.night #grade{opacity:1}
    prompted objects were on screen, so the fault was never visibility, it was that
    nothing connected the words to the thing. Positioned per frame now, with a small
    stem pointing down at it. */
+/* M54. HELD TIME HAS TO BE UNMISTAKABLE. The renderer has no post-processing pass,
+   so the effect is a CSS overlay: a cold vignette that closes in from the edges and
+   a single hairline at the top. It is deliberately NOT a full-screen wash - you have
+   four seconds to see and to act, and dimming the room you are working in would take
+   the ability away with one hand while giving it with the other. */
+body.frozen #freeze-veil{opacity:1}
+#freeze-veil{
+  position:fixed;inset:0;z-index:23;pointer-events:none;opacity:0;
+  transition:opacity .18s ease-out;
+  /* The first version was a vignette alone and it photographed as "slightly
+     different lighting" - true but unreadable, which for a four-second window is
+     the same as absent. backdrop-filter pulls the COLOUR out of the rendered
+     frame itself: a world with the life drained out of it, which is what has
+     happened to it. The vignette stays, harder, to close the edges in. */
+  backdrop-filter:saturate(.28) brightness(.94) contrast(1.06);
+  -webkit-backdrop-filter:saturate(.28) brightness(.94) contrast(1.06);
+  background:
+    radial-gradient(ellipse 74% 62% at 50% 52%,rgba(0,0,0,0) 42%,rgba(88,146,190,.46) 100%),
+    linear-gradient(rgba(168,214,240,.14),rgba(168,214,240,0) 26%);
+  box-shadow:inset 0 0 0 2px rgba(190,232,255,.55),
+             inset 0 0 42px rgba(150,205,240,.28);
+}
+body.frozen #hud{filter:saturate(.55)}
+@media (prefers-reduced-motion:reduce){#freeze-veil{transition:none}}
 #prompt{position:fixed;z-index:24;transform:translate(-50%,-100%);
+
   background:rgba(10,9,18,.88);border:1px solid var(--line);border-radius:12px;padding:8px 16px;
   font-size:13px;font-weight:700;opacity:0;transition:opacity .15s;pointer-events:none;
   white-space:nowrap}
@@ -285,7 +310,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M53 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M54 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -293,7 +318,9 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
   <div class="pill" id="seen-pill">SEEN <b id="seen-v">0</b>/<span id="seen-max">3</span></div>
   <div class="pill" id="wife-pill" style="display:none">DANA <b id="wife-v"></b></div>
   <div class="pill" id="mode-pill">MODE <b id="mode-v">WALK</b></div>
+  <div class="pill" id="freeze-pill" style="display:none"><span id="freeze-k">HELD</span> <b id="freeze-v"></b></div>
 </div>
+<div id="freeze-veil"></div>
 <div id="grade"></div>
 <div id="flash"></div>
 <div id="dbg"></div>
@@ -333,6 +360,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>E</b><span>examine / search / open &mdash; and at a wardrobe, a hedge or a shed,
       hide, and again to come out</span>
     <b>Q</b><span>scan pulse &mdash; marks their things, and is heard</span>
+    <b>G</b><span>hold time &mdash; four seconds; ruinous if you are seen doing it</span>
     <b>F / R</b><span>on a held object: record it, then print a rough copy</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; end the night, see the morning</span>
@@ -450,6 +478,9 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
       in while somebody is already looking at you, and the clock keeps running while
       you are in there</span>
     <b>Q</b><span>scan pulse &mdash; marks everything of theirs you can see. It goes through glass, not through walls, and they can hear it</span>
+    <b>G</b><span>hold time &mdash; four seconds in which nothing moves but you.
+      Silent, and it costs nothing at all &mdash; unless somebody is looking at you
+      when you do it, and then they stop believing in burglars</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; ends the night, shows you the morning</span>
     <b>Esc</b><span>pause &mdash; and the way out of an object, the afternoon, or the
@@ -680,6 +711,20 @@ const CONST={
                             // spreading beats hammering one house — that is the
                             // strategy this number is set against. See GDD 15.
   LOSE_STREET : 70,         // mean neighbourhood Suspicion that ends the run
+  /* M54 - TEMPORAL FREEZE (GDD 5.10). The slice is specified to ship exactly two
+     alien abilities, Night Vision and this, and until now it shipped one. Everything
+     the game asks of you is slow and deliberate - scan, print, swap, hide - and all
+     of it is the work of a careful burglar. Nothing in the verbs was ALIEN. This is:
+     the world stops for four seconds and you do not.
+
+     It is not a get-out-of-trouble card. The cost is that a freeze is the one thing
+     on this street that cannot be explained by a man with a crowbar, so anybody who
+     watches you do it stops thinking about burglars - and being certain about
+     something impossible is worth far more than being certain about a stranger. */
+  FREEZE_T    : 4.0,        // seconds the world is held
+  FREEZE_CD   : 30,         // seconds before it can be used again
+  FREEZE_SEEN_SUSP: 22,     // what a witness pays for seeing time stop
+
   /* M51: how far a verge tree's TRUNK must stay from a lot's centre line, so the
      camera standing at the gate is never inside a canopy. This positions the
      trunk, and a tree is several canopy blobs offset AROUND the trunk - at 4.0
@@ -2658,6 +2703,7 @@ const S={
   /* orbiting = the mouse is captured and turning the camera (M13). dragging = the
      fallback click-drag, only used when a browser refuses pointer lock. */
   keys:{}, menuOpen:false, orbiting:false, dragging:false, focus:null,
+  freeze:0, freezeCd:0,   // M54: seconds of held time left, and until the next
   // physics — S.py is AUTHORITATIVE feet height; player.position.y is DISPLAY only
   py:0, vy:0, grounded:true,
   mvx:0, mvz:0, speedNorm:0, moveMode:'walk', wallHit:null,
@@ -5221,6 +5267,22 @@ function updateHUD(dt){
   $('mode-v').textContent=
     S.hidden?(S.hideT>0?'HIDING…':'HIDDEN'):S.moveMode.toUpperCase();
   $('mode-pill').classList.toggle('warn',S.hidden?true:false);
+  /* M54. The pill shows the seconds of held time while it runs, then the cooldown
+     while it recharges, and nothing at all when the power is simply ready - a HUD
+     element that always says READY is furniture. */
+  (function(){
+    const p=$('freeze-pill');
+    /* The LABEL changes with the state. It said HELD for both, so a screenshot of
+       a finished freeze read "HELD 33s" while the world was running normally -
+       the pill was describing the cooldown in the words of the ability. */
+    if(S.freeze>0){p.style.display='';p.classList.add('warn');
+      $('freeze-k').textContent='HELD';
+      $('freeze-v').textContent=S.freeze.toFixed(1)+'s';}
+    else if(S.freezeCd>0){p.style.display='';p.classList.remove('warn');
+      $('freeze-k').textContent='TIME';
+      $('freeze-v').textContent=Math.ceil(S.freezeCd)+'s';}
+    else p.style.display='none';
+  })();
   if(S.phase==='house'){
     $('clock-v').textContent=clockString();
     $('clock').classList.toggle('late',NIGHT.t>CONST.NIGHT_CURFEW-0.5);
@@ -5932,6 +5994,15 @@ const SFX=(function(){
       tone(HERE,0.22,1046,1568,0.12,'foley','square');
       tone(HERE,0.16,1568,2093,0.10,'foley','square',0.07);},
     ui:function(){tone(HERE,0.10,880,880,0.05,'foley','sine');},
+    /* M54. Time stopping: everything slides DOWN and holds, then one high note
+       left ringing on its own - the world gone quiet with you still in it. */
+    freeze:function(){
+      tone(HERE,0.30,320,96,0.55,'music','sine');
+      tone(HERE,0.20,214,64,0.70,'music','triangle',0.03);
+      tone(HERE,0.09,1568,1568,3.60,'music','sine',0.18);},
+    unfreeze:function(){
+      tone(HERE,0.22,96,300,0.34,'music','sine');
+      tone(HERE,0.12,64,214,0.30,'music','triangle',0.02);},
     /* M32. THE ENDING USED TO PLAY IN SILENCE. The last sound of a winning run was
        the 'doubt' ping - the same two-note sine fired when a neighbour paused at a
        mug - and then nothing at all under the card that ends the game. */
@@ -8355,7 +8426,59 @@ function addHide(x,y,z,label,line){
 }
 /* You cannot get into a wardrobe while somebody is watching you do it. Anybody
    awake with a line of sight to you right now vetoes the whole idea. */
+/* ===================== M54 - TEMPORAL FREEZE (GDD 5.10) =====================
+   Four seconds in which nothing in the world moves except you. The implementation is
+   one number - S.freeze - because tick() already kept the player's simulation and the
+   world's simulation in separate calls; they simply needed separate clocks.
+
+   WITNESSED IS THE WHOLE COST. Everything else you do on this street has a mundane
+   reading: a noise is the boiler, a moved mug is your own forgetfulness, a man in the
+   dark is a burglar. Time stopping has no mundane reading at all, so a witness does
+   not become more frightened of a burglar - they become certain that something else
+   is going on, which is precisely what this assignment must not produce. */
+function freezeTime(){
+  if(S.phase!=='house'||S.focus||S.menuOpen)return false;
+  if(S.daytime||S.evening){
+    hint('Not in daylight. Whatever that is, it is not for an audience.');return false;
+  }
+  if(S.freeze>0)return false;
+  if(S.freezeCd>0){hint('Not yet - '+Math.ceil(S.freezeCd)+'s.');return false;}
+  S.freeze=CONST.FREEZE_T;
+  S.freezeCd=CONST.FREEZE_CD+CONST.FREEZE_T;
+  GAME.stats.freezes=(GAME.stats.freezes||0)+1;
+  document.body.classList.add('frozen');
+  SFX.cue('freeze');
+  /* Reuse watchedNow() rather than write a second seeing check - it is the same
+     question enterHide() asks, and two answers to one question is how they drift. */
+  const seenBy=watchedNow();
+  if(seenBy){
+    for(let i=0;i<SLEEPERS.length;i++){
+      const sl=SLEEPERS[i];
+      if(sl.absent||sl.state==='asleep')continue;
+      if(!canSee(sl,player.position.x,player.position.z))continue;
+      const r=RESIDENTS[sl.res];
+      if(!r)continue;
+      r.suspicion=clamp((r.suspicion||0)+CONST.FREEZE_SEEN_SUSP,0,100);
+      r.stress=clamp((r.stress||0)+25,0,100);
+    }
+    S.freezeSeenBy=seenBy;
+    hint(seenBy+' was looking at you when the world stopped. There is no burglar '+
+         'that explains that.');
+  }else{
+    S.freezeSeenBy=null;
+    hint('Everything holds. Four seconds, and none of them are yours.');
+  }
+  return true;
+}
+function freezeEnded(){
+  /* NOT updateHUD() - it takes a dt and decrements a throttle with it, so calling
+     it bare sets hudT to NaN and the whole HUD stops updating for the rest of the
+     run. The freeze pill is read by the normal tick, like everything else. */
+  document.body.classList.remove('frozen');
+  SFX.cue('unfreeze');
+}
 function watchedNow(){
+
   if(!player)return null;
   const px=player.position.x,pz=player.position.z;
   for(let i=0;i<SLEEPERS.length;i++){
@@ -8988,6 +9111,7 @@ addEventListener('keydown',e=>{
       if(S.daytime){readNearest();return;}
       scanPulse();return;                // M24: read the room
     }
+    if(k==='g'){freezeTime();return;}        // M54: hold the world still
     if(k==='tab'){showDossier();e.preventDefault();return;}
     if(k==='m'){endNight('home','You are back before anyone stirs.');return;}
   }
@@ -9188,14 +9312,22 @@ function loop(t){
    replay/determinism checks) can drive the sim at a fixed dt with no rAF timing. */
 function tick(dt){
   if(!player)return;
+  /* M54. THE WORLD AND THE PLAYER NOW GET DIFFERENT CLOCKS. `wdt` is the world's:
+     zero while time is held, so sleepers do not stir, the watchman does not walk,
+     the clock does not advance and the car does not arrive - while movePlayer and
+     the camera keep the real dt, because the whole point is that you still move.
+     Sound and the door hinges stay on real time as well: they are yours. */
+  const wdt=S.freeze>0?0:dt;
+  if(S.freeze>0){S.freeze=Math.max(0,S.freeze-dt);if(!S.freeze)freezeEnded();}
+  else if(S.freezeCd>0)S.freezeCd=Math.max(0,S.freezeCd-dt);
   // examining an object roots you in place — you are concentrating, not walking
   if(!S.menuOpen&&!S.focus){movePlayer(dt);animBody(dt);}
-  if(!S.menuOpen&&S.phase==='house')nightTick(dt);
+  if(!S.menuOpen&&S.phase==='house')nightTick(wdt);
   updateCamera(dt);
   trackShadow();
   scanTick(dt);
   hideTick(dt);
-  if(!S.menuOpen&&S.phase==='house')ambientTick(dt);
+  if(!S.menuOpen&&S.phase==='house')ambientTick(wdt);
   SFX.update(dt);
   for(let i=0;i<DOORS.length;i++){
     const d=DOORS[i];
@@ -9258,7 +9390,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   CATALOG,INV,PENDING,GAME,PLANTERS,DOORS,ceilAt,
   get frontDoor(){return FRONT_DOOR;},
   scanObject,fabricate,invFor,swapWith,nudgeObject,rotateObject,applyChange,
-  doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,
+  doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,freezeTime,watchedNow,
   updatePrompt,promptAnchor,promptWorldPos,
   showReport,showDossier,showEnding,hashStr,
   collapseIndex,streetSuspicion,activeResidents,fracturedCount,checkEnding,
@@ -9350,7 +9482,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M53'};
+  version:'M54'};
 </script>
 
 </body>
