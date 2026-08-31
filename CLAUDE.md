@@ -984,3 +984,28 @@ stays testable without a GL context.
 
 
 
+
+## M49 — the screens fit, and the tools still work
+
+Screenshotted the morning report — the screen you read every night — and got a crash
+banner over it: `SD.requisition is not a function`. M33 deleted `requisition()` sixteen
+milestones earlier; three of `shot.ps1`'s scenes have thrown ever since, and nobody
+noticed because nobody re-ran those scenes.
+
+Under the banner the report ran off the bottom: the last swap of the night cut in half,
+CONTINUE sitting on top of it. `#report-body` was capped at 58vh, but a **centred flex
+column clips at BOTH ends** when it overflows, so the cap could never have saved it.
+`.screen` now scrolls (`overflow-y:auto`, `.screen>*{flex-shrink:0}`) and the two long
+bodies are sized against the chrome around them, not against the viewport alone.
+
+`m49` carries an **API drift detector**: 137 `SD.*` names harvested from every
+`tools/*.js` and `tools/*.ps1`. That is what would have caught the crash the day M33
+landed, instead of sixteen milestones later in a screenshot.
+
+Two false alarms had to be designed out of the key-row check before it measured
+anything real — `querySelectorAll('b')` swept up the `<b>` tags descriptions use for
+emphasis, and "a label with no letters in it" failed the nudge row, which is
+legitimately four arrows. The rule is "nothing but a connector", the shape the
+`<b>F</b> / <b>R</b>` bug actually had.
+
+  report body 324px · button at 489px · viewport 624px · 30 key rows well formed

@@ -55,7 +55,7 @@ $setups = @{
   focus = @"
   SD.startHouse(); $open
   var keys=SD.objects.filter(function(o){return o.kind==='keyring';})[0];
-  SD.scanObject(keys); SD.requisition(keys);
+  SD.scanObject(keys); SD.fabricate(keys);
   SD.player.position.set(-2.9,0,-2.6); SD.player.rotation.y=Math.PI/2;
   SD.S.yaw=Math.PI/2; SD.S.pitch=0.2; SD.S.dist=2.1; SD.S.camP=null; SD.S.camL=null;
   SD.enterFocus(keys);
@@ -252,8 +252,8 @@ $setups = @{
   SD.startHouse(); $open
   var by=function(k){return SD.objects.filter(function(o){return o.kind===k;})[0];};
   var keys=by('keyring'), mug=by('coffeeMug'), cereal=by('cerealBox');
-  SD.scanObject(keys);   SD.requisition(keys);   SD.swapWith(keys,2);
-  SD.scanObject(cereal); SD.requisition(cereal); SD.swapWith(cereal,0);
+  SD.scanObject(keys);   SD.fabricate(keys);   SD.swapWith(keys,0);
+  SD.scanObject(cereal); SD.fabricate(cereal); SD.swapWith(cereal,0);
   for(var i=0;i<7;i++) SD.nudgeObject(mug,0.03,0);
   SD.endNight('home','You are back before anyone stirs.');
 "@
