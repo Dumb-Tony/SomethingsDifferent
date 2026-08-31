@@ -222,6 +222,11 @@ $setups = @{
   daylight = @"
   SD.startHouse();
   SD.RESIDENTS.walt.beats=2; SD.RESIDENTS.june.beats=1; SD.RESIDENTS.marisol.beats=3;
+  /* The walk is an AFTERNOON action, so in play the day pill always reads
+     AFTERNOON. Calling startWalk() straight from here leaves DAY.block at 0 and
+     the shot advertised "DAY 1 of 10 . MORNING" over a scene that can only
+     happen at three. Put the day where the action actually lives. */
+  SD.GAME.day=3; SD.DAY.block=3;
   SD.startWalk();
   SD.player.position.set(SD.houseById('hoyt').x-4.2,0,-10.2);
   SD.S.yaw=Math.PI*1.16; SD.S.pitch=0.13; SD.S.dist=5.6;
