@@ -578,6 +578,39 @@ Dev-wide catalog of what already exists and where to copy it from.
   unchanged - `PRACTICAL_GAIN` is a look control and must never become a difficulty
   one. **1390 assertions across forty-two suites.**
 
+- 2026-08-31 - **M43 DONE - SODIUM.** The art direction, chosen off rendered
+  comparisons rather than description: `tools/artdir.ps1` put the same two scenes
+  through a moonlit control, a hard-contrast noir and this (`docs/ad-*.png`). Sodium
+  won on **legibility** - under the old cool rig the house was a near-black slab with
+  no readable door, window or roofline - and on one argument the other two could not
+  make: **warm outdoors, cool indoors, so the colour of the light tells you which side
+  of a window you are standing on.** In a game about being seen through glass that is
+  a mechanic, not decoration.
+  **The option image was not the right implementation of its own pitch.** Applying
+  sodium to *everything* - which is what the rendered option actually did - gave a
+  pale pink lounge with **0% pure black**, reading like dawn. The shipped rig is the
+  pitch instead: ambient dropped to `NIGHT_HEMI 0.17` so houses stay dark, and
+  everything bright outdoors comes from a lamp you can see and walk around. Six
+  practicals are sodium, twenty stay cool; a street lamp and a window pool differ by
+  **0.96** in red-minus-blue.
+  Measured, all five scenes: street `18/49/16/17/0` at 7% black, bedroom
+  `33/17/39/11/0` at 24%, kitchen `19/19/54/8/0` at 12%. Every one now has shadow, a
+  midtone mass and a highlight - against `64/36/0/0/0` with nothing above the second
+  fifth before M42.
+  **AND IT CAUGHT A REGRESSION I CAUSED.** `dawnTick` hardcoded the *entire* old cool
+  rig - hemi 0.34, moon 0.40, exposure 0.52, blue hue ramp - so the moment the night
+  went to 0.86, **first light made the sky darker than the night it was ending**.
+  Night exposure, hemi and moon now have one home in `CONST` and dawn ramps from
+  them, with the hue travelling amber-to-blue the way a dawn actually does.
+  m20's `DAYLIGHT IS BRIGHTER THAN NIGHT` compared the **exposure setting**, and the
+  sodium night raised it to the same 0.86 the day uses - so it went red against a
+  correct game. It measures the **frame** now: at identical exposure the day renders
+  **1.78x** brighter than the night, which is both the true claim and a stronger one.
+  17 assertions. **1407 assertions across forty-three suites.**
+  **STILL OPEN:** a magenta shape at the left edge of the street shot that I twice
+  failed to identify - two raycast probes both missed it. Not a sofa by name, not a
+  parked car by position. Worth another look with a working probe.
+
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
   *perceived* at `doMorning()`. Repeated edits to one object collapse into a single

@@ -1632,6 +1632,13 @@ previous one runs in a browser.**
   **Measured and NOT changed:** the street's 99m is 108m of building, with 2.4m gaps
   between houses. There is no spacing to remove.
 
+
+- **M43 — sodium.** The night is lit by street lamps, not the moon: warm outdoors,
+  cool indoors, so light colour says which side of the glass you are on. Ambient
+  dropped so houses stay dark and brightness comes from lamps you can walk around.
+  `NIGHT_EXPOSURE`/`NIGHT_HEMI`/`NIGHT_MOON` centralised — `dawnTick` had hardcoded
+  the old cool rig and made first light *darker* than the night.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

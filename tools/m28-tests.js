@@ -101,7 +101,7 @@ var home=SD.HOUSES.filter(function(h){return h.yours;})[0];
   ok('GOING UP ENDS IT',!SD.S.evening);
   ok('...and takes her with it',!SD.DANA);
   ok('...and puts the night rig back',
-     SD.renderer.toneMappingExposure<0.6,
+     Math.abs(SD.renderer.toneMappingExposure-SD.CONST.NIGHT_EXPOSURE)<0.001,   // M43
      SD.renderer.toneMappingExposure.toFixed(2));
   ok('...and the sleepers are back in their beds',
      SD.SLEEPERS.some(function(s){return s.group&&s.group.visible;}));

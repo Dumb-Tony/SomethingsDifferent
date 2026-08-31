@@ -305,8 +305,11 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
   ok('DAWN COMES UP BEFORE CURFEW DOES',exp1>exp0+0.05,
      'exposure '+exp0.toFixed(2)+' -> '+exp1.toFixed(2));
   SD.endNight('home','x');
+  /* M43: 0.52 was the old cool night's exposure, hardcoded here. The night has one
+     home for it now, and dawn ramps FROM it - it used to ramp from 0.52 regardless,
+     so first light briefly made the sky darker than the night it was ending. */
   ok('...and the rig is put back, so night two does not start grey',
-     near(SD.renderer.toneMappingExposure,0.52,0.001),
+     near(SD.renderer.toneMappingExposure,SD.CONST.NIGHT_EXPOSURE,0.001),
      SD.renderer.toneMappingExposure.toFixed(2));
 })();
 

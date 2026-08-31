@@ -255,7 +255,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M42 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M43 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -744,7 +744,19 @@ const CONST={
      This is a VISUAL gain only. litAt() reads the LIGHTS[] zones, which are a
      separate structure - so nothing here changes where you can be seen, and m42
      asserts that. */
-  PRACTICAL_GAIN: 2.5,
+  /* M43: dropped from 2.5 when the sodium rig raised exposure 0.52 -> 0.86. */
+  PRACTICAL_GAIN: 1.8,
+  /* The colour of every lamp that is OUTDOORS. Interior lamps stay warm-white and
+     the moon spill through a window stays cold, so which side of the glass you are
+     on is legible at a glance - which is the whole reason this direction was picked
+     over the moonlit and noir ones. */
+  SODIUM      : '#ffb45e',
+  /* One home for the night's exposure. dawnTick used to hardcode the old 0.52 as its
+     floor, so the moment the sodium rig raised the night to 0.86 the sky got DARKER
+     at first light before it got brighter. */
+  NIGHT_EXPOSURE: 0.86,
+  NIGHT_HEMI  : 0.17,
+  NIGHT_MOON  : 0.22,
   /* ── THE FABRICATOR (M39) ────────────────────────────────────────────────
      MEASURED, on the live build: buying anything requires a prior scan, and the
      shops are a DAYTIME action - so the loop was scan tonight, buy tomorrow midday,
@@ -2652,11 +2664,31 @@ function setLighting(mode){
        the pools of moonlight through the windows — because those are exactly the
        places you can be seen (litAt). Light is the gameplay, so it has to be the
        thing your eye goes to. */
-    hemi.color.set('#18243f');hemi.groundColor.set('#04060a');hemi.intensity=0.34;
-    moon.color.set('#8ea6dc');moon.intensity=0.40;moonOff.set(-9,15,7);moon.position.set(-9,15,7);
-    fill.color.set('#232c49');fill.intensity=0.12;fill.position.set(7,5,-8);
-    scene.fog=new THREE.FogExp2('#0a0f1c',0.038);
-    scene.background=new THREE.Color('#070a12');
+    /* ── SODIUM (M43) ──────────────────────────────────────────────────────
+       A suburban street at three in the morning is not lit by the moon. It is lit
+       by sodium lamps, and everything outdoors takes their colour: amber-grey
+       walls, brown-green lawns, a sky that never goes properly black because the
+       whole town is throwing light at it.
+
+       Chosen off rendered comparisons (tools/artdir.ps1, docs/ad-*.png) against a
+       moonlit control and a hard-contrast noir. Sodium won on LEGIBILITY - under
+       the old cool rig the house was a near-black slab with no readable door,
+       window or roofline; under this one the porch posts, siding and path all
+       read - and on one gameplay argument the others could not make: warm
+       outdoors against cool interiors means COLOUR TELLS YOU WHICH SIDE OF A
+       WINDOW YOU ARE ON, which is the thing this game is actually about. */
+    /* The ambient is deliberately WEAK. Everything bright outdoors should be coming
+       from a lamp you can see and walk around; if the sky lights the street then it
+       also lights every interior for free, and the houses stop being dark places you
+       creep through. Measured: at hemi 0.42 the lounge went to 0% pure black and read
+       like dawn. */
+    hemi.color.set('#3b3020');hemi.groundColor.set('#120c06');
+    hemi.intensity=CONST.NIGHT_HEMI;
+    moon.color.set('#c9b088');moon.intensity=CONST.NIGHT_MOON;
+    moonOff.set(-9,15,7);moon.position.set(-9,15,7);
+    fill.color.set('#c9b088');fill.intensity=0.10;fill.position.set(7,5,-8);
+    scene.fog=new THREE.FogExp2('#191106',0.034);
+    scene.background=new THREE.Color('#0d0904');
     sky.material.map=skyTex;sky.material.needsUpdate=true;
     sky.visible=true;
     document.body.classList.remove('daylight');
@@ -2666,7 +2698,9 @@ function setLighting(mode){
        practicals (streetlight, window pools) hold their highlights — which is
        exactly the read we want, because light is where you can be seen. */
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.52;
+    /* Raised with the sodium rig. The old 0.52 was set against a cool key that has
+       been replaced; at 0.52 this palette reads as mud. */
+    renderer.toneMappingExposure=CONST.NIGHT_EXPOSURE;
     document.body.classList.add('night');
   }else if(mode==='day'){
     /* AFTERNOON. A high, warm sun and a bright sky bounce, because the point of
@@ -3386,7 +3420,7 @@ function buildHouse(def,rng){
   // a tight pool, not area lighting: crossing it should feel like a decision.
   // No shadow casting — the moon's shadow map is the one that sells the scene, and a
   // second shadow-casting light roughly halves the frame rate on software GL.
-  const lampL=practical('#ffcf94',2.4,9.5,1.7);
+  const lampL=practical(CONST.SODIUM,4.6,12.0,1.6);      // M43
   lampL.position.set(_p(-3.0),3.25,_p(-8.3));
   addLight(_p(-3.0),_p(-8.3),_p(5.0),1.0,lampL);
 
@@ -4049,7 +4083,7 @@ function streetLamp(x,z,r,i){
   const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.12,9,7),
     new THREE.MeshBasicMaterial({color:'#ffdca8'}));
   bulb.position.set(x+OX,3.80,z-0.28);bulb.userData.temporal=true;scene.add(bulb);
-  const L=practical('#ffcf94',2.1,r*2.1,1.7);
+  const L=practical(CONST.SODIUM,3.8,r*2.4,1.6);         // M43
   L.position.set(x,3.72,z-0.28);addLight(x,z-0.28,r,i,L);
 }
 /* Poles and wires. A suburban street reads as one because of the things strung
@@ -4363,11 +4397,16 @@ function dawnTick(){
   const k=clamp((1.15-left)/1.15,0,1);              // last ~70 game-minutes
   if(k<=0&&!S._dawnOn)return;
   S._dawnOn=k>0;
-  hemi.intensity=0.34+k*0.30;
-  hemi.color.setHSL(0.60-k*0.06,0.45-k*0.20,0.18+k*0.16);
-  moon.intensity=0.40+k*0.22;
-  renderer.toneMappingExposure=0.52+k*0.30;
-  if(scene.fog)scene.fog.color.setHSL(0.60-k*0.05,0.42-k*0.16,0.06+k*0.18);
+  /* M43. Every number here used to be the OLD cool night rig, hardcoded: hemi 0.34,
+     moon 0.40, exposure 0.52 and a blue hue ramp. Against the sodium rig that made
+     first light DARKER than the night it was ending. It ramps from the night's own
+     constants now, and the hue travels the right way for a dawn: amber sodium at
+     k=0, washing to a cold blue-grey as the sky starts to win. */
+  hemi.intensity=CONST.NIGHT_HEMI+k*0.42;
+  hemi.color.setHSL(0.09+k*0.47,0.32-k*0.14,0.16+k*0.18);
+  moon.intensity=CONST.NIGHT_MOON+k*0.55;
+  renderer.toneMappingExposure=CONST.NIGHT_EXPOSURE+k*0.22;
+  if(scene.fog)scene.fog.color.setHSL(0.08+k*0.48,0.62-k*0.30,0.06+k*0.18);
 }
 
 function buildStreet(seed){
@@ -5879,7 +5918,7 @@ function hardenNight(){
          live, so the seeing checks pick this up with no extra plumbing. */
       const z={x:h._door.pos[0],z:h._door.pos[2]+0.9,r:CONST.HARD_LIGHT_R,i:0};
       LIGHTS.push(z);
-      const L=practical('#fff0cf',0,CONST.HARD_LIGHT_R*2.2,1.6);
+      const L=practical(CONST.SODIUM,0,CONST.HARD_LIGHT_R*2.2,1.6);   // M43
       L.position.set(z.x,2.5,z.z);L.userData.temporal=true;scene.add(L);
       /* M19: something for the light to come OUT of. It was emitting from thin air
          at head height above the porch, which is why the street lighting up read as
@@ -8817,6 +8856,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M42'};
+  version:'M43'};
 </script>
 

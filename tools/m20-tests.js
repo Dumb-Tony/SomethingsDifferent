@@ -25,8 +25,25 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
   SD.setLighting('day');
   var dExp=SD.renderer.toneMappingExposure,dFog=SD.scene.fog?SD.scene.fog.density:0;
   var dMap=SD.scene.background?SD.scene.background.getHex():0;
-  ok('DAYLIGHT IS BRIGHTER THAN NIGHT',dExp>nExp,
-     'exposure '+nExp.toFixed(2)+' -> '+dExp.toFixed(2));
+  /* M43. This compared the EXPOSURE SETTING, and the sodium night raised the night
+     to the same 0.86 the day uses - so it went red against a game that is perfectly
+     correct. Daylight's brightness comes from its LIGHTS, not its exposure. Measure
+     the frame, which is both the true claim and a stronger one: at identical
+     exposure the day renders 1.78x brighter than the night. */
+  function frameY(){
+    var gl=SD.renderer.getContext(),w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+    SD.renderer.render(SD.scene,SD.camera);
+    var px=new Uint8Array(w*h*4);
+    gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    var s=0,n=w*h;
+    for(var i=0;i<n;i++){var o=i*4;s+=(0.2126*px[o]+0.7152*px[o+1]+0.0722*px[o+2])/255;}
+    return s/n;
+  }
+  SD.setLighting('night');var nY=frameY();
+  SD.setLighting('day');  var dY=frameY();
+  ok('DAYLIGHT IS BRIGHTER THAN NIGHT',dY>nY*1.3,
+     'frame luminance '+nY.toFixed(3)+' -> '+dY.toFixed(3)+
+     '  ('+(dY/nY).toFixed(2)+'x, at the same exposure)');
   ok('...and you can see further',dFog<nFog,
      'fog density '+nFog.toFixed(4)+' -> '+dFog.toFixed(4));
   ok('...against a different sky',dMap!==nMap,
@@ -118,7 +135,7 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
      before+' -> 0');
   ok('...restores the night rig',
      !document.body.classList.contains('daylight')&&
-     SD.renderer.toneMappingExposure<0.6,
+     Math.abs(SD.renderer.toneMappingExposure-SD.CONST.NIGHT_EXPOSURE)<0.001,   // M43
      SD.renderer.toneMappingExposure.toFixed(2));
   ok('...and puts the sleepers back in their beds',
      SD.SLEEPERS.some(function(s){return s.group&&s.group.visible;}));
