@@ -272,7 +272,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M47 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M48 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -4712,6 +4712,25 @@ const TOPS=['#5d5170','#3f6fb0','#7b4289','#40422e','#5d3b3c','#3b505d','#6b4a32
             '#8a6a48','#436d7d','#7c4f3c','#4a4a54','#9a8a72'];
 const LEGS=['#2e2b38','#3a3644','#4a382e','#3d4358','#2b2735','#514038'];
 const SHOE=['#1b1a22','#2a2733','#3b2d26','#4a4a54'];
+/* M48. STEVE MAREK IS DRESSED ON PURPOSE.
+
+   makeBlockout called personLook('steve-marek'), which is a random draw seeded off a
+   string - deterministic, but nobody chose it. What it drew was TOPS #7b4289, a
+   magenta shirt, and under the M43 sodium rig that made the man breaking into houses
+   at three in the morning the single brightest object in the frame. He is also the
+   one body you look at from behind for the entire game.
+
+   So: a fixed look, and a dark one. Slate jacket, near-black trousers, dark hair.
+   This is both the fiction - you do not burgle a cul-de-sac in fuchsia - and the
+   read: he should be a silhouette against a lit wall, because the whole game is
+   about which side of the light you are standing on. Everybody ELSE keeps the random
+   wardrobe, because the afternoon street should have colour in it. */
+const STEVE_LOOK={
+  h:1.02,build:1.04,
+  skin:'#d9b189',hair:'#241d16',style:'crop',
+  top:'#2c3340',legs:'#23212b',shoe:'#1b1a22',
+  belly:false
+};
 function personLook(id){
   const r=mulberry32((hashStr('look|'+id)>>>0)||3);
   const pick=a=>a[Math.floor(r()*a.length)];
@@ -4811,7 +4830,7 @@ function makeBlockout(){
      same part NAMES, so animBody's walk cycle is untouched, and adds proportions,
      clothing, hair and a face. STEVE MAREK is a fixed look rather than a random one:
      he is the man whose shape the player learns from behind for the whole game. */
-  const H=CONST.CH_H,g0=makePerson(personLook('steve-marek'));
+  const H=CONST.CH_H,g0=makePerson(STEVE_LOOK);      // M48: chosen, not drawn
   const g=g0.group,P=g0.parts;
   const legL=P.legL,legR=P.legR,armL=P.armL,armR=P.armR;
   const torso=P.torso,head=P.head,nose=P.nose;
@@ -9112,7 +9131,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   // - M23: windows -
   WINDOWS,sightBlocked,
   // - M22: people -
-  makePerson,personLook,folkTick,SKIN,HAIR,TOPS,
+  makePerson,personLook,folkTick,SKIN,HAIR,TOPS,STEVE_LOOK,
   // - M21: the look -
   grade,gradeCss,matShiny,isShiny,mulberry32,
   get GRADE_ON(){return GRADE_ON;},
@@ -9151,7 +9170,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M47'};
+  version:'M48'};
 </script>
 
 </body>

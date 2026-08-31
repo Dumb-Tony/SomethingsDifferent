@@ -701,6 +701,22 @@ Dev-wide catalog of what already exists and where to copy it from.
   it after looking at one bad screenshot. 16 assertions.
   **1491 assertions across forty-seven suites.**
 
+- 2026-08-31 - **M48 DONE - STEVE MAREK IS DRESSED ON PURPOSE.** `makeBlockout` called
+  `personLook('steve-marek')` - a random draw seeded off a string. Deterministic, but
+  nobody chose it, and what it drew was `TOPS #7b4289`: **a magenta shirt**. Under the
+  M43 sodium rig that made the man breaking into houses at three in the morning **the
+  single brightest object in the frame** - and he is the one body you look at, from
+  behind, for the entire game.
+  Fixed dark look now: slate jacket, near-black trousers. Measured luminance **0.20**
+  against a wardrobe average of 0.35 and a darkest-available of 0.25 - he is darker
+  than every shirt on the street - and saturation **0.19** against the 0.35 he drew.
+  Against a sodium-lit wall that is a gap of **0.50**: he reads as a silhouette, which
+  is the fiction (*you do not burgle a cul-de-sac in fuchsia*) and the mechanic, since
+  the whole game is about which side of the light you are standing on.
+  Everybody else keeps the random wardrobe - 6 different tops among 7 people - because
+  an afternoon street should have colour in it and a 3am porch should not.
+  14 assertions. **1505 assertions across forty-eight suites.**
+
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
   *perceived* at `doMorning()`. Repeated edits to one object collapse into a single
