@@ -261,7 +261,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M44 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M45 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -675,9 +675,24 @@ const CONST={
      why routing your loud work through him is a real strategy rather than a joke. */
   GOSSIP_K    : 0.55,       // fraction of the speaker's Suspicion gain that travels
   GOSSIP_MIN  : 0.5,        // below this nothing is said at all
-  ALERT_SUSP  : 1.5,        // weight on mean neighbourhood Suspicion
+  /* M45. WAS 1.5 - a HIGHER weight than collapse's implicit 1.0 - while the note on
+     streetAlert() two hundred lines below says "ALERTNESS is deliberately mostly
+     Doubt". It was mostly Suspicion, and by a wide margin: on the first measured full
+     run, night two read collapse 6.0 and suspicion 34.4, so suspicion contributed 90%
+     of an alertness of 58. That is why every hardening tier fired by night three, and
+     why my first re-cut of HARDEN_AT - tuned against that inflated curve - then broke
+     the CAREFUL player, who keeps suspicion near zero and would never have seen the
+     street react at all. Weighted so the meter matches its own description. */
+  ALERT_SUSP  : 0.35,       // weight on mean neighbourhood Suspicion
   ALERT_SEEN  : 8,          // weight per sighting
-  HARDEN_AT   : [12,22,32,42,55],
+  /* M45. RE-CUT against the first measured full run. streetAlert over ten nights of
+     competent play goes 4, 58, 66, 75, 79, 83, 108, 136, 142, 149 - and every one of
+     the old thresholds sat below 58, so the street installed ALL FIVE defences by
+     night three and then nothing changed for seven nights. A ladder that finishes
+     before the game does is not an escalation, it is a prologue.
+     These land roughly one every other night: lights ~2, dogs ~4, watch ~6,
+     cameras ~8, shifts ~10. fireHardening still installs at most one a morning. */
+  HARDEN_AT   : [15,26,34,48,62],
   HARD_LIGHT_R: 4.2,        // porch motion light: trigger radius and how bright it goes
   HARD_LIGHT_I: 0.95,
   HARD_DOG_R  : 5.0,        // a dog notices you this far into its yard
@@ -774,7 +789,12 @@ const CONST={
      something so close he walks straight past it. The shops sell PRECISION: a
      chosen rung, a known number, and a forecast to read it against. That is what
      money is for now. */
-  FAB_SIM     : [74,94],    // the band the on-board fabricator can hit, unaimed
+  /* M45: was [74,94]. Measured over a full run, that produced TWELVE CERTAINTY
+     results in the first twenty swaps - the low end of the band sits below the
+     DOUBT window for most residents, so the fallback the player is forced onto
+     while the forecast is still calibrating was actively losing them the run.
+     Narrowed at the bottom only; the ceiling still keeps it below the shops. */
+  FAB_SIM     : [82,94],    // the band the on-board fabricator can hit, unaimed
   FAB_NOISE   : 2.2,        // loud. Quieter than a pulse, far louder than a scan
   // -- the look (M21) ------------------------------------
   /* MEASURED before touching anything (tools/_look.js): 684 materials, of which 610
@@ -6610,10 +6630,24 @@ function isHome(){
 }
 function wifeAdd(n){WIFE.susp=clamp(WIFE.susp+n,0,100);}
 function hkGain(n){GAME.hk=clamp(GAME.hk+n,0,CONST.HK_MAX);}
-/* The Human Knowledge ladder is the UI becoming legible (GDD 5.6). */
+/* The Human Knowledge ladder is the UI becoming legible (GDD 5.6).
+
+   M45. THE GATE WAS SET ABOVE WHAT A WHOLE RUN CAN EARN. Measured on the first
+   end-to-end playthrough this project has ever had (tools/_arc.js): a player who goes
+   out every afternoon and stands with three neighbours reaches HK 46 by night seven.
+   The BAND forecast - the thing the intro promises and the guide tells you to use -
+   needed 50. So across an entire run the scanner never once told anybody what a
+   purchase would do, the shops could not be used deliberately, every swap came off
+   the unaimed printer, and the resulting CERTAINTY results drove street suspicion from
+   3.7 to 51.5 in a single night. The run lost on night 7 to THEY COMPARED NOTES with
+   collapse at 18.2 of 40.
+
+   Re-cut against the measured earn rate of about 6.6 HK a night: a name by night two,
+   the band by night three, the full read by night seven. The instrument should be
+   most of the way calibrated while there is still a game left to use it on. */
 function hkTier(){
   const h=GAME.hk;
-  return h>=80?3:(h>=50?2:(h>=20?1:0));
+  return h>=45?3:(h>=20?2:(h>=8?1:0));
 }
 function money(){return GAME.bank+GAME.cash;}
 /* Cash is the laundering path: a card purchase she can see costs Suspicion. */
@@ -8970,10 +9004,11 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M44'};
+  version:'M45'};
 </script>
 </body>
 </html>
+
 
 
 

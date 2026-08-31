@@ -58,8 +58,19 @@ try{
   SD.GAME.sightings=1;
   var bySeen=SD.streetAlert();
   SD.GAME.sightings=0;
-  ok('...so does suspicion, and worth MORE per point',bySusp>0&&C.ALERT_SUSP>1,
-     'weight '+C.ALERT_SUSP);
+  /* M45. This asserted ALERT_SUSP > 1 - suspicion worth MORE per point than doubt -
+     which is the opposite of what streetAlert()'s own note says two hundred lines
+     away: "ALERTNESS is deliberately mostly Doubt". At 1.5 it was mostly suspicion by
+     a wide margin, and on the first measured full run that put 90% of night two's
+     alertness into a meter the careful player never touches - so every tier fired at
+     once for a messy player and none at all for a careful one. The claim this section
+     is making is that BOTH meters move it and that DOUBT is the one that carries it. */
+  ok('...so does suspicion, but worth LESS per point than doubt',
+     bySusp>0&&C.ALERT_SUSP<1,'weight '+C.ALERT_SUSP);
+  ok('...and doubt is what actually carries the meter',
+     byDoubt>bySusp,
+     'the same 60 points reads '+byDoubt.toFixed(1)+' as doubt against '+
+     bySusp.toFixed(1)+' as suspicion');
   ok('...and a sighting on its own moves it',bySeen>=C.ALERT_SEEN-1e-9,
      bySeen.toFixed(1)+' from one sighting');
   info('keyed to suspicion alone this ladder would never fire: measured, a careful');

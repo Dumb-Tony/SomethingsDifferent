@@ -1646,6 +1646,13 @@ previous one runs in a browser.**
   place. Plus `CAR_PAINT` — parked cars drew a hue from the whole colour wheel and put
   a magenta car in the opening shot.
 
+
+- **M45 — the run has a shape.** The first end-to-end playthrough in the project's
+  life. HK tiers re-cut so the band forecast arrives night three instead of never;
+  `FAB_SIM` narrowed to `[82,94]`; `ALERT_SUSP` 1.5 → 0.35 so alertness is actually
+  mostly Doubt as its own note claims. Ten nights, won on night 10 at collapse 45.9
+  with the street at 69.1/70 and hardening on nights 2/4/6/8/10.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

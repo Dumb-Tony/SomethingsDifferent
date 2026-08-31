@@ -633,6 +633,35 @@ Dev-wide catalog of what already exists and where to copy it from.
   to near-white, and an indicator that cannot hold its own colour is not an indicator.
   **1431 assertions across forty-four suites.**
 
+- 2026-08-31 - **M45 DONE - THE RUN HAS A SHAPE.** Forty-four milestones, 1,431
+  assertions, and **nobody had ever played this game from night one to the end**. Every
+  measurement had been of a MOMENT. The first end-to-end playthrough
+  (`tools/_arc.js`) found three compounding faults no per-moment test could see:
+  **(1) The forecast never came online.** `predict()` returns a band at Human Knowledge
+  **50**; a player who goes out every afternoon and stands with three neighbours
+  reaches **46 by night seven**. So across an entire run the scanner never once said
+  what a purchase would do - the thing the intro promises and the guide tells you to
+  use. **(2) So every swap came off the unaimed printer**, and `FAB_SIM`'s low end sat
+  under the DOUBT window for most residents: **twelve CERTAINTY results in the first
+  twenty swaps**, and street suspicion went 3.7 -> 51.5 in a single night. **(3) And
+  the street finished hardening on night three** - every `HARDEN_AT` threshold sat
+  below night two's alert reading, so all five defences installed at once and nothing
+  changed for seven nights. A ladder that finishes before the game does is a prologue.
+  The run **lost on night 7** to THEY COMPARED NOTES with collapse at 18.2 of 40.
+  Fixed: HK tiers re-cut to the measured earn rate (~6.6/night) so the band arrives
+  **night three**; `FAB_SIM` narrowed at the bottom to `[82,94]`; and - the real one -
+  **`ALERT_SUSP` was 1.5, a HIGHER weight than collapse**, while `streetAlert()`'s own
+  note says *"ALERTNESS is deliberately mostly Doubt"*. It was mostly Suspicion by a
+  wide margin. **My first re-cut of `HARDEN_AT` was tuned against that inflated curve
+  and broke the CAREFUL player** - who keeps suspicion near zero and would have seen
+  the street react once in ten nights. Weighting alertness to match its own
+  description (0.35) fixed both playstyles at once.
+  **After: ten nights played, WON on night 10 at collapse 45.9**, street suspicion
+  finishing at **69.1 against a bar of 70** - a photo finish on two meters - money down
+  to $41 at its lowest, **24 bought against 20 printed**, 23 DOUBT against 11
+  CERTAINTY, and hardening arriving on nights **2, 4, 6, 8, 10**. 20 assertions.
+  **1453 assertions across forty-five suites.**
+
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
   *perceived* at `doMorning()`. Repeated edits to one object collapse into a single

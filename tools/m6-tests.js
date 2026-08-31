@@ -151,8 +151,13 @@ try{
   /* ── 6. Human Knowledge gates the readout ──────────────────────────────── */
   G.hk=0;  ok('at HK 0 the scanner says nothing useful',
      SD.predict(cereal.id,stock[3]).text==='???',SD.predict(cereal.id,stock[3]).text);
-  G.hk=30; ok('at HK 30 it names who, not what',SD.hkTier()===1,
+  /* M45 re-cut the ladder DOWN, because the band forecast sat at HK 50 and a whole
+     run of afternoons only earned 46 - so across ten nights the scanner never once
+     told anybody what a purchase would do. HK 30 is the BAND now; 12 is the name. */
+  G.hk=12; ok('at HK 12 it names who, not what',SD.hkTier()===1,
      SD.predict(cereal.id,stock[3]).text);
+  G.hk=30; ok('...and by HK 30 it says what',SD.hkTier()>=2,
+     'tier '+SD.hkTier()+' - it used to take 50, which a run cannot earn');
   G.hk=60; var p=SD.predict(cereal.id,stock[3]);
   ok('at HK 60 it predicts the BAND',['MISSED','DOUBT','CERTAINTY'].indexOf(p.text)>=0,
      p.text+' delta '+(p.delta||0).toFixed(1));
