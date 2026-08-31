@@ -261,7 +261,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M41 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M42 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -534,9 +534,13 @@ const CONST={
   CAM_LERP_P  : 9,      // position follow rate  (dt*n)
   CAM_LERP_L  : 14,     // look-at follow rate — faster, so framing snaps, body glides
   CAM_MIN_Y   : 0.25,
+  CAM_MIN_CLEAR: 0.55,  // M42: metres of room the camera needs AROUND it, not just
+                        // along the line to the player. See PHYS.clearance.
   CAM_CEIL_PAD: 0.18,   // keep the camera this far below the ceiling
   CAM_OCC_MIN_TOP:0.50, // colliders shorter than this never push the camera
-  CAM_OCC_PULL: 0.06,   // pull back 6% off the surface it hit
+  CAM_OCC_PULL: 0.45,   // METRES back off the surface it hit (M42: was 0.06, a
+                        // FRACTION of the camera distance - 20cm at dist 3.4, so the
+                        // wall filled a third of the frame. See PHYS.occlude.)
   /* M13: mouse look is POINTER-LOCKED. LOOK_SENS is radians per unit of raw mouse
      movement — a different quantity from DRAG_*, which are per CSS pixel and now only
      serve the fallback path for a browser that refuses the lock. */
@@ -719,6 +723,26 @@ const CONST={
   SCAN_T      : 6.0,        // seconds the marks stay up
   SCAN_CD     : 4.0,        // ...and before you can pulse again
   SCAN_NOISE  : 2.6,        // in sleeper-noise units: LOUDER than a single scan
+  /* ── THE NIGHT'S TOP END (M42) ───────────────────────────────────────────
+     MEASURED off the real framebuffer, per scene, for the first time in this
+     project's life: EVERY night scene lived entirely in the bottom two fifths of
+     the histogram. street 64/36/0/0/0, bedroom 48/51/0/0/0, kitchen 43/56/0/0/0 -
+     not one pixel anywhere in the top three fifths, and 13-25% of every frame pure
+     black. The rig's own comment says the plan is that "a low exposure crushes the
+     ambient toward black while letting the practicals hold their highlights". The
+     practicals were not holding any highlights. Nothing was.
+
+     Swept both levers. EXPOSURE IS THE WRONG ONE: at 1.35 the street reaches only
+     2.4% highlight while black collapses from 21% to 1% - it lifts the floor and
+     never builds a ceiling, which is exactly the "flat grey-blue" the rig warned
+     about. The PRACTICALS are the right one: x3 takes the bedroom from
+     48/51/0/0/0 to 37/14/42/7/0, keeping its 24% black while finally putting
+     something at the top. x5 blows out (48% of the frame above 0.6).
+
+     This is a VISUAL gain only. litAt() reads the LIGHTS[] zones, which are a
+     separate structure - so nothing here changes where you can be seen, and m42
+     asserts that. */
+  PRACTICAL_GAIN: 2.5,
   /* ── THE FABRICATOR (M39) ────────────────────────────────────────────────
      MEASURED, on the live build: buying anything requires a prior scan, and the
      shops are a DAYTIME action - so the loop was scan tonight, buy tomorrow midday,
@@ -3101,6 +3125,11 @@ function addLight(x,z,r,i,three){
   LIGHTS.push({x:x+OX,z:z,r:r,i:i});
   if(three){three.position.x+=OX;three.userData.temporal=true;scene.add(three);}
 }
+/* M42: every practical in the game goes through here, so the night's top end has a
+   single number behind it. See CONST.PRACTICAL_GAIN. */
+function practical(hex,intensity,dist,decay){
+  return new THREE.PointLight(hex,intensity*CONST.PRACTICAL_GAIN,dist,decay);
+}
 function litAt(x,z){
   let v=0;
   for(let i=0;i<LIGHTS.length;i++){
@@ -3355,7 +3384,7 @@ function buildHouse(def,rng){
   // a tight pool, not area lighting: crossing it should feel like a decision.
   // No shadow casting — the moon's shadow map is the one that sells the scene, and a
   // second shadow-casting light roughly halves the frame rate on software GL.
-  const lampL=new THREE.PointLight('#ffcf94',2.4,9.5,1.7);
+  const lampL=practical('#ffcf94',2.4,9.5,1.7);
   lampL.position.set(_p(-3.0),3.25,_p(-8.3));
   addLight(_p(-3.0),_p(-8.3),_p(5.0),1.0,lampL);
 
@@ -3377,7 +3406,7 @@ function buildHouse(def,rng){
   windowPane(_p( 2.4),1.45, HD, 1.40,1.00,'z');   // bedroom, north
   windowPane(_p(-2.6),1.40,-HD,1.00,0.90,'z');    // hall, front
   const spill=(x,z,r,i)=>{
-    const L=new THREE.PointLight('#9dbaf0',1.35,r*2.4,1.5);
+    const L=practical('#9dbaf0',1.35,r*2.4,1.5);
     L.position.set(x,1.5,z);addLight(x,z,r,i,L);
   };
   spill(_p(-4.0),_p( 1.20),_p(2.3),0.42);
@@ -4018,7 +4047,7 @@ function streetLamp(x,z,r,i){
   const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.12,9,7),
     new THREE.MeshBasicMaterial({color:'#ffdca8'}));
   bulb.position.set(x+OX,3.80,z-0.28);bulb.userData.temporal=true;scene.add(bulb);
-  const L=new THREE.PointLight('#ffcf94',2.1,r*2.1,1.7);
+  const L=practical('#ffcf94',2.1,r*2.1,1.7);
   L.position.set(x,3.72,z-0.28);addLight(x,z-0.28,r,i,L);
 }
 /* Poles and wires. A suburban street reads as one because of the things strung
@@ -4233,7 +4262,7 @@ function carLaunch(){
   const z=ST.roadZ+(CAR.dir>0?1.5:-1.5);
   // noCollide: a moving car is not a wall. Being hit by one is not in this game.
   CAR.active=parkedCar(CAR.x,z,CAR.dir>0?0:Math.PI,208+CAR.rng()*40,CAR.rng,true);
-  CAR.light=new THREE.PointLight('#fff0d0',S.daytime?0:2.2,CONST.CAR_LIGHT_R*2.0,1.6);
+  CAR.light=practical('#fff0d0',S.daytime?0:2.2,CONST.CAR_LIGHT_R*2.0,1.6);
   CAR.light.position.set(CAR.x,0.9,z);CAR.light.userData.temporal=true;scene.add(CAR.light);
   CAR.zone={x:CAR.x,z:z,r:CONST.CAR_LIGHT_R,i:CONST.CAR_LIGHT_I};LIGHTS.push(CAR.zone);
   SFX.world('car',CAR.x,z,1.0,'road');
@@ -4500,6 +4529,26 @@ const PHYS={
 
   /* Analytic ray-vs-AABB slab test — camera occlusion without raycasts.
      Mutates `to` in place; returns true if it hit something. */
+  /* M42. How much room is there around a POINT? occlude() only tests the straight
+     line from the player to the camera, so a camera that goes cleanly through a
+     doorway and ends up in the next room with its nose against a wall passes that
+     test - measured, that is exactly what the lounge camera did: 3.8m away, 0.74m
+     past a partition, with a third of the frame filled by the wall it was pressed
+     against. Returns metres to the nearest collider face, 0 if inside one. */
+  clearance(cols,x,y,z,minTop){
+    let best=Infinity;
+    for(let i=0;i<cols.length;i++){
+      const c=cols[i];
+      if(c.top<minTop)continue;
+      if(y>c.top||y<(c.base||0)-0.1)continue;
+      const dx=Math.max(c.minX-x,0,x-c.maxX);
+      const dz=Math.max(c.minZ-z,0,z-c.maxZ);
+      const d=Math.hypot(dx,dz);
+      if(d<best)best=d;
+      if(best<=0)return 0;
+    }
+    return best===Infinity?99:best;
+  },
   occlude(cols,from,to,minTop,pull){
     let tMin=1;
     const dx=to.x-from.x,dy=to.y-from.y,dz=to.z-from.z;
@@ -4519,8 +4568,15 @@ const PHYS={
       }
     }
     if(tMin<1){
-      to.set(from.x+dx*tMin,from.y+dy*tMin,from.z+dz*tMin);
-      to.x-=dx*pull;to.y-=dy*pull;to.z-=dz*pull;
+      /* M42. `pull` was a FRACTION of the requested camera distance: 6% of 3.4m is
+         twenty centimetres, so when the camera hit a wall it parked 20cm off it and
+         the wall filled the frame. Measured: 34% of the lounge frame was geometry
+         within a metre of the camera - you could not see the room you were standing
+         in. It is a distance in METRES now, converted to a fraction of this
+         particular offset, and clamped so it can never pull back past the player. */
+      const len=Math.hypot(dx,dy,dz)||1e-6;
+      const t=Math.max(0.06,tMin-pull/len);
+      to.set(from.x+dx*t,from.y+dy*t,from.z+dz*t);
       return true;
     }
     return false;
@@ -5821,7 +5877,7 @@ function hardenNight(){
          live, so the seeing checks pick this up with no extra plumbing. */
       const z={x:h._door.pos[0],z:h._door.pos[2]+0.9,r:CONST.HARD_LIGHT_R,i:0};
       LIGHTS.push(z);
-      const L=new THREE.PointLight('#fff0cf',0,CONST.HARD_LIGHT_R*2.2,1.6);
+      const L=practical('#fff0cf',0,CONST.HARD_LIGHT_R*2.2,1.6);
       L.position.set(z.x,2.5,z.z);L.userData.temporal=true;scene.add(L);
       /* M19: something for the light to come OUT of. It was emitting from thin air
          at head height above the porch, which is why the street lighting up read as
@@ -5874,7 +5930,7 @@ function hardenNight(){
     const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),
       new THREE.MeshBasicMaterial({color:'#fff4d6'}));
     bulb.position.set(0.34,1.16,0);g.add(bulb);
-    const TL=new THREE.PointLight('#ffe6b0',1.9,9.0,1.7);
+    const TL=practical('#ffe6b0',1.9,9.0,1.7);
     TL.position.set(0,1.16,0);g.add(TL);
     const zone={x:0,z:0,r:CONST.HARD_WATCH_R*0.62,i:0.66};
     LIGHTS.push(zone);hardAdd(null,zone);
@@ -5946,7 +6002,7 @@ function hardenTick(dt){
     const want=on?CONST.HARD_LIGHT_I:0;
     if(m.zone.i!==want){
       m.zone.i=want;
-      if(m.three)m.three.intensity=on?2.2:0;
+      if(m.three)m.three.intensity=on?2.2*CONST.PRACTICAL_GAIN:0;   // M42
       if(on)hint('A light snaps on over the porch.');
     }
   }
@@ -6346,7 +6402,7 @@ function fireEvent(e){
        seeing check that reads it - agrees that you are now standing in it. */
     const h=otherHouse(rng); if(!h)return;
     const x=h.x+(rng()<0.5?-4.0:4.0),z=-3.05*RS;
-    const L=new THREE.PointLight('#ffd9a0',1.9,9.0,1.6);
+    const L=practical('#ffd9a0',1.9,9.0,1.6);
     L.position.set(x,1.9,z);L.userData.temporal=true;scene.add(L);
     const zone={x:x,z:z,r:6.4,i:0.72};LIGHTS.push(zone);
     e.light=L;e.zone=zone;e.until=NIGHT.t+0.42;      // ~25 real seconds
@@ -7278,7 +7334,7 @@ function relocate(owner,kind,localPos){
 function houseLight(houseId,dx,dz,r,i){
   const h=houseById(houseId);if(!h)return false;
   LIGHTS.push({x:h.x+dx,z:dz,r:r,i:i});
-  const L=new THREE.PointLight('#ffd9a0',1.2,r*2.3,1.6);
+  const L=practical('#ffd9a0',1.2,r*2.3,1.6);
   L.position.set(h.x+dx,1.95,dz);L.userData.temporal=true;scene.add(L);
   return true;
 }
@@ -8759,7 +8815,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M41'};
+  version:'M42'};
 </script>
 </body>
 </html>

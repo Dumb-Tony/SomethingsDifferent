@@ -539,7 +539,44 @@ Dev-wide catalog of what already exists and where to copy it from.
   would be unfair, and the point is **presence, not difficulty**. Asserted: five
   minutes of a player doing nothing leaves noise at 0.0000 and the sleeper asleep.
   15 assertions.
-  **1373 assertions across forty-one suites.**
+
+
+- 2026-08-31 - **M42 DONE - THE FRAME IS PART OF THE CONTRACT.** *Playtest feedback: "I
+  need to see some real progress", and "couldn't see what was going on".* Forty-one
+  milestones, 1,373 assertions, and **not one of them had ever looked at a pixel**. The
+  last screenshots in `docs/` were M21. I finally rendered the thing and the images
+  said what no state assertion could.
+  **MEASURED** (`tools/_frame.js`, off the real framebuffer): every night scene lived
+  entirely in the bottom two fifths of the histogram - street `64/36/0/0/0`, bedroom
+  `48/51/0/0/0`, kitchen `43/56/0/0/0`. **Not one pixel anywhere in the top three
+  fifths**, and 13-25% of every frame pure black. The rig's own comment says the plan
+  is that "a low exposure crushes the ambient toward black while letting the practicals
+  hold their highlights". The practicals were holding nothing.
+  **Swept both levers** (`tools/_tone.js`). **Exposure is the wrong one**: at 1.35 the
+  street reaches 2.4% highlight while black collapses 21% -> 1%, which is the "flat
+  grey-blue" the rig itself warned about. **The practicals are the right one.** All
+  eight now route through `practical()` and `CONST.PRACTICAL_GAIN` (2.5). Result:
+  bedroom `48/51/0/0/0` -> `39/13/48/0/0`, kitchen `43/56/0/0/0` -> `23/33/44/0/0`,
+  hall mean 0.209 -> 0.344. Still a night: brightest scene mean 0.385, deepest 24%
+  black.
+  **`CAM_OCC_PULL` was dimensionally wrong** - a *fraction* of the camera distance, so
+  6% of 3.4m parked the camera 20cm off a wall. It is 0.45 **metres** now.
+  **THREE OF MY OWN CLAIMS WERE WRONG AND THE MEASUREMENT CAUGHT THEM.** I told the
+  user the camera was "inside the walls" everywhere: it is 0% near-geometry in four of
+  five scenes and only bad in the lounge (34%). I said prompts were orphaned off
+  screen: **52 of 52** prompted objects are on screen; the fault is placement at the
+  bottom of the frame, not visibility. And I told them to shrink the street, which M41
+  had already disproved.
+  **AND ONE FIX I COULD NOT MAKE.** The lounge camera goes cleanly through a doorway,
+  ends up 3.8m away in the next room with its nose 0.74m from a partition; `occlude()`
+  passes it because the *line* was never blocked. I added a clearance solve that walked
+  the camera in until it had room - it made things **worse** (lounge 34% -> 64%, hall
+  9% -> 49% black), because pulling in just presses the camera against nearer things.
+  Reverted. `PHYS.clearance` survives as the query that measures it, and m42 pins 34%
+  so it cannot quietly get worse. **Still open.**
+  17 assertions, including that quadrupling every lamp leaves `litAt` at 0.700
+  unchanged - `PRACTICAL_GAIN` is a look control and must never become a difficulty
+  one. **1390 assertions across forty-two suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
@@ -773,6 +810,13 @@ In the browser console: `__SD.doubt()` prints the band maps + histogram;
 - Props are parametric; a "variant" is a diff of a spec's parameter vector (GDD §5.1).
 - Houses are authored, not procgen — the opposite of the Chameleon project, on purpose.
 - Solo game. No multiplayer.
+
+
+- **LOOK AT THE GAME.** Forty-one milestones shipped without a single rendered frame
+  being inspected, while the player kept saying it was unplayable. State assertions
+  cannot see a black screen, a camera in a wall, or a prompt in the wrong corner.
+  Every visual milestone ends with `tools/shot.ps1` and actually reading the image,
+  and `m42` measures the framebuffer so a regression goes red.
 
 ## Testing (binding — GDD §16)
 No Node.js on this box. Serve over http (`play.bat` → localhost:8341), smoke-run in a
