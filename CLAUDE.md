@@ -1098,3 +1098,45 @@ still sat 3.7m off vance's path. The suite asserts foliage against a fixed 4.0m 
 than against `VERGE_CLEAR`, which would have been circular and passed at any value.
 
   every gate now clears 4.9m or better · 0% of the upper frame within 3m at all five
+
+## M52 — a mirrored house must be the exact mirror of its twin
+
+m50 asserted the things I thought to check — wall layouts differ, walkable area is
+preserved, light zones and lamps agree. All true, all green, and all blind to three
+real handedness bugs that only turned up when I **looked at the frames**:
+
+- **The front door opened the wrong way.** `setDoor` wrote a fixed `+0.48π` for every
+  door in the game. M50 moved the hinge to the other jamb on a mirrored lot, so the
+  door swung backwards through its own doorway and into the hall, where it filled the
+  camera. Invisible to every assertion, because **a closed door is symmetric and every
+  test looked at closed doors**.
+- **The door knob was on the wrong side** — the panel was mirrored, the handle wasn't.
+- **The guard dog stood in the driveway.** Hardening fires long after `buildHouse` has
+  returned, so the global `MIR` is back to 1; dog and kennel were placed at a hardcoded
+  `+2.6` from the lot centre and never learned about the mirror.
+
+All three are one mistake: a quantity with a handedness that never asked which hand
+its house is. Enumerating them one at a time is how the first two got missed, so m52
+asserts the **general property** — take every mesh on an unmirrored lot and every mesh
+on a mirrored one, flip the local x and the yaw of the mirrored set, and require the
+two to pair. **160 meshes, 0 unpaired, doors shut and doors open.** A handedness bug
+anywhere fails here whether or not I thought of it.
+
+Four things had to be designed out before it measured anything real, and each was a
+lesson about what "the same" means:
+
+- **Props are excluded.** Every house authors its own twenty objects, so comparing
+  them compares two different set-dressings.
+- **Colour is excluded.** Keying on it took the mismatch count 7 → 29, because every
+  house has had its own palette since M17.
+- **Actors are excluded** — sleepers stir and turn their heads, scan marks spin on a
+  clock. Two houses hold two different people in two different states.
+- **Matched by tolerance, not by a hash of the coordinates.** Quantising a position
+  into a key is tidy and wrong: two meshes 3mm apart straddle a rounding boundary and
+  hash to different buckets. It reported five phantom mismatches that were all pairs
+  exactly 0.25 apart. **M50 hit this same trap comparing wall fingerprints.**
+  Snap-to-grid cannot express "close enough"; a tolerance can.
+
+Also fixed: `fireHardening()` only *adds a tier* when the alert level earns it — the
+bodies are built by `hardenNight()`. Calling the wrong one gave zero dogs and an
+assertion that passed because it had nothing to look at.

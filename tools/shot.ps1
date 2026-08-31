@@ -95,15 +95,15 @@ $setups = @{
 
   SD.startHouse(); SD.GAME.hasSpareKey=true;
   SD.useDoor(SD.houseById('hoyt')._door);
-  SD.player.position.set(0.0,0,-2.2); SD.player.rotation.y=Math.PI;
-  SD.S.yaw=Math.PI; SD.S.pitch=0.10; SD.S.dist=3.4; SD.S.camP=null; SD.S.camL=null;
+  SD.player.position.set(-2.2,0,-3.9); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI*0.62; SD.S.pitch=0.12; SD.S.dist=3.2; SD.S.camP=null; SD.S.camL=null;
 "@
   hall14 = @"
   SD.startHouse(); SD.GAME.hasSpareKey=true;
   SD.useDoor(SD.houseById('vance')._door);
   var ox=SD.houseById('vance').x;
-  SD.player.position.set(ox,0,-2.2); SD.player.rotation.y=Math.PI;
-  SD.S.yaw=Math.PI; SD.S.pitch=0.10; SD.S.dist=3.4; SD.S.camP=null; SD.S.camL=null;
+  SD.player.position.set(ox+2.2,0,-3.9); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI*1.38; SD.S.pitch=0.12; SD.S.dist=3.2; SD.S.camP=null; SD.S.camL=null;
 "@
   lounge = @"
 

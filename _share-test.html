@@ -285,7 +285,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M50 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M51 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -680,6 +680,12 @@ const CONST={
                             // spreading beats hammering one house — that is the
                             // strategy this number is set against. See GDD 15.
   LOSE_STREET : 70,         // mean neighbourhood Suspicion that ends the run
+  /* M51: how far a verge tree's TRUNK must stay from a lot's centre line, so the
+     camera standing at the gate is never inside a canopy. This positions the
+     trunk, and a tree is several canopy blobs offset AROUND the trunk - at 4.0
+     the trunk cleared but a blob still sat 3.7m off vance's path. 4.5 puts every
+     piece of foliage beyond 4m of any front path. Measured in tools/_sky.js. */
+  VERGE_CLEAR : 4.5,
   /* M50 — THE STREET FORGETS.
      Every write to a resident's suspicion in this entire file is `+=` and clamped.
      It is a RATCHET: nothing anywhere subtracts from it, so a bad night on night two
@@ -4587,8 +4593,30 @@ function buildEstate(rng){
     wireSpan(x,x+LOT_PITCH,ST.kerbS-ST.paveW*0.45,6.86,0.9);
     wireSpan(x,x+LOT_PITCH,ST.kerbS-ST.paveW*0.45+0.4,6.30,0.8);
   }
+  /* M51 — NOT ACROSS SOMEBODY'S FRONT PATH. The verge trees step on a fixed 11.6m
+     grid down a 146m street while the lots sit on a 24.8m pitch, so the two rhythms
+     drift in and out of phase. MEASURED, camera at the gate of each house, nearest
+     canopy: 12 Ardsley 7.4m, 8 Ardsley 5.3m, 10 Ardsley 9.0m - and 14 Ardsley 2.0m,
+     16 Ardsley 1.6m. At those last two the camera is INSIDE the tree, and a canopy
+     at 1.6m blacks out a third of the frame. Standing at your own gate is the single
+     most common thing the player does; two lots in five had a tree over the lens.
+
+     NUDGED, NOT SKIPPED. Dropping a tree would change how many times this loop draws
+     from `rng`, and the street's generator is shared - the note on carReset is about
+     exactly this, that an extra draw here silently repaints everything after it.
+     Moving a tree costs no randomness at all, so the rest of the street is bit for
+     bit what it was. A council would not plant across a driveway either. */
+  const offPath=tx=>{
+    for(let i=0;i<HOUSES.length;i++){
+      const d=tx-HOUSES[i].x;
+      if(Math.abs(d)<CONST.VERGE_CLEAR)
+        return HOUSES[i].x+(d<0?-1:1)*CONST.VERGE_CLEAR;
+    }
+    return tx;
+  };
   for(let x=ST.cx+ST.cr+3;x<ST.eastX-3;x+=11.6)
-    if(rng()<0.55)tree(x+rng()*3,ST.kerbN+ST.paveW*0.55,3.6+rng()*2.0,rng);
+    if(rng()<0.55)tree(offPath(x+rng()*3),ST.kerbN+ST.paveW*0.55,3.6+rng()*2.0,rng);
+
   // the east end: the road leaves through a gap in a hedgerow you cannot follow
   box(2.2,2.60,26,'#243a24',ST.eastX+0.6,1.30,ST.roadZ+13,{tag:'hedgerow'});
   box(2.2,2.60,26,'#243a24',ST.eastX+0.6,1.30,ST.roadZ-13,{tag:'hedgerow'});
@@ -9264,7 +9292,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M50'};
+  version:'M51'};
 </script>
 
 </body>
