@@ -1658,6 +1658,15 @@ Houses 4–8 including the conspiracy theorist; gossip and credibility; hardenin
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full
 fracture set; children as observers.
 
+
+### Phase 3 — The alien *(begun)*
+
+- **M46 — person-scanning and trait reveal.** Q in the afternoon reads a neighbour:
+  attention, notice floor, doubt band, one a day. `readTier(owner)` is the better of
+  global Human Knowledge and what you know about that person, so studying Walt sharpens
+  Walt's shelf and nobody else's. Remaining in this phase: wall-crawl and crawlspace
+  traversal, pets, weather affecting entries, the truck and large-furniture heists.
+
 ### Phase 3 — The alien
 Full ability set with Agency Attention; person-scanning and trait reveal; wall-crawl and
 crawlspace traversal (port from `chameleon3d`); pets; weather affecting entries; the

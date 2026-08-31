@@ -255,7 +255,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M45 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M46 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -6913,7 +6913,10 @@ function predict(objId,variant){
      similarity-to-your-record, but the forecast has to be similarity-to-reality. */
   const probe={kind:o.kind,spec:o.spec,attach:o.attach,marked:o.marked,fresh:o.fresh};
   const r=DOUBT.resolve(res,probe,variant.spec);
-  const tier=hkTier();
+  /* M46: the better of what you know about people in general and what you know
+     about THIS one. Reading Walt three times makes Walt's shelf legible without
+     telling you anything about Marisol. */
+  const tier=readTier(o.owner);
   if(tier<=0)return {text:'???',cls:''};
   if(tier===1)return {text:res.name.split(' ')[0]+'?',cls:''};
   return {text:r.band,cls:r.band==='DOUBT'?'sh-good':(r.band==='CERTAINTY'?'sh-bad':'sh-dim'),
@@ -7006,7 +7009,7 @@ function buildFolk(){
       }
       scene.add(g);envMeshes.push(g);
       DAYFOLK.push({res:id,name:r.name,x:x,z:z,group:g,where:where,
-                    pos:[x,1.15,z],spoken:false,fret:fretting});
+                    pos:[x,1.15,z],spoken:false,readToday:false,fret:fretting});   // M46
     });
   });
 }
@@ -7277,7 +7280,8 @@ const GAME={day:1,hasSpareKey:false,sightings:0,
      haul and the fence, which is a whole milestone of economy thrown away by
      startHouse without ever being shown. A run with no story to retell gives you
      nothing to beat next time. */
-  stats:{swapped:0,scanned:0,pulses:0,nightsOut:0,sold:0,earned:0,hidden:0,fabbed:0},
+  stats:{swapped:0,scanned:0,pulses:0,nightsOut:0,sold:0,earned:0,hidden:0,
+         fabbed:0,readPeople:0},
   /* M11 — run state, so the guide and the one-off explanations survive a save.
      The player's PREFERENCE (guide on/off, intro seen) is not here: that lives in
      localStorage like the audio mix, because it must outlive any single run. */
@@ -8002,6 +8006,68 @@ function markState(o){
   if(invFor(o.id).length)return 'ready';
   return CATALOG[o.id]?'known':'fresh';
 }
+/* ═══════════════════ READING A PERSON (M46) ═══════════════════════════════
+   GDD Phase 3: "person-scanning and trait reveal". The first thing off the roadmap
+   proper, and it is the one that pays for the rest of the game.
+
+   Human Knowledge has been an ABSTRACT NUMBER since M6 - a single global counter
+   that unlocks the forecast for everybody at once. That is backwards for a game
+   about people: knowing that Walt forgets things should not teach you anything
+   about Marisol, who photographs her rooms.
+
+   So the scanner reads PEOPLE, in the afternoon, when they are out. Three readings
+   and you have their whole curve. What you learn is exactly what the Doubt Curve
+   runs on - how closely they look, how far past that they will go before they stop
+   blaming themselves - so predict() gets sharp for THEIR things and stays vague for
+   everybody else's. Human Knowledge still exists and still gates the general read;
+   this is the specific one, and it beats the general one for anybody you have
+   actually studied.
+
+   It costs the afternoon, which is the resource M20 built and M25 gave a job. */
+function readPerson(f){
+  const r=RESIDENTS[f.res];
+  if(!r)return null;
+  if(f.readToday){hint('You have already had a good look at '+f.name+' today.');return null;}
+  if((r.read||0)>=3){hint(f.name+' holds no more surprises. You know how they look at a room.');
+                     return null;}
+  f.readToday=true;
+  r.read=(r.read||0)+1;
+  GAME.stats.readPeople=(GAME.stats.readPeople||0)+1;
+  SFX.cue('doubt');
+  const lines=[
+    f.name+' looks at things for '+(r.attention>=0.9?'a long time':
+      r.attention>=0.7?'about as long as anyone':'no time at all')+
+      '. You have their ATTENTION.',
+    f.name+' would not notice a change smaller than about '+r.noticeFloor+
+      ' parts in a hundred. You have their FLOOR.',
+    f.name+' will keep blaming themselves for about '+r.doubtBand+
+      ' parts past that, and then stop. You have their BAND &mdash; you can read '+
+      'their things exactly now.'
+  ];
+  hint(lines[r.read-1]);
+  DAY.log.push(lines[r.read-1]);
+  hkGain(2);
+  return r.read;
+}
+/* How well the forecast can read THIS object's owner: whichever is better, what you
+   know about people in general or what you know about this person. */
+/* Whoever you are standing closest to, within the same reach as everything else. */
+function readNearest(){
+  if(!player||!DAYFOLK.length){hint('There is nobody out.');return null;}
+  let best=null,bd=1e9;
+  for(let i=0;i<DAYFOLK.length;i++){
+    const f=DAYFOLK[i];
+    const d=Math.hypot(player.position.x-f.x,player.position.z-f.z);
+    if(d<bd){bd=d;best=f;}
+  }
+  if(!best||bd>INTERACT_RANGE*1.6){
+    hint('Too far. You have to stand near somebody to read them.');return null;}
+  return readPerson(best);
+}
+function readTier(ownerId){
+  const r=RESIDENTS[ownerId];
+  return Math.max(hkTier(),(r&&r.read)||0);
+}
 function scanPulse(){
   if(!player||S.phase!=='house')return null;
   /* M38: a refused Q was silent, so on a cooldown with no meter it was
@@ -8645,7 +8711,13 @@ addEventListener('keydown',e=>{
   if(S.focus){focusKey(k,e);return;}          // focus mode owns the keyboard
   if(S.phase==='house'){
     if(k==='e'){interact();return;}
-    if(k==='q'){scanPulse();return;}     // M24: read the room
+    /* M46: the same instrument, pointed at a person instead of a room. In the
+       afternoon there is nobody asleep to wake and nothing to catalogue - what is
+       out there is people, so that is what it reads. */
+    if(k==='q'){
+      if(S.daytime){readNearest();return;}
+      scanPulse();return;                // M24: read the room
+    }
     if(k==='tab'){showDossier();e.preventDefault();return;}
     if(k==='m'){endNight('home','You are back before anyone stirs.');return;}
   }
@@ -8719,7 +8791,7 @@ function startHouse(){
   GAME.everPulsed=false;GAME.everSold=false;               // ...from scratch (M29)
   GAME.everBought=false;                                   // M39
   GAME.stats={swapped:0,scanned:0,pulses:0,nightsOut:0,    // ...with a blank ledger (M32)
-              sold:0,earned:0,hidden:0,fabbed:0};
+              sold:0,earned:0,hidden:0,fabbed:0,readPeople:0};
   GAME.callingIn=false;                                    // M34
   GAME.hardened=[];GAME.lastHarden=[];                     // ...on a soft street (M14)
   GAME.lastGossip=[];
@@ -8728,7 +8800,7 @@ function startHouse(){
   Object.keys(RESIDENTS).forEach(id=>{
     const r=RESIDENTS[id];r.doubt=0;r.suspicion=0;r.stress=0;r.beats=0;
     r.fretting=null;                                          // M40
-    r.fired={};r.collapsed=false;r.familiar=0;});
+    r.fired={};r.collapsed=false;r.familiar=0;r.read=0;});   // M46
   RESIDENTS.walt.sleepQuality=0.50;RESIDENTS.june.sleepQuality=0.40;
   GAME.lastFractures=[];
   nightReset();
@@ -8978,6 +9050,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   setGrade(v){const was=GRADE_ON;GRADE_ON=!!v;return was;},
   // - M20: daylight -
   DAYFOLK,buildFolk,clearFolk,talkTo,startWalk,endWalk,FOLK_SPOTS,
+  readPerson,readNearest,readTier,
   // - M19: the threats have bodies -
   CAM_FX,HARD_FX,hardClear,makeWalker,makeDog,
   // ── M7: her ladder acting, fractures, marking ──
@@ -9006,6 +9079,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M45'};
+  version:'M46'};
 </script>
 

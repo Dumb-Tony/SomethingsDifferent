@@ -662,6 +662,24 @@ Dev-wide catalog of what already exists and where to copy it from.
   CERTAINTY, and hardening arriving on nights **2, 4, 6, 8, 10**. 20 assertions.
   **1453 assertions across forty-five suites.**
 
+- 2026-08-31 - **M46 DONE - READING A PERSON.** The first thing off the GDD roadmap
+  proper (**Phase 3: person-scanning and trait reveal**), and the one that pays for the
+  rest of the game. Human Knowledge has been an **abstract number** since M6: one
+  global counter unlocking the forecast for everybody at once. That is backwards for a
+  game about people - knowing that Walt forgets things should not teach you anything
+  about Marisol, who photographs her rooms before bed.
+  The scanner reads **people** now. Press **Q** in the afternoon next to somebody and
+  you get one reading a day: their **attention**, then their **notice floor**, then
+  their **doubt band** - which is precisely what the Doubt Curve runs on. `predict()`
+  takes `readTier(owner) = max(hkTier(), r.read)`, so studying somebody makes *their*
+  shelf legible and tells you nothing about anybody else's.
+  Measured: at **Human Knowledge 0**, three readings of Walt make his objects forecast
+  a real band while June's still read `???`. A global counter could never do that.
+  It costs the afternoon - the resource M20 built, M25 gave a job, and M40 made worth
+  watching - and a new run knows nobody, so you learn the street from scratch every
+  time. 22 assertions.
+  **1475 assertions across forty-six suites.**
+
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
   *perceived* at `doMorning()`. Repeated edits to one object collapse into a single
