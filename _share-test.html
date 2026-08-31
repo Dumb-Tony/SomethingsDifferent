@@ -28,8 +28,17 @@ canvas{display:block}
 
 /* ── overlays: .screen is EXCLUSIVE (go() clears every .on). Anything that should
       stack over gameplay must NOT carry class="screen". ───────────────────────── */
+/* M49. THE MORNING REPORT RAN OFF THE BOTTOM OF THE SCREEN. Screenshotted it and the
+   last swap of the night was cut in half with CONTINUE sitting on top of it - on the
+   screen you read EVERY night, at the four-a-night pace the game is balanced around.
+   #report-body already capped at 58vh, but the heading, the band glosses and M34's
+   second button push the column past the viewport, and a centred flex column clips at
+   BOTH ends when it overflows. Scroll the screen itself, and let the flex children
+   keep their size. */
 .screen{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
-  flex-direction:column;gap:18px;background:rgba(8,7,14,.86);backdrop-filter:blur(6px);text-align:center;padding:20px}
+  flex-direction:column;gap:18px;background:rgba(8,7,14,.86);backdrop-filter:blur(6px);
+  text-align:center;padding:20px;overflow-y:auto;overscroll-behavior:contain}
+.screen>*{flex-shrink:0}
 .screen.on{display:flex}
 h1{font-family:var(--font-display);font-weight:800;font-size:46px;color:var(--paper);line-height:1.03;letter-spacing:-.5px}
 h1 span{color:var(--alien)}
@@ -170,7 +179,10 @@ body.night #grade{opacity:1}
   font-family:var(--font-mono);font-size:11px}
 
 /* ── morning report + dossier (M4) ── */
-#report-body{max-width:640px;max-height:58vh;overflow:auto;text-align:left;
+/* Sized against the CHROME rather than a flat fraction of the viewport: heading,
+   two buttons and the padding come to about 280px, and 58vh of a 760px window left
+   the column 46px too tall. */
+#report-body{max-width:640px;max-height:calc(100vh - 300px);overflow:auto;text-align:left;
   display:flex;flex-direction:column;gap:10px}
 .rp-item{border-left:3px solid var(--line);padding:9px 13px;background:var(--panel);
   border-radius:0 10px 10px 0}
@@ -219,7 +231,8 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .rp-none,.rp-foot{color:var(--dim);font-size:13px}
 /* ── day / shop / dialogue (M6) ── */
 #day-block span{font-size:24px;color:var(--dim)}
-#day-body{max-width:720px;text-align:left}
+/* The day screen grows with the block's action list and its log; same treatment. */
+#day-body{max-width:720px;max-height:calc(100vh - 260px);overflow:auto;text-align:left}
 .dy-meta{font-family:var(--font-mono);font-size:11px;letter-spacing:1.2px;color:var(--alien);margin-bottom:6px}
 .dy-sub{color:var(--dim);font-size:14px;margin-bottom:10px}
 .dy-wife{font-size:13px;background:var(--panel);border:1px solid var(--line);
@@ -272,7 +285,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M48 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M49 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -320,7 +333,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
     <b>E</b><span>examine / search / open &mdash; and at a wardrobe, a hedge or a shed,
       hide, and again to come out</span>
     <b>Q</b><span>scan pulse &mdash; marks their things, and is heard</span>
-    <b>F</b> / <b>R</b><span>on a held object: record it, then print a rough copy</span>
+    <b>F / R</b><span>on a held object: record it, then print a rough copy</span>
     <b>Tab</b><span>dossier &mdash; catalog, bag, their state of mind</span>
     <b>M</b><span>go home &mdash; end the night, see the morning</span>
     <b>F3</b><span>toggle debug readout</span>
@@ -9170,7 +9183,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M48'};
+  version:'M49'};
 </script>
 
 </body>

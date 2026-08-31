@@ -1009,3 +1009,55 @@ legitimately four arrows. The rule is "nothing but a connector", the shape the
 `<b>F</b> / <b>R</b>` bug actually had.
 
   report body 324px · button at 489px · viewport 624px · 30 key rows well formed
+
+## M50 — the houses stop being the same house, and the street learns to forget
+
+`tools/_plans.js` fingerprinted the five lots. The answer was worse than "similar":
+they were the **same building** — 941 walkable cells in every house, one window
+layout, one furniture layout, the same wardrobe to hide in at the same coordinate.
+Only the paint and the objects on the surfaces differed. `buildHouse`'s own comment
+argued that was enough ("suburban houses on one road ARE the same developer's
+floorplan"), and it is not, because **the floorplan IS the stealth puzzle**.
+
+A developer stamping a cul-de-sac mirrors the plan on alternate lots — the true thing
+and the cheap thing at once. `MIR`/`MX()` threads one sign flip through the 26 places
+that turn a house coordinate into a world one, so 14 and 8 come out handed the other
+way: walls, windows, wardrobe, driveway, light zones, and the props on the shelves.
+
+**The invariant that proves it is a mirror and not a break: reflection preserves
+area.** All five houses still measure exactly 941 walkable cells. Wall layouts went
+2 distinct → 4, hiding places 2 → 4, windows 1 → 2.
+
+`addLight` was the near-miss: it sets a gameplay ZONE *and* a THREE light on two
+separate lines. Mirroring one and not the other would light a house down one side and
+have it *read* as lit down the other — the worst stealth bug available here.
+
+### The second half, which the first half found
+
+The mirror moved m45's competent run from 69.1 to 70.0 against `LOSE_STREET` 70, and
+flipped a win into a loss. Chasing that turned up the real defect: **every write to a
+resident's suspicion in the whole file is `+=` and clamped.** It was a ratchet. One bad
+night on night two was still being paid for on night ten, there was no way back, and no
+reason to ever lay low — so any change at all was a coin flip on the ending.
+
+It cools now (`SUSP_COOL`), cancelled for anyone who noticed something that morning.
+The meter finally moves both ways: 34 → 33 → 28 → 27 → 23, a bad patch to 64, recovery
+to 56. Swept in `tools/_cool.js` against two bars — and **only one of them binds**:
+
+      cool | competent finishes | sloppy peaks | sloppy crosses 70
+      0.00 |  67.9 (margin  2.1)|     99.8     |  night 3
+      0.12 |  56.3 (margin 13.7)|     94.8     |  night 3
+      0.32 |  38.2 (margin 31.8)|     86.5     |  night 3
+
+The sloppy run crosses on night three at every rate, so cooling cannot rescue a bad
+player and THEY COMPARED NOTES was never at risk. I had asserted otherwise from a
+first sweep whose "worst match" selector read `v.similarity` where the shelf calls
+that field `v.sim` — so it silently bought nothing and fabricated everything. Both the
+constant's comment and the m50 assertions carry the corrected numbers.
+
+### Found while photographing it, NOT caused by it
+
+`docs/m50-front16.png` — an **unmirrored** lot 49.6m from the world origin — shows the
+same black wedge across the top-left as the mirrored `front14`. It tracks distance from
+the origin, not the hand, so it predates M50. The rays through it miss every collider
+and land ~54m out on a white-based material. Next milestone.

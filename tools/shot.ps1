@@ -47,7 +47,44 @@ $setups = @{
   SD.S.yaw=0; SD.S.pitch=0.22; SD.S.dist=2.6; SD.S.camP=null; SD.S.camL=null;
   SD.NIGHT.running=false;
 "@
+  # ── M50. THE SAME POSE ON TWO LOTS, ONE OF EACH HAND. If the mirror works these
+  #    two frames are left/right flips of one another: driveway, window, the lot
+  #    the porch light falls on. If it does not, one of them has a wall in it.
+  front12 = @"
+  SD.startHouse();
+  SD.player.position.set(0.0,0,-9.4); SD.player.rotation.y=0;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.13; SD.S.dist=6.4; SD.S.camP=null; SD.S.camL=null;
+"@
+  front14 = @"
+  SD.startHouse();
+  var ox=SD.houseById('vance').x;
+  SD.player.position.set(ox,0,-9.4); SD.player.rotation.y=0;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.13; SD.S.dist=6.4; SD.S.camP=null; SD.S.camL=null;
+"@
+  # 16 Ardsley: UNMIRRORED, but twice as far from the world origin as 14. If the black
+  # wedge follows the lot rather than the hand, it is not the mirror's doing.
+  front16 = @"
+  SD.startHouse();
+  var ox=SD.houseById('okonkwo').x;
+  SD.player.position.set(ox,0,-9.4); SD.player.rotation.y=0;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.13; SD.S.dist=6.4; SD.S.camP=null; SD.S.camL=null;
+"@
+  hall12 = @"
+
+  SD.startHouse(); SD.GAME.hasSpareKey=true;
+  SD.useDoor(SD.houseById('hoyt')._door);
+  SD.player.position.set(0.0,0,-2.2); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.10; SD.S.dist=3.4; SD.S.camP=null; SD.S.camL=null;
+"@
+  hall14 = @"
+  SD.startHouse(); SD.GAME.hasSpareKey=true;
+  SD.useDoor(SD.houseById('vance')._door);
+  var ox=SD.houseById('vance').x;
+  SD.player.position.set(ox,0,-2.2); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.10; SD.S.dist=3.4; SD.S.camP=null; SD.S.camL=null;
+"@
   lounge = @"
+
   SD.startHouse(); $open
   SD.player.position.set(2.2,0,-1.0); SD.player.rotation.y=Math.PI;
   SD.S.yaw=0.9; SD.S.pitch=0.20; SD.S.dist=3.4; SD.S.camP=null; SD.S.camL=null;
