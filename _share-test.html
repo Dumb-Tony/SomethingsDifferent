@@ -143,9 +143,17 @@ body.night #grade{opacity:1}
 #flash.on{opacity:1}
 
 /* ── interaction prompt + focus panel (M4) ── */
-#prompt{position:fixed;bottom:124px;left:50%;transform:translateX(-50%);z-index:24;
-  background:rgba(10,9,18,.85);border:1px solid var(--line);border-radius:12px;padding:8px 16px;
-  font-size:13px;font-weight:700;opacity:0;transition:opacity .15s;pointer-events:none}
+/* M47: the prompt follows the THING. It used to sit pinned at the bottom of the
+   screen naming an object that might be anywhere in frame - measured at M42, all 52
+   prompted objects were on screen, so the fault was never visibility, it was that
+   nothing connected the words to the thing. Positioned per frame now, with a small
+   stem pointing down at it. */
+#prompt{position:fixed;z-index:24;transform:translate(-50%,-100%);
+  background:rgba(10,9,18,.88);border:1px solid var(--line);border-radius:12px;padding:8px 16px;
+  font-size:13px;font-weight:700;opacity:0;transition:opacity .15s;pointer-events:none;
+  white-space:nowrap}
+#prompt::after{content:'';position:absolute;left:50%;top:100%;margin-left:-5px;
+  border:5px solid transparent;border-top-color:var(--line)}
 #prompt.on{opacity:1}
 #prompt b{color:var(--alien);font-family:var(--font-mono);margin-right:6px}
 #focus{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:28;display:none;
@@ -264,7 +272,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M46 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M47 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -4944,6 +4952,25 @@ function updateCamera(dt){
   }else{
     tx=player.position.x;ty=S.py+CONST.CH_H*CONST.CAM_LOOK_F;tz=player.position.z;
     dist=S.dist;shoulder=CONST.CAM_SHOULDER;
+    /* M47. THE INDOOR CAMERA IS FINE, AND I SPENT THREE ATTEMPTS PROVING IT.
+
+       The story: one authored screenshot pose in the lounge showed a third of the
+       frame filled by a wall, so I called the camera broken. M42 tried walking it in
+       until it had clearance and made things worse (lounge 34% -> 64%). M47 then
+       tried capping the indoor distance - first scaled off clearance, which put the
+       camera on the back of the player's head, then flat.
+
+       Then I measured it properly (tools/_cam.js): 456 poses on a grid across a whole
+       house, eight headings each, sweeping the cap from 1.5m to none.
+
+         cap:      none  3.6  3.0  2.6  2.4  2.1  1.8  1.5
+         badly blocked: 13%  13%  13%  14%  13%  13%  13%  14%
+
+       IDENTICAL AT EVERY VALUE. Distance is not the lever, because the bad poses are
+       ones where you are standing in a corner facing the corner - and then you see
+       the corner, which is not a bug. Median blocked share across a house is 0%.
+
+       So there is no indoor cap. The thing I was chasing was one screenshot. */
   }
   // shoulder offset — applied to BOTH the position and the look-at, or the camera
   // yaws inward toward the target. Easiest thing here to get wrong.
@@ -8334,6 +8361,35 @@ function interact(){
   else if(t.t==='door')useDoor(t.d);
   else if(t.t==='scenery'){hint(t.s.line);emitNoise(t.s.pos[0],t.s.pos[2],CONST.N_SCAN,'scan');}
 }
+/* Where in the frame is the thing this prompt is about? Projected through the live
+   camera, clamped so a prompt can never leave the screen even when the object is at
+   the very edge of view. */
+const _promptV=new THREE.Vector3();
+function promptWorldPos(t){
+  if(t.t==='prop'&&t.o.spec&&t.o.spec._pos){
+    const p=t.o.spec._pos,sz=t.o.group&&t.o.group.userData.size;
+    return [p[0],p[1]+(sz?sz.y*0.6:0.18),p[2]];
+  }
+  if(t.t==='planter')return [t.p.pos[0],t.p.pos[1]+0.42,t.p.pos[2]];
+  if(t.t==='door')  return [t.d.pos[0],t.d.pos[1]+0.55,t.d.pos[2]];
+  if(t.t==='hide')  return [t.h.pos[0],1.35,t.h.pos[2]];
+  if(t.t==='folk')  return [t.f.x,1.75,t.f.z];
+  if(t.t==='dana'&&DANA)return [DANA.position.x,1.75,DANA.position.z];
+  if(t.t==='scenery'&&t.s.pos)return [t.s.pos[0],t.s.pos[1]+0.30,t.s.pos[2]];
+  return null;
+}
+function promptAnchor(t){
+  const w=promptWorldPos(t);
+  if(!w||!camera)return null;
+  _promptV.set(w[0],w[1],w[2]).project(camera);
+  if(_promptV.z>1)return null;                    // behind the camera
+  const W=innerWidth,H=innerHeight;
+  return {
+    x:Math.max(90,Math.min(W-90,(_promptV.x*0.5+0.5)*W)),
+    /* a little ABOVE the object, and never off the top or under the HUD */
+    y:Math.max(96,Math.min(H-40,(-_promptV.y*0.5+0.5)*H-14))
+  };
+}
 function updatePrompt(){
   const el=$('prompt');
   if(S.focus||S.phase!=='house'){el.classList.remove('on');return;}
@@ -8350,6 +8406,12 @@ function updatePrompt(){
   else if(t.t==='folk')txt='<b>E</b> '+(t.f.spoken?'you have already spoken to ':'stand near ')+t.f.name;
   else if(t.t==='scenery')txt='<b>E</b> look at '+t.s.label+' <span class="ds-dim">(not theirs to swap)</span>';
   el.innerHTML=txt;el.classList.add('on');
+  /* ...and put it ON the thing. */
+  const at=promptAnchor(t);
+  if(at){
+    el.style.left=at.x.toFixed(0)+'px';
+    el.style.top =at.y.toFixed(0)+'px';
+  }
 }
 
 /* ═════════════════════════ REPORT / DOSSIER ═════════════════════════ */
@@ -8998,6 +9060,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   get frontDoor(){return FRONT_DOOR;},
   scanObject,fabricate,invFor,swapWith,nudgeObject,rotateObject,applyChange,
   doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,
+  updatePrompt,promptAnchor,promptWorldPos,
   showReport,showDossier,showEnding,hashStr,
   collapseIndex,streetSuspicion,activeResidents,fracturedCount,checkEnding,
   houseLight,moveSleeper,endShift,audibleNight,updateHUD,
@@ -9088,7 +9151,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M46'};
+  version:'M47'};
 </script>
 
 </body>

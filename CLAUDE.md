@@ -680,6 +680,27 @@ Dev-wide catalog of what already exists and where to copy it from.
   time. 22 assertions.
   **1475 assertions across forty-six suites.**
 
+- 2026-08-31 - **M47 DONE - THE PROMPT GOES TO THE THING, AND THE CAMERA WAS NEVER
+  BROKEN.** The prompt sat pinned at the bottom of the screen saying *"E examine her
+  mother's vase"* while the vase was somewhere else. M42 had already measured that all
+  **52 of 52** prompted objects were on screen - visibility was never the fault,
+  nothing connected the words to the object. It is projected onto the thing now, with a
+  stem pointing down at it, clamped so it can never leave the frame. Measured: **0px**
+  between the prompt and its object.
+  **AND THE CAMERA. I was wrong about it for three milestones.** One authored
+  screenshot pose in the lounge showed a third of the frame filled by a wall, so I
+  called the camera broken. M42 walked it in until it had clearance and made it
+  **worse** (34% -> 64%). M47 capped the indoor distance - first scaled off clearance,
+  which put the camera on the back of the player's head, then flat.
+  Then I measured it properly (`tools/_cam.js`): **456 poses** on a grid across a whole
+  house, eight headings each, sweeping the cap from 1.5m to none.
+  `cap: none 3.6 3.0 2.6 2.4 2.1 1.8 1.5` -> `badly blocked: 13 13 13 14 13 13 13 14%`
+  **Identical at every value.** Distance was never the lever. The bad poses are ones
+  where you stand in a corner facing the corner, and then you see the corner. Median
+  across a house is **0%**. The cap is gone; m47 pins the measurement so nobody re-adds
+  it after looking at one bad screenshot. 16 assertions.
+  **1491 assertions across forty-seven suites.**
+
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
   *perceived* at `doMorning()`. Repeated edits to one object collapse into a single
