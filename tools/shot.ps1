@@ -105,7 +105,17 @@ $setups = @{
   SD.player.position.set(ox+2.2,0,-3.9); SD.player.rotation.y=Math.PI;
   SD.S.yaw=Math.PI*1.38; SD.S.pitch=0.12; SD.S.dist=3.2; SD.S.camP=null; SD.S.camL=null;
 "@
+  # M53: the hall at 16 Ardsley, which is plan B - one doorway off the hall, into the
+  # kitchen, where plan A has two. Same pose as hall12 so the two can be compared.
+  hall16 = @"
+  SD.startHouse(); SD.GAME.hasSpareKey=true;
+  SD.useDoor(SD.houseById('okonkwo')._door);
+  var ox=SD.houseById('okonkwo').x;
+  SD.player.position.set(ox-2.2,0,-3.9); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI*0.62; SD.S.pitch=0.12; SD.S.dist=3.2; SD.S.camP=null; SD.S.camL=null;
+"@
   lounge = @"
+
 
   SD.startHouse(); $open
   SD.player.position.set(2.2,0,-1.0); SD.player.rotation.y=Math.PI;

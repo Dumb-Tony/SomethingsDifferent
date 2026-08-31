@@ -9341,8 +9341,18 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   renderer,scene,camera,
   version:'M53'};
 </script>
+<script>
+(function(){var SD=window.__SD; if(!SD) return;
+  SD.startHouse(); SD.GAME.hasSpareKey=true;
+  SD.useDoor(SD.houseById('okonkwo')._door);
+  var ox=SD.houseById('okonkwo').x;
+  SD.player.position.set(ox-2.2,0,-3.9); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI*0.62; SD.S.pitch=0.12; SD.S.dist=3.2; SD.S.camP=null; SD.S.camL=null;
+})();
+</script>
 </body>
 </html>
+
 
 
 

@@ -1140,3 +1140,53 @@ lesson about what "the same" means:
 Also fixed: `fireHardening()` only *adds a tier* when the alert level earns it — the
 bodies are built by `hardenNight()`. Calling the wrong one gave zero dogs and an
 assertion that passed because it had nothing to look at.
+
+## M53 — two plans, not one
+
+M50 gave the street two **hands** of a single floorplan. That doubled the variety and
+then stopped: 14 Ardsley is 12 Ardsley backwards, and once you have learned 12 you have
+learned both. A hand is not a plan.
+
+A plan changes **which walls have gaps in them**, and nothing else — not one stick of
+furniture, not one prop, not one window. The furniture is placed from the fixtures and
+the twenty objects per house are authored in metres *against* those fixtures, so moving
+a room would strand every one of them. Moving a doorway costs nothing and changes the
+only thing that matters, which is the route to the bed.
+
+      PLAN A   two doors off the hall. hall -> lounge -> bedroom, 12.4m of walking,
+               straight across the lounge past the television.
+      PLAN B   ONE door off the hall, into the kitchen; the kitchen opens into the
+               lounge. hall -> kitchen -> lounge -> bedroom, 20.0m, past the fridge
+               AND the television, with the hall a dead end behind you.
+
+With M50's two hands that gives the four houses you burgle **four distinct buildings** —
+A-plain, A-mirrored, B-plain, B-mirrored. It was one before M50 and two after.
+
+### The first plan B did not work, and the flood fill caught it
+
+I opened the divider at its **north** end, to put the bedroom off the kitchen. Every
+other measurement stayed green — walls differed, rooms had clearance, hiding places
+existed — and the bed was **unreachable in two of the four houses**. A clearance probe
+beside a bed proves there is standing room; it says nothing about whether you can *get*
+there. Only a real flood fill from the front door does, and it read 2325 cells against
+2828.
+
+`tools/_gap.js` said why in one pass: the **wardrobe** stands hard against that divider
+from z 1.0 to 3.5, so there is no doorway to be had there without moving a hiding
+place. The same probe showed the divider is clear on both sides from z −2.0 to 0.8. So
+plan B opens at the *south* end and closes the hall's second doorway instead — which is
+a better change anyway, because what now separates the two plans is **how many ways
+there are out of the hall**.
+
+### Two assertions had to be restated, not deleted
+
+- m50 asserted "every house has exactly the same walkable area". The invariant was
+  never that every house is the same size — it is that **a reflection preserves area**,
+  so a mirrored house must match its *same-plan* twin. Per plan: A 941/941/941,
+  B 939/939.
+- m50 also asserted that the two unmirrored target houses fingerprint identically,
+  which proved the M50 variation was a mirror rather than noise. No two target houses
+  share both a plan and a hand any more, so the stronger claim replaces it: all four
+  are distinct, and m52 still proves the mirror is exact by pairing 160 meshes.
+- m52 picked its pair by array order and *happened* to get two plan A houses. That is
+  luck, not a test; it now selects a same-plan pair explicitly.

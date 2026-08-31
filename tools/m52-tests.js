@@ -130,9 +130,17 @@ function pair(a,b){
       b[k2].y.toFixed(2)+','+b[k2].z.toFixed(2));
   return lonely;
 }
+/* THE PAIR MUST SHARE A PLAN. M53 gave 16 and 8 a second floorplan, so picking
+   "first unmirrored" and "first mirrored" off the list would compare a plan A
+   house with a plan B one and report every partition as a handedness bug. It
+   happened to still pick two plan A houses by array order, which is luck, not a
+   test. Reflection is only claimed between two houses of the SAME plan. */
 function compare(label){
-  var plain=SD.HOUSES.filter(function(h){return !h.yours&&!h.mirror;})[0];
-  var mirr =SD.HOUSES.filter(function(h){return !h.yours&&h.mirror;})[0];
+  var plan='A';
+  var plain=SD.HOUSES.filter(function(h){
+    return !h.yours&&!h.mirror&&(h.plan||'A')===plan;})[0];
+  var mirr =SD.HOUSES.filter(function(h){
+    return !h.yours&&h.mirror&&(h.plan||'A')===plan;})[0];
   var a=census(plain.id,false),b=census(mirr.id,true);
   var d=pair(a,b);
   info(label+': '+plain.id+' has '+a.length+' meshes, '+mirr.id+' has '+b.length+

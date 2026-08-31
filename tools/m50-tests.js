@@ -103,24 +103,43 @@ function walkable(id){
      (plain?plain.id:'?')+' vs '+(mirr?mirr.id:'?'));
   ok('THEIR WALL LAYOUTS ARE NOT THE SAME',walls(plain.id)!==walls(mirr.id),
      plain.id+' and '+mirr.id+' used to fingerprint identically');
-  /* two houses of the SAME hand still match - this is a mirror, not noise */
-  var p2=SD.HOUSES.filter(function(h){return !h.yours&&!h.mirror;});
-  if(p2.length>=2)
-    ok('...while two of the same hand still do match',walls(p2[0].id)===walls(p2[1].id),
-       p2[0].id+' and '+p2[1].id+' - the variation is the plan, not randomness');
+  /* M53 RETIRED THE PAIR THIS USED TO COMPARE. It asserted that the two unmirrored
+     target houses fingerprint identically, which proved the variation was a MIRROR
+     rather than noise. M53 then gave 16 and 8 a second floorplan, so hoyt and
+     okonkwo are legitimately different buildings and no two target houses share
+     both a plan and a hand any more. The stronger claim replaces it: all four are
+     distinct, and m52 proves the mirror is exact by pairing 160 meshes. */
+  var t=SD.HOUSES.filter(function(h){return !h.yours;});
+  var shapes={};t.forEach(function(h){shapes[walls(h.id)]=1;});
+  ok('...and all four target houses are different buildings',
+     Object.keys(shapes).length===t.length,
+     Object.keys(shapes).length+' distinct of '+t.length+' - two plans x two hands');
 })();
 
 /* ── 4. THE INVARIANT: A REFLECTION PRESERVES AREA ──────────────────────────
    The one assertion that separates "mirrored" from "broken". */
 (function(){
-  var w=SD.HOUSES.map(function(h){return walkable(h.id);});
-  info('walkable cells per house: '+w.join(', '));
-  var same=w.every(function(v){return v===w[0];});
-  ok('EVERY HOUSE STILL HAS EXACTLY THE SAME WALKABLE AREA',same,
-     same?('all five at '+w[0]+' cells - reflection preserves area, so a mirrored '+
-           'house that measures short has furniture inside a wall')
-        :('MISMATCH: '+w.join(', ')));
-  ok('...and that area is not zero',w[0]>200,w[0]+' cells');
+  /* PER PLAN. Until M53 there was one floorplan and this compared all five houses
+     at once; M53 gave 16 and 8 a second plan, which legitimately has a different
+     area. The invariant was never 'every house is the same size' - it is that a
+     REFLECTION PRESERVES AREA, so a mirrored house must match its SAME-PLAN twin.
+     A mirrored house that measures short has furniture inside a wall. */
+  var byPlan={};
+  SD.HOUSES.forEach(function(h){
+    var p=h.plan||'A';
+    (byPlan[p]=byPlan[p]||[]).push({id:h.id,n:walkable(h.id)});
+  });
+  var bad=[],lines=[];
+  Object.keys(byPlan).forEach(function(p){
+    var g=byPlan[p];
+    lines.push('plan '+p+': '+g.map(function(x){return x.id+' '+x.n;}).join(', '));
+    if(!g.every(function(x){return x.n===g[0].n;}))
+      bad.push('plan '+p+' '+g.map(function(x){return x.n;}).join('/'));
+  });
+  lines.forEach(function(l){info('walkable cells - '+l);});
+  ok('A MIRRORED HOUSE HAS THE SAME WALKABLE AREA AS ITS TWIN',bad.length===0,
+     bad.join('; ')||'every plan is internally consistent');
+  ok('...and that area is not zero',byPlan.A[0].n>200,byPlan.A[0].n+' cells');
 })();
 
 /* ── 5. YOU CAN STILL GET IN, AND STILL GET TO THE SLEEPER ──────────────────
