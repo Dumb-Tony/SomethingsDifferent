@@ -1639,6 +1639,13 @@ previous one runs in a browser.**
   `NIGHT_EXPOSURE`/`NIGHT_HEMI`/`NIGHT_MOON` centralised — `dawnTick` had hardcoded
   the old cool rig and made first light *darker* than the night.
 
+
+- **M44 — the objective has a place.** `beaconTarget()` maps the current guide step to
+  a world position and a sodium beacon stands over it: planter, door, the object to
+  record, the one to swap, home. Only while the guide is on, only for steps that have a
+  place. Plus `CAR_PAINT` — parked cars drew a hue from the whole colour wheel and put
+  a magenta car in the opening shot.
+
 ### Phase 2 — Neighborhood
 Houses 4–8 including the conspiracy theorist; gossip and credibility; hardening tiers;
 specialty stores (thrift, hardware, antique); social camouflage/familiarity; the full

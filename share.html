@@ -255,7 +255,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M43 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M44 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -3900,7 +3900,7 @@ function dressLot(def,P){
   // ── the driveway, down the east side of the lot, and what is parked on it ──
   const dvx=HW-1.9;
   ground(3.0,7.4,dvx+OX,-HD-4.2,0.007,texConcrete(),2,4);
-  if(dr()<0.75)parkedCar(dvx+OX,-HD-3.6,Math.PI/2+(dr()-0.5)*0.06,dr()*360,dr);
+  if(dr()<0.75)parkedCar(dvx+OX,-HD-3.6,Math.PI/2+(dr()-0.5)*0.06,carPaint(dr),dr);
   // ── bins by the gate: lined up, or not ──
   const bz=YMIN+1.5;
   wheelieBin(dvx-1.0+OX,bz,32,tidy?0:(dr()-0.5)*1.2);
@@ -4039,8 +4039,30 @@ function tree(x,z,h,rng,tag){
 }
 /* A parked car. Solid, tall enough to crouch behind, and the only object outdoors
    with a silhouette a person could hide inside. */
-function parkedCar(x,z,yaw,hue,rng,noCollide){
-  const g=new THREE.Group(),body=hslCss(hue,0.34,0.26);
+/* M44. Every parked car took `rng()*360` - a hue from ANYWHERE on the wheel - at a
+   flat saturation of 0.34. So the street could and did park a MAGENTA car in a front
+   garden, and it is the first thing in frame on the opening shot; I chased it for
+   three probes thinking it was a sofa, and missed it twice by searching the wrong
+   side of the street.
+
+   Real cars are not a rainbow. Most are white, silver, grey or black, and the ones
+   with colour in them are dark: navy, maroon, bottle green. Weighted so the boring
+   ones come up more often, because a suburban cul-de-sac at 3am is mostly grey. */
+const CAR_PAINT=[
+  {h:210,s:0.04,l:0.60},  // silver
+  {h:210,s:0.04,l:0.60},
+  {h:  0,s:0.00,l:0.78},  // white
+  {h:  0,s:0.00,l:0.78},
+  {h:220,s:0.05,l:0.16},  // near-black
+  {h:210,s:0.06,l:0.32},  // graphite
+  {h:218,s:0.38,l:0.22},  // navy
+  {h:355,s:0.40,l:0.24},  // maroon
+  {h:150,s:0.26,l:0.19},  // bottle green
+  {h: 28,s:0.16,l:0.29},  // beige
+];
+function carPaint(rng){return CAR_PAINT[Math.floor(rng()*CAR_PAINT.length)];}
+function parkedCar(x,z,yaw,paint,rng,noCollide){
+  const g=new THREE.Group(),body=hslCss(paint.h,paint.s,paint.l);
   gbox(g,4.05,0.62,1.80,body,0,0.66,0);
   gbox(g,2.20,0.56,1.66,body,-0.15,1.22,0);
   gbox(g,2.05,0.40,1.60,'#141a26',-0.15,1.28,0);         // glass band
@@ -4172,7 +4194,7 @@ function buildFarSide(rng){
     wheelieBin(x-w*0.44,fz+1.05,rng()*360,0.4);
     if(rng()<0.55){
       ground(2.8,3.4,x+w*0.32,fz+1.7,0.008,texConcrete(),2,2);     // driveway
-      parkedCar(x+w*0.32,fz+1.9,Math.PI/2+(rng()-0.5)*0.08,rng()*360,rng);
+      parkedCar(x+w*0.32,fz+1.9,Math.PI/2+(rng()-0.5)*0.08,carPaint(rng),rng);
     }
     if(rng()<0.7)tree(x-w*0.62,fz+2.6,3.4+rng()*1.6,rng);
   }
@@ -4297,7 +4319,7 @@ function carLaunch(){
   CAR.x=CAR.dir>0?(ST.cx-ST.cr):ST.eastX;
   const z=ST.roadZ+(CAR.dir>0?1.5:-1.5);
   // noCollide: a moving car is not a wall. Being hit by one is not in this game.
-  CAR.active=parkedCar(CAR.x,z,CAR.dir>0?0:Math.PI,208+CAR.rng()*40,CAR.rng,true);
+  CAR.active=parkedCar(CAR.x,z,CAR.dir>0?0:Math.PI,carPaint(CAR.rng),CAR.rng,true);
   CAR.light=practical('#fff0d0',S.daytime?0:2.2,CONST.CAR_LIGHT_R*2.0,1.6);
   CAR.light.position.set(CAR.x,0.9,z);CAR.light.userData.temporal=true;scene.add(CAR.light);
   CAR.zone={x:CAR.x,z:z,r:CONST.CAR_LIGHT_R,i:CONST.CAR_LIGHT_I};LIGHTS.push(CAR.zone);
@@ -4372,6 +4394,7 @@ function folkTick(dt){
 function ambientTick(dt){
   skyFollow();
   if(S.daytime)folkTick(dt);
+  beaconTick(dt);
   carTick(dt);
   const t=(S._ambT=(S._ambT||0)+dt);
   for(let i=0;i<SWAY.length;i++){
@@ -7836,6 +7859,98 @@ function loadGame(){
    Line of sight uses sightBlocked, so it passes through glass and not through
    walls. Standing in a yard and pulsing through the lounge window to see which of
    their things you have already catalogued is the whole reason M23 exists. */
+/* ═════════════════════ THE OBJECTIVE, IN THE WORLD (M44) ═════════════════════
+   Playtest: "didn't know what to do". The rail has twelve steps and every one of
+   them is a PARAGRAPH - it tells you to search the planters by the porch while you
+   are standing in a dark street looking at four identical dark shapes, and never
+   once points at one.
+
+   So the current step gets a place. A slow amber beacon stands on whatever the rail
+   is asking about; it is the only thing in the game that moves like that, and it is
+   the same sodium the street lamps use, because the language of "look here" should
+   be the language the world is already speaking.
+
+   Deliberately NOT a marker on everything - one at a time, only while the guide is
+   on, and only for the steps that HAVE a place. "Read the room" and "buy a better
+   one" do not; those are keys and screens, and pointing at a spot for them would be
+   a lie. */
+const BEACON={obj:null,at:null,forStep:null};
+function beaconTarget(){
+  const st=GUIDE.step();
+  if(!st||!GUIDE.on)return null;      // a getter, not a method
+  switch(st.id){
+    case 'leave':{
+      /* the nearest house that is not yours */
+      let best=null,bd=1e9;
+      for(let i=0;i<HOUSES.length;i++){
+        const h=HOUSES[i];
+        if(h.yours||!h._door)continue;
+        const d=Math.abs((player?player.position.x:0)-h.x);
+        if(d<bd){bd=d;best=h;}
+      }
+      return best?{pos:[best._door.pos[0],1.9,best._door.pos[2]-1.4],
+                   label:best.name}:null;
+    }
+    case 'key':{
+      const p=PLANTERS.filter(q=>!q.searched)[0]||PLANTERS[0];
+      return p?{pos:[p.pos[0],0.9,p.pos[2]],label:'a planter'}:null;
+    }
+    case 'in':{
+      const d=DOORS.filter(x=>!x.open)[0]||DOORS[0];
+      return d?{pos:[d.pos[0],1.6,d.pos[2]],label:'the front door'}:null;
+    }
+    case 'scan':{
+      /* something of theirs you have not recorded */
+      for(let i=0;i<objects.length;i++){
+        const o=objects[i];
+        if(!RESIDENTS[o.owner]||CATALOG[o.id])continue;
+        if(!o.spec||!o.spec._pos)continue;
+        return {pos:[o.spec._pos[0],o.spec._pos[1]+0.45,o.spec._pos[2]],
+                label:o.label};
+      }
+      return null;
+    }
+    case 'fab':
+    case 'swap':{
+      /* the thing you have recorded and not yet swapped */
+      for(let i=0;i<objects.length;i++){
+        const o=objects[i];
+        if(!CATALOG[o.id]||!o.spec||!o.spec._pos)continue;
+        if(PENDING.some(p=>p.objId===o.id))continue;
+        return {pos:[o.spec._pos[0],o.spec._pos[1]+0.45,o.spec._pos[2]],
+                label:o.label};
+      }
+      return null;
+    }
+    case 'out':
+      return {pos:[HOME.x,1.9,HOME.z-1.0],label:'home'};
+    default:
+      return null;              // a key or a screen; there is nowhere to point
+  }
+}
+const BEACON_GEO=new THREE.ConeGeometry(0.16,0.42,4);
+/* toneMapped:false - ACES at exposure 0.86 washed this to near-white, and an
+   indicator that does not hold its own colour is not an indicator. */
+const BEACON_MTL=new THREE.MeshBasicMaterial({color:'#ffb45e',transparent:true,
+                                              opacity:0.85,toneMapped:false});
+function beaconTick(dt){
+  if(S.phase!=='house'||S.daytime||S.evening){ if(BEACON.obj)BEACON.obj.visible=false; return; }
+  const t=beaconTarget();
+  if(!t){ if(BEACON.obj)BEACON.obj.visible=false; return; }
+  if(!BEACON.obj){
+    BEACON.obj=new THREE.Mesh(BEACON_GEO,BEACON_MTL);
+    BEACON.obj.userData.temporal=true;
+    scene.add(BEACON.obj);
+  }
+  BEACON.obj.visible=true;
+  BEACON.at=t.pos;
+  const k=(S._beaconT=(S._beaconT||0)+dt);
+  /* points DOWN at the thing, and bobs, so it reads as an indicator rather than as
+     something in the room you could pick up */
+  BEACON.obj.position.set(t.pos[0],t.pos[1]+0.55+Math.sin(k*2.2)*0.09,t.pos[2]);
+  BEACON.obj.rotation.set(Math.PI,k*0.9,0);
+  BEACON_MTL.opacity=0.55+Math.sin(k*2.2)*0.28;
+}
 const MARKS=[];
 const MARK_GEO=new THREE.OctahedronGeometry(0.055);
 const MARK_MTL={
@@ -8785,6 +8900,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   STORES,storeById,storeHas,
   // ── M11: onboarding ──
   GUIDE,GUIDE_STEPS,GUIDE_KEY,BAND_GLOSS,beginRun,
+  BEACON,beaconTarget,beaconTick,
   // - M13: mouse look -
   look,grabMouse,releaseMouse,isLocked,canLook,
   // - M16: Ray, and gossip -
@@ -8856,6 +8972,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M43'};
+  version:'M44'};
 </script>
 

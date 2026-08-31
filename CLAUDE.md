@@ -606,10 +606,32 @@ Dev-wide catalog of what already exists and where to copy it from.
   sodium night raised it to the same 0.86 the day uses - so it went red against a
   correct game. It measures the **frame** now: at identical exposure the day renders
   **1.78x** brighter than the night, which is both the true claim and a stronger one.
-  17 assertions. **1407 assertions across forty-three suites.**
+  17 assertions.
   **STILL OPEN:** a magenta shape at the left edge of the street shot that I twice
   failed to identify - two raycast probes both missed it. Not a sofa by name, not a
   parked car by position. Worth another look with a working probe.
+
+- 2026-08-31 - **M44 DONE - THE OBJECTIVE HAS A PLACE.** *Playtest: "didn't know what
+  to do."* The rail has twelve steps and every one is a **paragraph**. It tells you to
+  search the planters by the porch while you stand in a dark street looking at four
+  identical dark shapes, and never once points at one. Reading is not knowing where to
+  go. The current step now gets a **place**: a slow amber beacon over whatever the rail
+  is asking about - the planter, the door, the object to record, the one to swap, home.
+  Sodium, because that is the language the street already speaks (M43).
+  Deliberately **not** on everything: one at a time, only while the guide is on, only
+  for steps that have a place. `read` is a key and `shop` is a screen, and standing a
+  beacon somewhere for those would be a lie. 24 assertions.
+  **AND THE MAGENTA THING WAS A CAR.** Three probes to find it, and I missed it twice
+  by searching **the wrong side of the street** - the camera looks north, so world +x
+  maps to screen LEFT and I had been scanning -x. `parkedCar` took `rng()*360`: a hue
+  from **anywhere on the colour wheel**, at a flat 0.34 saturation. So the street could
+  and did park a magenta car in a front garden, and it was the first thing in frame on
+  the opening shot. Cars now draw from `CAR_PAINT`: silver, white, near-black,
+  graphite, navy, maroon, bottle green, beige, weighted toward the boring ones because
+  a cul-de-sac at 3am is mostly grey.
+  The beacon needed `toneMapped:false` - ACES at exposure 0.86 washed a `#ffb45e` cone
+  to near-white, and an indicator that cannot hold its own colour is not an indicator.
+  **1431 assertions across forty-four suites.**
 
 ## Structures worth knowing
 - **The night ledger** (`PENDING`): a change alters the world immediately but is
