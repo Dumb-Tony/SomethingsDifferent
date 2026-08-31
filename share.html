@@ -276,7 +276,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M49 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M50 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -671,6 +671,40 @@ const CONST={
                             // spreading beats hammering one house — that is the
                             // strategy this number is set against. See GDD 15.
   LOSE_STREET : 70,         // mean neighbourhood Suspicion that ends the run
+  /* M50 — THE STREET FORGETS.
+     Every write to a resident's suspicion in this entire file is `+=` and clamped.
+     It is a RATCHET: nothing anywhere subtracts from it, so a bad night on night two
+     was still being paid for on night ten, and there was never a reason to lay low.
+     That is backwards for this game. DOUBT is the unstable thing the whole design is
+     about; being certain there is a BURGLAR is what ends the run. Certainty about
+     nothing in particular is exactly the kind that fades when nothing else happens.
+
+     Measured, not guessed. The mirror in this same milestone moved the competent run
+     from 69.1 to 70.0 against a bar of 70 - which is how I found out the win had been
+     passing by NINE TENTHS OF A POINT. A meter that only climbs gives a ten-night run
+     no way back, so any change to the world at all is a coin flip on the ending.
+
+     Cooling is CANCELLED for anybody who noticed something this morning: leave them
+     alone for a night and they settle, keep taking their things and they do not. Both
+     numbers are swept in tools/_cool.js against two bars that were EXPECTED to pull
+     opposite ways: the competent run must clear 70 with real margin, and the worst
+     run must still reach it or THEY COMPARED NOTES becomes dead content.
+
+     MEASURED, and only one of those two bars actually binds:
+
+       cool | competent finishes | sloppy peaks | sloppy crosses 70
+       0.00 |  67.9  (margin 2.1)|      99.8    |  night 3
+       0.12 |  56.3  (margin 13.7)|     94.8    |  night 3
+       0.32 |  38.2  (margin 31.8)|     86.5    |  night 3
+
+     The sloppy run crosses the bar on night THREE at every rate in the sweep - it
+     is nowhere near marginal, and cooling cannot save a player who buys the worst
+     thing on the shelf eight times a night. So the upper bar is not the constraint
+     I thought it was; the only one that binds is the competent run's margin. 0.12
+     is chosen for that, and the headroom above it is real rather than assumed. */
+  SUSP_COOL   : 0.12,       // fraction of a quiet resident's suspicion lost per night
+  SUSP_COOL_FLAT: 0.6,      // ...plus this much, so small residues actually reach 0
+
   // ── hardening: the street escalates (GDD 5.8, M14) ────
   /* GDD 5.8 keys this to Neighbourhood Suspicion at 25/40/55/70/85. MEASURED: a
      careful player's street suspicion stays at exactly 0.0 for a whole run, and even
@@ -2917,6 +2951,29 @@ const envMeshes=[],colliders=[],helpers=[];
    buildHouse(), always restored to 0. Cheaper and far less error-prone than
    threading an offset through sixty coordinates. */
 let OX=0;
+/* M50 — MIR. Every house on this street was the same building. Not similar: the
+   SAME - 941 walkable cells in all five, one window layout, one furniture layout,
+   the same wardrobe to hide in at the same coordinate. Only the paint and the
+   objects on the surfaces differed, and buildHouse's own comment argued that was
+   enough ("suburban houses on one road ARE the same developer's floorplan").
+
+   It is not enough, because the floorplan IS the stealth puzzle. Learn the route
+   from the front door to the bedroom once and you have solved all four.
+
+   A developer stamping a cul-de-sac mirrors the plan on alternate lots, which is
+   both the true thing and the cheap thing: one sign flip on the local x axis and
+   the whole house comes out handed the other way - walls, windows, furniture,
+   colliders, light zones, hiding places, the driveway, the props on the shelves.
+   Every one of those goes through box() or through one of the two dozen sites
+   below that add the lot origin themselves, so MX() is the single place it happens.
+
+   Local x -> world x. Use it anywhere you would have written `x+OX`. */
+let MIR=1;
+function MX(x){return OX+MIR*x;}
+/* A yaw in degrees, reflected. A mirror is not a rotation, so a handed object comes
+   out the other way round - which is exactly right for a mirrored house. */
+function MR(deg){return MIR<0?-deg:deg;}
+
 let ROOM=null;          // {minX,maxX,minZ,maxZ} — camera XZ clamp over the whole street
 /* M17: the PLAYER's clamp, and it did not exist before — movePlayer() translated
    without any bound and groundHeightAt() returns 0 everywhere, so you could walk
@@ -3018,7 +3075,7 @@ function box(w,h,d,hex,x,y,z,opts){
   opts=opts||{};
   const m=new THREE.Mesh(UNIT_BOX,opts.mat||mat(hex));
   m.scale.set(w,h,d);
-  x+=OX;
+  x=MX(x);
   m.position.set(x,y,z);m.userData.baseColor=hex;
   m.castShadow=opts.cast!==false;m.receiveShadow=true;
   scene.add(m);envMeshes.push(m);
@@ -3129,7 +3186,7 @@ function windowPane(x,y,z,w,h,axis){
   const g=box(dims[0],dims[1],dims[2],'#22344f',x,y,z,{collide:false,cast:false,mat:pane,tag:'pane'});
   const fw=(axis==='x')?[t*1.4,h+0.1,w+0.1]:[w+0.1,h+0.1,t*1.4];
   const f=new THREE.Mesh(new THREE.BoxGeometry(fw[0],fw[1],fw[2]),fr);
-  f.position.set(x+OX,y,z);f.renderOrder=-1;
+  f.position.set(MX(x),y,z);f.renderOrder=-1;
   scene.add(f);envMeshes.push(f);
   /* A glazing bar, so a hole in a wall still reads as a window. */
   const barDims=(axis==='x')?[t*1.6,0.035,w]:[w,0.035,t*1.6];
@@ -3138,7 +3195,8 @@ function windowPane(x,y,z,w,h,axis){
   const sill=(axis==='x')?[0.18,0.05,w+0.16]:[w+0.16,0.05,0.18];
   box(sill[0],sill[1],sill[2],'#c8bda6',x,y-h/2-0.03,z,
       {collide:false,cast:false,tag:'sill'});
-  WINDOWS.push({minX:x+OX-((axis==='x')?0.12:w/2),maxX:x+OX+((axis==='x')?0.12:w/2),
+  var _wx=MX(x);
+  WINDOWS.push({minX:_wx-((axis==='x')?0.12:w/2),maxX:_wx+((axis==='x')?0.12:w/2),
                 minZ:z-((axis==='x')?w/2:0.12),maxZ:z+((axis==='x')?w/2:0.12),
                 y0:y-h/2,y1:y+h/2,axis:axis});
   return g;
@@ -3181,7 +3239,7 @@ function sightBlocked(ax,az,bx,bz){
 function clearWorld(){
   for(const m of envMeshes)scene.remove(m);
   for(const m of helpers)scene.remove(m);
-  OX=0;
+  OX=0;MIR=1;
   /* Object ids MUST be stable across rebuilds: CATALOG and the save file are both
      keyed by them, and loadGame() replays the builder before restoring state. Let
      the counter run on and every saved reference dangles. */
@@ -3199,8 +3257,11 @@ function clearWorld(){
 /* Light ZONES are gameplay (am I lit?); THREE lights are presentation. Kept as two
    lists on purpose — the seeing check must not depend on renderer state. */
 function addLight(x,z,r,i,three){
-  LIGHTS.push({x:x+OX,z:z,r:r,i:i});
-  if(three){three.position.x+=OX;three.userData.temporal=true;scene.add(three);}
+  LIGHTS.push({x:MX(x),z:z,r:r,i:i});
+  /* The THREE light must land where its ZONE landed, or a mirrored house is lit
+     on one side and reads as lit on the other. Same transform, same argument. */
+  if(three){three.position.x=MX(three.position.x);
+            three.userData.temporal=true;scene.add(three);}
 }
 /* M42: every practical in the game goes through here, so the night's top end has a
    single number behind it. See CONST.PRACTICAL_GAIN. */
@@ -3272,7 +3333,8 @@ function buildGreybox(){
 const objects=[];
 let _objId=0;
 function placeObject(kindId,spec,pos,rotDeg,owner,attach,label){
-  const s=Object.assign({},spec,{_pos:[pos[0]+OX,pos[1],pos[2]],_rot:rotDeg||0});
+  const s=Object.assign({},spec,{_pos:[MX(pos[0]),pos[1],pos[2]],
+                                 _rot:MR(rotDeg||0)});
   const o={id:'o'+(++_objId),kind:kindId,spec:s,owner:owner,label:label||kindId,
            house:CUR_HOUSE,
            attach:attach===undefined?1:attach,marked:false,fresh:1,group:null};
@@ -3317,6 +3379,8 @@ let CUR_HOUSE=null;
    and, above all, WHOSE things are in it. */
 function buildHouse(def,rng){
   OX=def.x;CUR_HOUSE=def.id;
+  /* M50: alternate lots are handed the other way, as a real developer builds them. */
+  MIR=def.mirror?-1:1;
   /* M13 - THE FLOORPLAN BELOW IS IN LAYOUT UNITS, not metres. _p() converts.
      Furniture SIZES and all Y heights stay real-world (a sofa is still 2.1m wide, a
      counter still 0.92m high); only the distances BETWEEN things grow. That is
@@ -3341,7 +3405,7 @@ function buildHouse(def,rng){
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
       new THREE.MeshLambertMaterial({map:tex}));
     m.rotation.x=(rot===undefined?-Math.PI/2:rot);
-    m.position.set(x+OX,y,z);m.receiveShadow=true;
+    m.position.set(MX(x),y,z);m.receiveShadow=true;
     scene.add(m);envMeshes.push(m);return m;
   };
   surf(YARD.maxX-YARD.minX,YARD.maxZ-YARD.minZ,0,(YARD.minZ+YARD.maxZ)/2,0.001,
@@ -3395,9 +3459,9 @@ function buildHouse(def,rng){
   (function(){
     const pivot=new THREE.Group();
     const DW=_p(0.55);                       // half the doorway, in metres
-    pivot.position.set(-DW+OX,0,-HD);
+    pivot.position.set(MX(-DW),0,-HD);
     const panel=new THREE.Mesh(new THREE.BoxGeometry(DW*2,2.05,0.06),matL('#6b4a32'));
-    panel.position.set(DW,1.025,0);pivot.add(panel);
+    panel.position.set(MIR*DW,1.025,0);pivot.add(panel);
     const knob=new THREE.Mesh(new THREE.SphereGeometry(0.035,10,8),matL('#c9a84a'));
     knob.position.set(DW*1.82,1.0,0.06);pivot.add(knob);
     scene.add(pivot);envMeshes.push(pivot);
@@ -3457,7 +3521,7 @@ function buildHouse(def,rng){
   box(0.5,0.22,0.5,'#4a4a54',_p(-3.0),3.45,_p(-8.3),{collide:false,tag:'lamphead'});
   const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8),
     new THREE.MeshBasicMaterial({color:'#ffdca8'}));
-  bulb.position.set(_p(-3.0)+OX,3.30,_p(-8.3));bulb.userData.temporal=true;scene.add(bulb);
+  bulb.position.set(MX(_p(-3.0)),3.30,_p(-8.3));bulb.userData.temporal=true;scene.add(bulb);
   // a tight pool, not area lighting: crossing it should feel like a decision.
   // No shadow casting — the moon's shadow map is the one that sells the scene, and a
   // second shadow-casting light roughly halves the frame rate on software GL.
@@ -3471,9 +3535,9 @@ function buildHouse(def,rng){
     box(0.44,0.36,0.44,'#7c4f3c',px,0.18,pz,{tag:'planter'});
     box(0.36,0.06,0.36,'#3f5730',px,0.38,pz,{collide:false,tag:'soil'});
     const bush=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),matL('#3d6034'));
-    bush.position.set(px+OX,0.50,pz);bush.scale.y=0.8;bush.castShadow=true;
+    bush.position.set(MX(px),0.50,pz);bush.scale.y=0.8;bush.castShadow=true;
     scene.add(bush);envMeshes.push(bush);
-    PLANTERS.push({pos:[px+OX,0.42,pz],searched:false,hasKey:i===keyIn,
+    PLANTERS.push({pos:[MX(px),0.42,pz],searched:false,hasKey:i===keyIn,
                    house:def.id,label:'planter'});
   });
 
@@ -3557,7 +3621,7 @@ function buildHouse(def,rng){
   box(1.52,0.44,0.44,'#4a382e',3.90,0.22,ZLN-0.24,{tag:'tvstand'});
   box(1.30,0.76,0.09,'#232125',3.90,0.84,ZLN-0.16,{tag:'tv'});
   const tvS=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial({color:'#101724'}));
-  tvS.scale.set(1.20,0.66,0.02);tvS.position.set(3.90+OX,0.84,ZLN-0.22);
+  tvS.scale.set(1.20,0.66,0.02);tvS.position.set(MX(3.90),0.84,ZLN-0.22);
   scene.add(tvS);envMeshes.push(tvS);
   /* The bookshelf sits SOUTH of the east window (which spans z -1.165..0.235), not
      across it. The bookRow objects have been labelled "the shelf" since M8 while
@@ -3634,7 +3698,7 @@ function buildHouse(def,rng){
     const s=bed(b.who,b.mx!==undefined?b.mx:_p(b.x),BEDZ);
     if(b.shift)s.shift=true;    // works nights — not always in it
   });
-  OX=0;CUR_HOUSE=null;
+  OX=0;MIR=1;CUR_HOUSE=null;
 }
 
 /* ═════════════════════════ THE STREET ═════════════════════════
@@ -3690,7 +3754,11 @@ const HOUSES=[
      {kind:'coasterSet',  m:[ 4.30,0.42, 0.30],rot:0,  owner:'walt',attach:1.0,label:'the coasters'},
      {kind:'potPlant',    m:[ 3.40,0.00,-3.40],rot:0,  owner:'june',attach:0.8,label:'the hall plant'},
    ]},
+  /* M50: 14 and 8 are the mirrored stamp of the plan. Not decoration - it moves
+     the bedroom, the wardrobe you hide in and the window you are lit through to
+     the other side of the house, so the route you learned at 12 is wrong here. */
   {id:'vance',x:LOT_PITCH,name:'14 Ardsley Ct',wall:'#e0d6c6',keeper:'marisol',
+   mirror:true,
    pal:{wall:'#e6dccb',wallHue:44,floor:36,ceil:42,tile:[46,40],roof:'#5d3b3c',
         cab:'#e0d6c6',cab2:'#cfc0a8'},
    beds:[{who:'marisol',x:2.15},{who:'aaron',x:3.05}],
@@ -3767,6 +3835,7 @@ const HOUSES=[
      reachable from Bulwark's finest rung and some only from the antique shop -
      attachment is what decides which, since perceived delta scales by it. */
   {id:'pittman',x:-LOT_PITCH*2,name:'8 Ardsley Ct',wall:'#b9b3a4',keeper:'ray',
+   mirror:true,
    pal:{wall:'#b9b3a4',wallHue:62,floor:22,ceil:60,tile:[30,26],roof:'#3a3630',
         cab:'#b3ab98',cab2:'#9c937f'},
    beds:[{who:'ray',x:2.60}],
@@ -3819,7 +3888,7 @@ function houseById(id){return HOUSES.filter(h=>h.id===id)[0];}
    who reads the room can guess who is dangerous before scanning a single object. */
 const SCENERY=[];
 function scenery(x,y,z,label,line){
-  SCENERY.push({pos:[x+OX,y,z],label:label,line:line});
+  SCENERY.push({pos:[MX(x),y,z],label:label,line:line});
 }
 function dressInterior(def,P){
   /* A SEPARATE rng, seeded off the house id. The street's rng is consumed in order
@@ -3839,7 +3908,7 @@ function dressInterior(def,P){
   const rug=(w,d,x,z,hue)=>{
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
       new THREE.MeshLambertMaterial({map:tiled(texPaint(hue,0.30,0.34),2,2)}));
-    m.rotation.x=-Math.PI/2;m.position.set(x+OX,0.012,z);m.receiveShadow=true;
+    m.rotation.x=-Math.PI/2;m.position.set(MX(x),0.012,z);m.receiveShadow=true;
     scene.add(m);envMeshes.push(m);return m;
   };
   // ── ceiling: a pendant under each of the four window spill lights ──
@@ -3847,7 +3916,7 @@ function dressInterior(def,P){
     box(0.03,0.42,0.03,'#2e2b38',p[0],H-0.21,p[1],{collide:false,cast:false,tag:'cord'});
     const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.21,0.20,12,1,true),
       new THREE.MeshLambertMaterial({color:'#e6dfd2',side:THREE.DoubleSide}));
-    sh.position.set(p[0]+OX,H-0.50,p[1]);scene.add(sh);envMeshes.push(sh);
+    sh.position.set(MX(p[0]),H-0.50,p[1]);scene.add(sh);envMeshes.push(sh);
     scenery(p[0],H-0.50,p[1],'the light fitting',
       'A shade over a bulb. Nothing of theirs is up here.');
   });
@@ -3862,7 +3931,7 @@ function dressInterior(def,P){
     const inner=new THREE.Mesh(UNIT_BOX,
       new THREE.MeshLambertMaterial({map:texPaint(hue,0.34,0.42)}));
     inner.scale.set(axis==='x'?0.05:w*0.86,h*0.86,axis==='x'?w*0.86:0.05);
-    inner.position.set(x+OX,y,z);scene.add(inner);envMeshes.push(inner);
+    inner.position.set(MX(x),y,z);scene.add(inner);envMeshes.push(inner);
     scenery(x,y,z,'a picture on the wall',
       'Somewhere they went, or somewhere they meant to go. Screwed to the wall.');
   };
@@ -3940,22 +4009,23 @@ function dressLot(def,P){
   const YMIN=_p(-9.0);                                   // the fence line
   // ── the driveway, down the east side of the lot, and what is parked on it ──
   const dvx=HW-1.9;
-  ground(3.0,7.4,dvx+OX,-HD-4.2,0.007,texConcrete(),2,4);
-  if(dr()<0.75)parkedCar(dvx+OX,-HD-3.6,Math.PI/2+(dr()-0.5)*0.06,carPaint(dr),dr);
+  ground(3.0,7.4,MX(dvx),-HD-4.2,0.007,texConcrete(),2,4);
+  if(dr()<0.75)parkedCar(MX(dvx),-HD-3.6,MIR*Math.PI/2+(dr()-0.5)*0.06,
+                         carPaint(dr),dr);
   // ── bins by the gate: lined up, or not ──
   const bz=YMIN+1.5;
-  wheelieBin(dvx-1.0+OX,bz,32,tidy?0:(dr()-0.5)*1.2);
-  wheelieBin(dvx-1.7+OX,bz+(tidy?0:0.55),96,tidy?0:(dr()-0.5)*1.4);
+  wheelieBin(MX(dvx-1.0),bz,MR(32),tidy?0:(dr()-0.5)*1.2);
+  wheelieBin(MX(dvx-1.7),bz+(tidy?0:0.55),MR(96),tidy?0:(dr()-0.5)*1.4);
   scenery(dvx-1.35,0.95,bz,'their bins',
     tidy?'Both squared to the fence. Somebody moves them back after collection.'
         :'Left where the lorry put them, some time last week.');
   // ── the front garden: a tree, and a tap with a hose ──
-  tree(-HW+1.4+OX,-HD-3.0,3.8+dr()*1.3,dr);
+  tree(MX(-HW+1.4),-HD-3.0,3.8+dr()*1.3,dr);
   /* box() applies OX itself; ground/tree/parkedCar/wheelieBin are world-space and
      do not. Getting that backwards is how the road ended up in the gardens. */
   box(0.07,0.20,0.07,'#8b8794',-HW+0.35,0.30,-HD-0.20,{collide:false,tag:'tap'});
   const hose=new THREE.Mesh(new THREE.TorusGeometry(0.24,0.05,6,14),mat('#2e4231'));
-  hose.rotation.x=Math.PI/2;hose.position.set(-HW+0.55+OX,0.06,-HD-0.55);
+  hose.rotation.x=Math.PI/2;hose.position.set(MX(-HW+0.55),0.06,-HD-0.55);
   if(!tidy)hose.rotation.z=0.4;
   scene.add(hose);envMeshes.push(hose);
   scenery(-HW+0.55,0.30,-HD-0.55,'the hose',
@@ -4145,7 +4215,7 @@ function streetLamp(x,z,r,i){
   box(0.46,0.20,0.86,'#4a4a54',x,3.92,z-0.28,{collide:false,tag:'lamphead'});
   const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.12,9,7),
     new THREE.MeshBasicMaterial({color:'#ffdca8'}));
-  bulb.position.set(x+OX,3.80,z-0.28);bulb.userData.temporal=true;scene.add(bulb);
+  bulb.position.set(MX(x),3.80,z-0.28);bulb.userData.temporal=true;scene.add(bulb);
   const L=practical(CONST.SODIUM,3.8,r*2.4,1.6);         // M43
   L.position.set(x,3.72,z-0.28);addLight(x,z-0.28,r,i,L);
 }
@@ -4497,7 +4567,7 @@ function buildStreet(seed){
   buildHead(rng);
   buildEstate(rng);
   buildHorizon();
-  OX=0;
+  OX=0;MIR=1;
 }
 /* Street furniture between and around the lots: the poles and wires overhead, the
    trees on the verge, the hedgerow that closes the east end, and the back fence
@@ -4526,7 +4596,7 @@ function buildEstate(rng){
 function buildHoyt(seed){buildStreet(seed);}
 /* Register a sleeper: a body on the mattress plus the state the night systems read. */
 function bed(resId,x,z){
-  x+=OX;
+  x=MX(x);
   const g=makeSleeper(resId);
   g.position.set(x,0.54,z);
   scene.add(g);envMeshes.push(g);
@@ -7839,7 +7909,18 @@ function doMorning(){
     lines.push({label:o.label,kind:o.kind,owner:o.owner,name:res.name,r:r,
                 labels:p.labels.slice(),doubtNow:res.doubt,suspNow:res.suspicion});
   }
+  /* M50: the street forgets - see CONST.SUSP_COOL. Read off `lines`, which is this
+     morning's resolutions, so "noticed something" means a CERTAINTY landed on them
+     TODAY and not at some point in the past. */
+  const _noticed={};
+  lines.forEach(l=>{if(l.r.band==='CERTAINTY')_noticed[l.owner]=1;});
+  Object.keys(RESIDENTS).forEach(id=>{
+    const r=RESIDENTS[id];
+    if(_noticed[id]||!(r.suspicion>0))return;
+    r.suspicion=Math.max(0,r.suspicion*(1-CONST.SUSP_COOL)-CONST.SUSP_COOL_FLAT);
+  });
   PENDING.length=0;GAME.day++;
+
   /* M40: now that the date is today's, the morning's doubts become this afternoon's
      behaviour. Anybody who did not doubt anything this morning stops fretting. */
   Object.keys(RESIDENTS).forEach(id=>{
@@ -8180,7 +8261,7 @@ function scanTick(dt){
    volume the level designer sprinkled about. */
 const HIDES=[];
 function addHide(x,y,z,label,line){
-  HIDES.push({pos:[x+OX,y,z],label:label,line:line||''});
+  HIDES.push({pos:[MX(x),y,z],label:label,line:line||''});
 }
 /* You cannot get into a wardrobe while somebody is watching you do it. Anybody
    awake with a line of sight to you right now vetoes the whole idea. */
@@ -9109,7 +9190,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   // - M18: the night has things in it -
   EVENTS,planNightEvents,eventTick,fireEvent,walkSleepers,
   // - M18: the fence -
-  HAUL,WINDOW,itemValue,offerFor,isRecognisable,sellItem,windowTick,
+  HAUL,WINDOW,PANES:WINDOWS,MX,MR,itemValue,offerFor,isRecognisable,sellItem,windowTick,
   // - M17: the estate, the dressing, and the one thing that moves -
   ST,SCENERY,CAR,FACADES,SKY_RIDE,
   get PLAY(){return PLAY;}, get ROOM(){return ROOM;},
@@ -9174,6 +9255,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M49'};
+  version:'M50'};
 </script>
 

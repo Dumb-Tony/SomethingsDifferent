@@ -69,7 +69,29 @@ $setups = @{
   SD.player.position.set(ox,0,-9.4); SD.player.rotation.y=0;
   SD.S.yaw=Math.PI; SD.S.pitch=0.13; SD.S.dist=6.4; SD.S.camP=null; SD.S.camL=null;
 "@
+  # M51 probes: same frame as front16, with one candidate hidden each time.
+  noband = @"
+  SD.startHouse();
+  var ox=SD.houseById('okonkwo').x;
+  SD.scene.traverse(function(o){
+    if(o.isMesh&&o.geometry&&o.geometry.type==='CylinderGeometry'&&
+       o.geometry.parameters&&o.geometry.parameters.radiusTop>=90)o.visible=false;
+  });
+  SD.player.position.set(ox,0,-9.4); SD.player.rotation.y=0;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.13; SD.S.dist=6.4; SD.S.camP=null; SD.S.camL=null;
+"@
+  nosky = @"
+  SD.startHouse();
+  var ox=SD.houseById('okonkwo').x;
+  SD.scene.traverse(function(o){
+    if(o.isMesh&&o.geometry&&o.geometry.type==='SphereGeometry'&&
+       o.geometry.parameters&&o.geometry.parameters.radius===70)o.visible=false;
+  });
+  SD.player.position.set(ox,0,-9.4); SD.player.rotation.y=0;
+  SD.S.yaw=Math.PI; SD.S.pitch=0.13; SD.S.dist=6.4; SD.S.camP=null; SD.S.camL=null;
+"@
   hall12 = @"
+
 
   SD.startHouse(); SD.GAME.hasSpareKey=true;
   SD.useDoor(SD.houseById('hoyt')._door);

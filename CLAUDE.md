@@ -1061,3 +1061,40 @@ constant's comment and the m50 assertions carry the corrected numbers.
 same black wedge across the top-left as the mirrored `front14`. It tracks distance from
 the origin, not the hand, so it predates M50. The rays through it miss every collider
 and land ~54m out on a white-based material. Next milestone.
+
+## M51 — the camera was standing inside a tree
+
+M50's evidence shots came back with a third of the sky covered by a hard-edged dark
+wedge at 14 and 16 Ardsley. Three guesses, all wrong, and each wrong in a way worth
+recording:
+
+1. **The mirror.** No — 16 Ardsley is *unmirrored* and had the same wedge, so it
+   tracked distance from the world origin, not the hand of the plan.
+2. **A shadow on the sky.** No — the sky is a `MeshBasicMaterial` and cannot receive
+   one.
+3. **The raycast.** It reported the sky sphere at 28.9m when that sphere has radius
+   70, which is impossible. **The harness stops the render loop, so `matrixWorld` is
+   stale while `.position` already reads the new value. Raycasts lie in a stopped
+   world** — measure by position there, not by ray.
+
+Positions gave it up immediately. Nearest thing overhead, camera at each front gate:
+
+      10 Ardsley 9.0m    12 Ardsley 7.4m    8 Ardsley 5.3m
+      14 Ardsley 2.0m    16 Ardsley 1.6m   <-- inside the canopy
+
+The verge trees step on a fixed 11.6m grid down a 146m street while the lots sit on a
+24.8m pitch; the two rhythms drift in and out of phase, and at two lots in five a
+street tree landed on the front path. Standing at your own gate is the single most
+common thing the player does.
+
+**Nudged, not skipped.** Dropping a tree changes how many times that loop draws from
+the street's shared generator, and this file carries a standing warning that one extra
+draw silently repaints everything after it. Moving one costs no randomness — and m51
+proves it: 59 canopies before and after, identical across two builds.
+
+`VERGE_CLEAR` is 4.5 and not 4.0 because the constant places the **trunk**, while a
+tree is several canopy blobs offset around it — at 4.0 the trunk cleared and a blob
+still sat 3.7m off vance's path. The suite asserts foliage against a fixed 4.0m rather
+than against `VERGE_CLEAR`, which would have been circular and passed at any value.
+
+  every gate now clears 4.9m or better · 0% of the upper frame within 3m at all five
