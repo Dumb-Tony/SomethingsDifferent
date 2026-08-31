@@ -8,8 +8,13 @@ param(
   [string]$Out   = "",
   [int]$W = 1280,
   [int]$H = 760,
-  [int]$Port = 8396
+  [int]$Port = 0
 )
+# M56 - ONE PORT AND ONE SCRATCH FILE PER RUN, for the same reason smoketest.ps1
+# got them: both were fixed constants, so a run that timed out left a server
+# holding 8396 and every later shot hung waiting for it. Two shots at once also
+# overwrote each other's _shot.html and photographed the wrong scene.
+if ($Port -le 0) { $Port = 9300 + ($PID % 600) }
 $ErrorActionPreference = "Stop"
 $root   = Split-Path $PSScriptRoot -Parent
 $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -355,7 +360,8 @@ $inject = "<script>`n(function(){var SD=window.__SD; if(!SD) return;`n" +
 
 $html = Get-Content (Join-Path $root "somethingsdifferent.html") -Raw -Encoding UTF8
 $html = $html -replace '</body>', $inject
-$scratch = Join-Path $root "_shot.html"
+$scratchName = "_shot-$PID.html"
+$scratch = Join-Path $root $scratchName
 Set-Content -Path $scratch -Value $html -Encoding utf8
 
 $server = Start-Process powershell `
@@ -367,7 +373,7 @@ $profileDir = Join-Path $env:TEMP ("sd-shot-" + [System.Guid]::NewGuid().ToStrin
 Start-Process $chrome -ArgumentList `
   "--headless=new","--disable-gpu","--no-first-run","--no-default-browser-check",
   "--user-data-dir=$profileDir","--hide-scrollbars","--window-size=$W,$H",
-  "--virtual-time-budget=25000","--screenshot=$Out","http://localhost:$Port/_shot.html" `
+  "--virtual-time-budget=25000","--screenshot=$Out","http://localhost:$Port/$scratchName" `
   -NoNewWindow -Wait | Out-Null
 
 if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force }

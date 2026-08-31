@@ -1270,3 +1270,41 @@ A false pass is far worse than a collision that errors. The port is now `8400 + 
 900)` and the scratch file is `_smoketest-$PID.html`, so concurrent runs cannot see
 each other. m55 was then re-run *during* a publish and came back with its own
 assertions, which is the proof.
+
+## M56 — the afternoon tells you where you are
+
+A screenshot of the walk showed the objective card reading **"Search the planters by
+the porch — E"** over a sunlit lawn with three neighbours standing on it, and a HUD
+containing the words `MODE WALK` and nothing else whatsoever.
+
+Both are the same fault. `GUIDE_STEPS` is a rail about the **night**: every step
+asserts a night state and none can be satisfied while the sun is up, so in the
+afternoon the card sat there giving an order the player could not carry out — for the
+whole of the half of the game it does not describe. And in daylight the clock, the
+noise meter and the sightings counter are all hidden (correctly — there is no clock in
+an afternoon and nothing to hear), which left **no readout at all** in the half of the
+game that is entirely about spending a limited number of days.
+
+- The afternoon and the evening get their own cards, naming the two verbs each is
+  actually for, and saying why standing about in daylight is worth anything
+  (familiarity is what stops them looking twice at 3am).
+- **Not rail steps.** An afternoon is not a sequence — it is a thing you do as much of
+  as you have time for — and a rail step that blocks on an optional action strands the
+  player, which is the lesson the `key` and `read` steps already carry.
+- A `DAY 3 · AFTERNOON` pill, shown only when the night pills are hidden.
+
+### `shot.ps1` had the same collision `smoketest.ps1` did
+
+Fixed port 8396 and a fixed `_shot.html`. A render that timed out left a server holding
+the port and **every later shot hung waiting for it** — which is why the last several
+screenshots kept stalling and I kept blaming the renderer. Per-process port and scratch
+file, and the very next render returned immediately.
+
+### Two escapes eaten, in two different languages
+
+- Perl's `s///` **replacement** treats `\u` as a case-folding directive, so the middot
+  I wrote as `·` reached the game as the literal text `00b7`, and the pill read
+  `DAY 1 of 10 00b7 MORNING`.
+- Then the obvious way to *test* for that — looking for a literal `\u` in the output —
+  is itself an invalid Unicode escape in JS, and took the whole page down with a
+  SyntaxError. Both are now built with `String.fromCharCode`.
