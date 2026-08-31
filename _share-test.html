@@ -285,7 +285,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M52 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M53 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
@@ -3455,18 +3455,59 @@ function buildHouse(def,rng){
   /* ── interior: hall across the south, kitchen west, lounge + BEDROOM east.
         The bedroom matters: M5 needs somebody asleep, and June's most-attached
         object now sits on the nightstand beside her. ── */
-  wallSeg(-HW,_p(-1.6),_p(-3.4),_p(-1.6),WCOL,WOPT);   // hall/kitchen wall + doorway
-  wallSeg(_p(-2.4),_p(-1.6),_p(1.6),_p(-1.6),WCOL,WOPT);
-  wallSeg(_p(2.6),_p(-1.6),HW,_p(-1.6),WCOL,WOPT);     // hall/lounge doorway
-  wallSeg(0,_p(-1.6),0,HD,WCOL,WOPT);                  // kitchen / east side, solid
+  const PLAN=def.plan||'A';
+  if(PLAN==='B'){
+    /* one doorway off the hall, not two: the lounge no longer opens onto it */
+    wallSeg(-HW,_p(-1.6),_p(-3.4),_p(-1.6),WCOL,WOPT);
+    wallSeg(_p(-2.4),_p(-1.6),HW,_p(-1.6),WCOL,WOPT);
+  }else{
+    wallSeg(-HW,_p(-1.6),_p(-3.4),_p(-1.6),WCOL,WOPT); // hall/kitchen wall + doorway
+    wallSeg(_p(-2.4),_p(-1.6),_p(1.6),_p(-1.6),WCOL,WOPT);
+    wallSeg(_p(2.6),_p(-1.6),HW,_p(-1.6),WCOL,WOPT);   // hall/lounge doorway
+  }
+  /* ── M53. TWO PLANS, NOT ONE. ──────────────────────────────────────────────
+     M50 gave the street two HANDS of a single floorplan, which doubled the variety
+     and then stopped: 14 is 12 backwards, and once you know 12 you know both.
+
+     A plan is not a hand. This moves WHICH WALLS HAVE GAPS IN THEM and nothing
+     else - not one stick of furniture, not one prop, not one window - because the
+     furniture is placed from the fixtures and the twenty objects per house are
+     authored in metres against those fixtures. Moving a room would strand every one
+     of them; moving a DOORWAY costs nothing and changes the only thing that matters,
+     which is the route to the bed.
+
+     THE FIRST VERSION OF PLAN B DID NOT WORK, and the flood fill in m53 caught it.
+     I opened the divider at the north end to put the bedroom off the KITCHEN, and
+     tools/_gap.js showed why the bed then became unreachable: the WARDROBE stands
+     hard against that divider from z 1.0 to 3.5, so there is no doorway to be had
+     there without moving a hiding place. The same probe showed the divider IS clear
+     on both sides from z -2.0 to 0.8.
+
+       PLAN A   hall -> lounge -> bedroom, and hall -> kitchen. Two doors off the
+                hall; the lounge is the short way to the sleeper.
+       PLAN B   ONE door off the hall, into the kitchen. The lounge is reached
+                through the kitchen and the bedroom through the lounge, so the way
+                in is longer, it passes the fridge and the television both, and the
+                hall - the room you arrive in - is a dead end but for one doorway.
+
+     Same rooms, same furniture, same objects; a different problem. */
+  if(PLAN==='B'){
+    /* the divider opens at its south end, joining kitchen to lounge */
+    wallSeg(0,_p(-1.6),0,_p(-0.9),WCOL,WOPT);
+    wallSeg(0,_p(0.1),0,HD,WCOL,WOPT);
+  }else{
+    wallSeg(0,_p(-1.6),0,HD,WCOL,WOPT);                  // kitchen / east side, solid
+  }
   wallSeg(0,_p(0.9),_p(1.0),_p(0.9),WCOL,WOPT);        // lounge/bedroom wall + doorway
   wallSeg(_p(2.0),_p(0.9),HW,_p(0.9),WCOL,WOPT);
+
   // skirting boards — a small thing that makes interiors stop looking like boxes
   const skirt=(x1,z1,x2,z2)=>box(Math.abs(x2-x1)+0.14,0.11,Math.abs(z2-z1)+0.14,
     '#e6dfd2',(x1+x2)/2,0.055,(z1+z2)/2,{collide:false,cast:false,tag:'skirt'});
   skirt(-HW,-HD,HW,-HD); skirt(-HW,HD,HW,HD);
   skirt(-HW,-HD,-HW,HD); skirt(HW,-HD,HW,HD);
-  skirt(0,_p(-1.6),0,HD);
+  if(PLAN==='B'){ skirt(0,_p(-1.6),0,_p(-0.9)); skirt(0,_p(0.1),0,HD); }
+  else skirt(0,_p(-1.6),0,HD);
   skirt(-HW,_p(-1.6),HW,_p(-1.6)); skirt(0,_p(0.9),HW,_p(0.9));   // M17: the two
   // interior partitions that never got any — the hall wall and the bedroom wall.
 
@@ -3810,7 +3851,11 @@ const HOUSES=[
      {kind:'alarmClock',  m:[ 2.86,0.55, 5.145],rot:-6,owner:'aaron',  attach:1.0,label:'the alarm'},
      {kind:'teaBox',      m:[-6.58,0.92, 1.80],rot:8,  owner:'marisol',attach:0.8,label:'the tea'},
    ]},
+  /* M53: 16 and 8 are built to the other plan - the bedroom opens off the kitchen
+     and the lounge is a dead end. With M50's two hands that gives the four houses
+     you burgle four different problems: A-plain, A-mirrored, B-plain, B-mirrored. */
   {id:'okonkwo',x:LOT_PITCH*2,name:'16 Ardsley Ct',wall:'#bfc7ce',keeper:'grace',
+   plan:'B',
    pal:{wall:'#bfc7ce',wallHue:205,floor:18,ceil:208,tile:[200,206],roof:'#33404e',
         cab:'#a6b0bb',cab2:'#8f9aa8'},
    /* Grace works nights. Some nights the bed is half empty — which is recon you can
@@ -3851,7 +3896,7 @@ const HOUSES=[
      reachable from Bulwark's finest rung and some only from the antique shop -
      attachment is what decides which, since perceived delta scales by it. */
   {id:'pittman',x:-LOT_PITCH*2,name:'8 Ardsley Ct',wall:'#b9b3a4',keeper:'ray',
-   mirror:true,
+   mirror:true,plan:'B',
    pal:{wall:'#b9b3a4',wallHue:62,floor:22,ceil:60,tile:[30,26],roof:'#3a3630',
         cab:'#b3ab98',cab2:'#9c937f'},
    beds:[{who:'ray',x:2.60}],
@@ -9305,7 +9350,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M52'};
+  version:'M53'};
 </script>
 
 </body>

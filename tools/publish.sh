@@ -54,7 +54,7 @@ if [ "$RUN_TESTS" = "1" ]; then
   # hardcoded "28 suites" while the loop ran thirty-one - a build report that
   # misstates what it checked is the same bug _balance.js had, and it is worse
   # than no report at all.
-  SUITES="m1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m17 m18 m19 m20 m21 m22 m23 m24 m25 m26 m27 m28 m29 m30 m31 m32 m33 m34 m35 m36 m37 m38 m39 m40 m41 m42 m43 m44 m45 m46 m47 m48 m49 m50 m51 m52 m53"
+  SUITES="m1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m17 m18 m19 m20 m21 m22 m23 m24 m25 m26 m27 m28 m29 m30 m31 m32 m33 m34 m35 m36 m37 m38 m39 m40 m41 m42 m43 m44 m45 m46 m47 m48 m49 m50 m51 m52 m53 m54"
   for s in $SUITES; do
     # RETRY ONCE. The harness flakes about one run in twenty on Chrome startup and
     # reports NO OUTPUT for a suite that is perfectly green. Measured, and it blocked

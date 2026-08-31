@@ -1190,3 +1190,49 @@ there are out of the hall**.
   are distinct, and m52 still proves the mirror is exact by pairing 160 meshes.
 - m52 picked its pair by array order and *happened* to get two plan A houses. That is
   luck, not a test; it now selects a same-plan pair explicitly.
+
+## M54 — Temporal Freeze: the verb that is actually alien
+
+GDD 5.10 specifies that the vertical slice ships exactly two abilities — Night Vision
+and Temporal Freeze. It shipped one. Everything the game asks of you is slow and
+deliberate — scan, print, swap, hide, wait — and every one of those is the work of a
+careful burglar. **Nothing in the verbs was alien at all;** the premise lived entirely
+in the prose.
+
+**G holds the world for four seconds.** The implementation is one number, because
+`tick()` already ran the player's simulation and the world's as separate calls — they
+only ever needed separate clocks. `wdt` is zero while time is held, so the night clock
+stops, sleepers stop stirring, the watchman stops walking and the car stops coming,
+while `movePlayer` and the camera keep the real `dt`.
+
+### The cost is being seen doing it
+
+Everything else on this street has a mundane reading available: a noise is the boiler,
+a moved mug is your own forgetfulness, a man in the dark at 3am is a burglar. Time
+stopping has no mundane reading, so a witness does not get *more* frightened of a
+burglar — **they stop believing in one**. Certainty is the thing this assignment must
+never produce, which makes an unwitnessed freeze free and a witnessed one the most
+expensive mistake available (+22, against a `LOSE_STREET` of 70).
+
+**Is that cost reachable, or is it theatre?** Chasing a test failure I found that a
+sleeper who *sees* you ends the night on the very next `nightTick` — so if "watched"
+and "caught" were the same instant, the cost would be dead content, which is exactly
+what this project keeps having to dig out of its own constants. They are not the same
+instant: a sleeper goes asleep → **stirring** → awake; `watchedNow()` counts anybody
+not asleep with a line of sight, and `onSeen` only fires from the *awake* branch. So
+there is a window of seconds in which somebody is watching and the night is not over —
+precisely when `enterHide()` refuses to let you into the wardrobe, and precisely when a
+player reaches for a panic button. **The power is most useful exactly where it is most
+expensive.** m54 measures the window rather than assuming it.
+
+### Three things caught by looking rather than by asserting
+
+- The HUD pill said `HELD 33s` while the world was running normally — one label for
+  two states, so it described the *cooldown* in the words of the ability. `HELD` while
+  held, `TIME` while it recharges.
+- The first veil was a vignette alone and photographed as "slightly different
+  lighting" — true, and for a four-second window as good as absent. It uses
+  `backdrop-filter` now to pull the colour out of the rendered frame itself.
+- `cue()` lives inside the SFX closure; the global handle is `SFX.cue`. And
+  `updateHUD(dt)` *decrements a throttle with its argument*, so calling it bare would
+  have set `hudT` to NaN and stopped the entire HUD updating for the rest of the run.

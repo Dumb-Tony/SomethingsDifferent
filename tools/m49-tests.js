@@ -36,6 +36,7 @@ function el(id){return document.getElementById(id);}
     'HARDEN HAUL HIDES HOME HOUSES INV LIGHTS MARKS NIGHT NIGHT_HOURS OPT PENDING '+
     'PHYS PLANTERS PLAY PROP_KINDS RESIDENTS ROOM S SAVE_KEY SCENES SFX SLEEPERS '+
     'SPEC STEVE_LOOK STORES TOPS WIFE WINDOW PANES MX MR hardenNight '+
+    'freezeTime watchedNow '+
     'activeResidents applyChange audibleNight beaconTarget beaconTick beginNight '+
     'buyVariant camera canSee ceilAt checkEnding collapseIndex colliders doAction '+
     'doMorning emitNoise endEvening endNight endWalk enterFocus enterHide envMeshes '+

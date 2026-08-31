@@ -114,7 +114,25 @@ $setups = @{
   SD.player.position.set(ox-2.2,0,-3.9); SD.player.rotation.y=Math.PI;
   SD.S.yaw=Math.PI*0.62; SD.S.pitch=0.12; SD.S.dist=3.2; SD.S.camP=null; SD.S.camL=null;
 "@
+  # M54: time held. Somebody is sitting up in the dark with a line of sight to you,
+  # which is the exact moment the power is for - and the exact moment it costs most.
+  freeze = @"
+  SD.startHouse(); SD.beginNight();
+  SD.GAME.hasSpareKey=true; SD.useDoor(SD.frontDoor);
+  var w=SD.SLEEPERS[0];
+  w.state='stirring'; w.stir=3; w.look=Math.atan2(-1,0);
+  w.group.userData.torso.rotation.x=-0.42;
+  SD.player.position.set(w.x+0.9,0,w.z-1.8); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=0.35; SD.S.pitch=0.20; SD.S.dist=3.0; SD.S.camP=null; SD.S.camL=null;
+  SD.S.daytime=false; SD.S.evening=false; SD.S.freeze=0; SD.S.freezeCd=0;
+  /* The real freeze is four seconds and the harness takes longer than that to
+     settle and capture, so the first version of this shot photographed a world
+     that had already started again. Hold it open for the photograph. */
+  SD.CONST.FREEZE_T=45;
+  SD.freezeTime();
+"@
   lounge = @"
+
 
 
   SD.startHouse(); $open
