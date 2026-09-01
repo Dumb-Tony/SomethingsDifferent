@@ -301,13 +301,14 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .ds-dim{color:var(--dim)}
 </style>
 
-<div id="build-tag">SOMETHING'S DIFFERENT · M55 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M56 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
   <div class="pill" id="noise-pill">NOISE <b id="noise-v">0%</b></div>
   <div class="pill" id="seen-pill">SEEN <b id="seen-v">0</b>/<span id="seen-max">3</span></div>
   <div class="pill" id="wife-pill" style="display:none">DANA <b id="wife-v"></b></div>
+  <div class="pill" id="day-pill" style="display:none">DAY <b id="day-v"></b></div>
   <div class="pill" id="mode-pill">MODE <b id="mode-v">WALK</b></div>
   <div class="pill" id="freeze-pill" style="display:none"><span id="freeze-k">HELD</span> <b id="freeze-v"></b></div>
 </div>
@@ -5258,6 +5259,23 @@ function updateHUD(dt){
   $('mode-v').textContent=
     S.hidden?(S.hideT>0?'HIDING…':'HIDDEN'):S.moveMode.toUpperCase();
   $('mode-pill').classList.toggle('warn',S.hidden?true:false);
+  /* M56. In daylight the clock, the noise meter and the sightings counter are all
+     hidden - correctly, there is no clock and nothing to hear - which left the
+     afternoon with a HUD reading MODE WALK and nothing else at all. You could not
+     tell which day it was, or which block of it, in the half of the game that is
+     entirely about spending a limited number of days. */
+  (function(){
+    const p=$('day-pill');
+    if(S.daytime||S.evening){
+      p.style.display='';
+      const b=BLOCKS[Math.min(DAY.block,BLOCKS.length-1)];
+      $('day-v').textContent=GAME.day+' of '+CONST.SLICE_NIGHTS+
+        /* fromCharCode, not an escape: perl's s/// replacement treats a
+           backslash-u as a case-folding directive and ate the one that was
+           meant to be a middot, so the pill read "DAY 1 of 10 00b7 MORNING". */
+        (b?(String.fromCharCode(32,183,32)+(S.evening?'EVENING':b.name)):'');
+    }else p.style.display='none';
+  })();
   /* M54. The pill shows the seconds of held time while it runs, then the cooldown
      while it recharges, and nothing at all when the power is simply ready - a HUD
      element that always says READY is furniture. */
@@ -5509,7 +5527,37 @@ const GUIDE=(function(){
       GUIDE_HIDE_ON.some(id=>{const n=document.getElementById(id);
                               return n&&n.classList.contains('on');});
     if(hidden){el.classList.remove('on');return;}
+    /* M56. THE RAIL IS ABOUT THE NIGHT, AND IT WAS STILL GIVING NIGHT ORDERS AT
+       FOUR IN THE AFTERNOON. A screenshot of the walk showed "Search the planters
+       by the porch - E" over a sunlit lawn with three neighbours standing on it.
+       Every step in GUIDE_STEPS is a night step; none of them can be satisfied
+       while the sun is up, so the card sat there telling the player to do something
+       impossible for the whole of the half of the game it does not describe.
+
+       The afternoon has its own two verbs and they are worth one card. This is not
+       a rail: there is no ordering and nothing to complete, because the afternoon
+       is not a sequence - it is a thing you do as much of as you have time for. */
+    if(S.daytime){
+      el.classList.remove('done');
+      $('guide-lbl').textContent='THE AFTERNOON';
+      $('guide-step').innerHTML='Stand near somebody &mdash; <b>E</b>';
+      $('guide-why').innerHTML='Being seen out here in daylight is the opposite of '+
+        'being seen at night: it is how they get used to you, and FAMILIARITY is what '+
+        'stops them looking twice at three in the morning. <b>Q</b> reads one person '+
+        'properly &mdash; what they notice and how far you can push it &mdash; once a day.';
+      el.classList.add('on');return;
+    }
+    if(S.evening){
+      el.classList.remove('done');
+      $('guide-lbl').textContent='THE EVENING';
+      $('guide-step').innerHTML='Sit with Dana, or go up';
+      $('guide-why').innerHTML='She is the clock on your ambition, not an obstacle '+
+        'with a detection cone. An evening spent with her buys you the front of the '+
+        'night; one spent avoiding her costs you it.';
+      el.classList.add('on');return;
+    }
     const s=step();
+
     if(!s){
       /* The chain is finished. Say so once, in the language of the thing it taught,
          and then get out of the way for good. */
@@ -9505,6 +9553,6 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M55'};
+  version:'M56'};
 </script>
 

@@ -1308,3 +1308,71 @@ file, and the very next render returned immediately.
 - Then the obvious way to *test* for that — looking for a literal `\u` in the output —
   is itself an invalid Unicode escape in JS, and took the whole page down with a
   SyntaxError. Both are now built with `String.fromCharCode`.
+
+## M57 — close the loop
+
+Fifty-six milestones passed every test and the game felt flat. The reason is a process
+one: **every test in this project asserts on state, and the state was always correct.**
+The test nobody had written is the only one that could have found this — *play the game
+the way the game tells you to, and look at the score.*
+
+Doing that returned **Collapse 0.0 of 40 after ten nights**, ten identical grey lines
+reading "Walt walks past it". Four things stacked up to produce it.
+
+**1. The score was not in the room where the game is played.** `collapseIndex()` is a
+credibility-weighted mean of resident *doubt*, and doubt is written in exactly one place
+in the loop — `DOUBT.commit`, from `doMorning`. It was on the day screen only. The
+player watched NOISE 0% and SEEN 0/3 all night — both honest, both pinned at zero for a
+careful approach — while the meter the run is scored on was invisible until morning.
+
+The trap: a pill printing `collapseIndex()` **cannot move during a night** and would
+have reproduced the open loop it was meant to close. So it shows the standing score, an
+arrow, and what tonight's ledger will actually be worth — `nightForecast()`, which
+replays `PENDING` the way dawn will. Three things make the obvious version wrong:
+
+- `commit` writes `res.stress` and `perceived` reads stress back as an **alertness
+  multiplier**, so lines must resolve *in order* onto an accumulator. Resolving each
+  against a pristine resident is off by 0.69 on a three-line ledger and — worse —
+  reports DOUBT on a line the morning resolves as CERTAINTY.
+- it must clamp like `commit` does, or it forecasts a collapse the run cannot reach;
+- it must not write. Verified: forecast equals dawn to **0.0e+0** on three shapes.
+
+It also **goes dark in focus mode**. `focusKey` turns 8° a press and `applyChange`
+coalesces every press onto the same ledger line, so a live band beside the focus panel's
+own similarity readout is a binary search for the resident's notice floor — the number
+`readTier` deliberately sells at tier 2. A receipt for a commitment, not a dial.
+
+**2. The pace was never stated, and CONST's own figures were three milestones stale.**
+The note claimed 1/night reaches 19.3 and 4/night 42.5 winning on night 5. Re-measured
+(`tools/_pace.js`): **14.4 and 61.2**, crossing on night 7. Two a night was described as
+"a near miss" when two a night *cannot win at all*. GDD §15 carried the same dead
+numbers and has been corrected. m57 now **re-measures two points of the curve** and goes
+red if the stated pace drifts again.
+
+Also measured: credibilities sum to 4.10 and the best household is 1.50 of it, so an
+entire household driven to Doubt 100 with nobody else touched is **36.6 — short of the
+bar, permanently.** That single fact is what makes "spread across the street" a strategy
+rather than a preference, and it now appears on the day screen.
+
+**3. MISSED was dressed as a success.** `showReport` put `rp-miss` on the **"HOME BEFORE
+DAWN" header** *and* on every wasted swap — the same dead grey for the best outcome of
+the approach and the worst outcome of the work — and its line read "Walt walks past it",
+which in a game about not being noticed is the sentence for getting away with it. The
+gloss explaining that it gained you nothing fired **once per run**, so the rail's ten
+consecutive MISSED mornings shared one sentence between them. The header has its own
+class now, MISSED is warm and dimmed (CERTAINTY stays the loudest thing on screen), the
+line says what it cost, and the gloss repeats and names the pace.
+
+### And the pace is not the whole fix — which is the finding worth keeping
+
+Ten nights each, spread across residents:
+
+      1 a night, printed  (what the rail teaches)      4.0   never wins
+      4 a night, printed  (the rail teaching a pace)  23.3   never wins
+      4 a night, best rung bought                     54.2   wins on night 8
+
+**The fabricator cannot aim.** 40 printed copies land 19 MISSED and 13 CERTAINTY; 40
+*chosen* ones land 38 DOUBT. The whole game is already there — it is gated behind being
+able to aim, and aiming is what the shop is for, currently unreadable until `hkTier` 2 on
+about night 5. m57 §8 pins those numbers and goes red if anybody makes the printed loop
+winnable without coming back to rewrite the claim.

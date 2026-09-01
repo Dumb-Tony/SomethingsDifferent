@@ -103,7 +103,21 @@ h1 span{color:var(--alien)}
 .mix.muted input[type=range],.mix.muted output{opacity:.32}
 
 /* ── HUD layer (z 20-30) — deliberately NOT .screen so it survives go() ───────── */
-#hud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:20;display:none;gap:8px}
+/* M57. WAS left:50% + translateX(-50%) with width:auto, so the space available to the
+   pills was innerWidth/2 - 631px on a 1262px window. With Dana out and time held it
+   was ALREADY wrapping every pill mid-word into three shredded rows, before this
+   milestone added anything; a seventh pill only made it unmissable. Full width, and
+   let it wrap between pills instead of inside them.
+   pointer-events:none because a full-width strip across the top is otherwise a click
+   shield over the canvas, and the canvas is what takes the click that grabs the mouse
+   (renderer.domElement 'click' -> grabMouse). No pill has a listener and there is no
+   .pill:hover rule, so nothing is lost by making the whole bar transparent to clicks. */
+#hud{position:fixed;top:12px;left:0;right:0;z-index:20;display:none;gap:8px;
+  justify-content:center;flex-wrap:wrap;padding:0 10px;box-sizing:border-box;
+  pointer-events:none}
+.pill{white-space:nowrap}
+.c-bar{color:var(--dim);font-weight:700}
+
 #hud.on{display:flex}
 .pill{background:rgba(10,9,18,.8);border:1px solid var(--line);border-radius:20px;padding:6px 14px;
   font-size:12px;font-weight:700;letter-spacing:.5px}
@@ -240,14 +254,28 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 .dy-prow2 b{color:var(--text)}
 .dy-hard{margin-top:8px;padding-top:7px;border-top:1px solid var(--line);
   font-family:var(--font-mono);font-size:10px;letter-spacing:1px;color:#9fb0cc}
+.dy-pace{margin-top:8px;padding-top:7px;border-top:1px solid var(--line);
+  font-family:var(--font-mono);font-size:10px;letter-spacing:1px;color:var(--warm)}
+.dy-pace b{color:var(--paper)}
 .rp-doubt{border-left-color:var(--alien)}
 .rp-cert{border-left-color:var(--coral)}
-.rp-miss{border-left-color:#4a4658}
+/* M57. rp-miss WAS DOING TWO OPPOSITE JOBS. showReport put it on the "HOME BEFORE
+   DAWN" header - you got in and out unseen - and on every wasted swap, in the same
+   dead grey. So the screen said the same thing in the same colour about the best
+   outcome of the approach and the worst outcome of the work.
+   The arrival header has its own class now. MISSED gets the WARM accent, dimmed: it
+   is a null result, not a disaster, and CERTAINTY must stay the loudest thing here -
+   but it costs a night and the price of a replica, and a grey that matches the
+   success line above it could never say so. */
+.rp-miss{border-left-color:#6b5a2e}
+.rp-home{border-left-color:#3c5a4a}
+.rp-home .rp-band{color:#6fbf9b}
+
 .rp-head{font-weight:700;font-size:14px}
 .rp-num{font-family:var(--font-mono);font-size:11px;color:var(--dim);margin:3px 0}
 .rp-band{font-family:var(--font-mono);font-size:12px;letter-spacing:1.6px}
 .rp-doubt .rp-band{color:var(--alien)} .rp-cert .rp-band{color:var(--coral)}
-.rp-miss .rp-band{color:var(--dim)}
+.rp-miss .rp-band{color:var(--warm);opacity:.85}
 .rp-say{font-size:13px;color:var(--paper);margin-top:4px}
 .rp-none,.rp-foot{color:var(--dim);font-size:13px}
 /* ── day / shop / dialogue (M6) ── */
@@ -307,9 +335,10 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M56 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M57 · ARDSLEY COURT</div>
 
 <div id="hud">
+  <div class="pill" id="collapse-pill" style="display:none">COLLAPSE <b id="collapse-v">0.0</b><span id="collapse-fc"></span><span class="c-bar" id="collapse-bar"> / 40</span><span id="collapse-know"></span></div>
   <div class="pill" id="clock">🌙 <b id="clock-v">23:00</b></div>
   <div class="pill" id="noise-pill">NOISE <b id="noise-v">0%</b></div>
   <div class="pill" id="seen-pill">SEEN <b id="seen-v">0</b>/<span id="seen-max">3</span></div>
@@ -692,14 +721,38 @@ const CONST={
   SLICE_NIGHTS: 10,         // was 7. A longer run leaves room to work the whole street
                             // instead of rushing two houses. The win threshold below
                             // was re-measured against it, not left where it was.
-  SLICE_WIN_COLLAPSE: 40,   // Collapse Index needed by the deadline. RE-MEASURED in M12
-                            // against 10 nights x 30 objects instead of left to drift:
-                            // 1 object/night reaches 19.3 (loses badly), 2/night 37.5
-                            // (a near miss), 4/night SPREAD ACROSS THE STREET 42.5 and
-                            // wins on night 5. Kept at 40 because that gradient is the
-                            // right shape. Collapse is a MEAN over residents, so
-                            // spreading beats hammering one house — that is the
-                            // strategy this number is set against. See GDD 15.
+  SLICE_WIN_COLLAPSE: 40,   // Collapse Index needed by the deadline.
+  /* M57 — WHAT A NIGHT IS WORTH, AND THE FACT THAT NOTHING TOLD THE PLAYER.
+     The figures that lived here were measured in M12 against 30 objects and were
+     stale on every number by the time anybody read them: three milestones re-cut the
+     balance underneath them (M45 the HK ladder, M50 suspicion cooling, M53 the
+     floorplans). Re-measured against the shipping build in tools/_pace.js:
+
+         a night of...  1      2      3      4      5
+         final collapse 14.4   28.0   43.1   61.2   75.0
+         crosses 40     never  never  night 9  night 7  night 6
+
+     M12 claimed 19.3 / 37.5 / 42.5-winning-on-night-5. Every one of those was wrong,
+     and the old note read as though two a night were a near miss when two a night
+     cannot win at all.
+
+     THE STRATEGY THOSE NUMBERS ASSUME, stated because a pace is meaningless without
+     one: N swaps a night, each on a DIFFERENT resident, choosing the shop rung that
+     actually lands DOUBT. It is an upper bound - perfect information - so the pace a
+     real player should aim at is the next one up. PACE_TARGET is that number.
+
+     WHY SPREAD, measured the same day: the credibilities sum to 4.10, and the best
+     HOUSEHOLD on the street is the Hoyts at 1.50 of it. Both of them driven all the
+     way to Doubt 100, with nobody else touched, is collapseIndex 36.6 - short of the
+     bar, permanently. The single most credible person alone is 22.0. Hammering one
+     house cannot win however well it is played, which is what makes "spread" the
+     strategy rather than a preference.
+
+     The bar stays at 40: that gradient is the right shape. What was wrong was the
+     note, and the fact that the game never said any of it out loud. See GDD 15. */
+  PACE_CURVE  : [0,14.4,28.0,43.1,61.2,75.0],   // final collapse for a night of N
+  PACE_TARGET : 4,          // what the game tells the player to aim for, in different houses
+
   LOSE_STREET : 70,         // mean neighbourhood Suspicion that ends the run
   /* M54 - TEMPORAL FREEZE (GDD 5.10). The slice is specified to ship exactly two
      alien abilities, Night Vision and this, and until now it shipped one. Everything
@@ -5251,6 +5304,53 @@ function updateHUD(dt){
   hudT-=dt;if(hudT>0)return;hudT=0.1;
   updatePrompt();
   GUIDE.tick();          // reads game state; never drives it
+  /* ── M57. THE SCORE, IN THE ROOM WHERE THE WORK HAPPENS ────────────────────
+     The number the whole run is scored on was on the DAY screen only. A player spent
+     780 seconds a night watching NOISE 0% and SEEN 0/3 - both honest, both pinned at
+     zero for a careful approach - while the meter that decides the run was somewhere
+     they could not see it until morning.
+
+     It shows the standing score, then an arrow and what tonight's ledger will add,
+     then the bar. And it says the BAND in words, because the number alone lies twice:
+       - a CERTAINTY still awards doubt (DOUBT.resolve, CERTAIN_DOUBT_FRAC), so a rising
+         arrow with no word on it would teach that being caught is progress;
+       - a landed DOUBT on Ray, credibility 0.1 of 4.10, prints +0.0 - so an arrow to
+         the same number is not always a wasted night, and only the word can tell them
+         apart.
+
+     DARK IN FOCUS MODE. focusKey turns 8 degrees and nudges 3cm a press, applyChange
+     coalesces every press onto the same ledger line, and a rotate is exactly undone by
+     the opposite rotate - so a live band next to the focus panel's own "currently
+     93.9% of the recorded state" is a binary search for the notice floor. That number
+     is what readTier sells at tier 2 (M46) and what the shop exists to make you guess.
+     This is a receipt for something already committed, not a dial to turn while your
+     hands are on the object. */
+  (function(){
+    const p=$('collapse-pill');
+    if(S.phase!=='house'||S.daytime||S.evening||S.focus||!NIGHT.running){
+      p.style.display='none';return;
+    }
+    const fc=nightForecast();
+    if(!fc){p.style.display='none';return;}
+    p.style.display='';
+    const now=collapseIndex(),bar=winBar();
+    $('collapse-v').textContent=now.toFixed(1);
+    $('collapse-bar').textContent=' / '+bar.toFixed(0);
+    const fcEl=$('collapse-fc'),kn=$('collapse-know');
+    if(!fc.n){fcEl.textContent='';fcEl.className='';kn.textContent='';kn.className='';return;}
+    fcEl.className=fc.band==='DOUBT'?'k-doubt':(fc.band==='CERTAINTY'?'k-cert':'k-miss');
+    fcEl.textContent=' '+String.fromCharCode(8594)+' '+fc.ci.toFixed(1);
+    /* the band names itself, in the report's own words: it says "Walt KNOWS" for a
+       certainty and "Walt walks past it" for a miss. */
+    if(fc.band==='CERTAINTY'){
+      kn.className='k-cert';
+      kn.textContent=String.fromCharCode(32,183,32)+fc.knows+' WILL KNOW';
+    }else if(fc.band==='MISSED'){
+      kn.className='k-miss';
+      kn.textContent=String.fromCharCode(32,183,32)+fc.n+' WALK PAST';
+    }else{kn.className='';kn.textContent='';}
+  })();
+
   /* M36. The pill read WALK or SNEAK while you were shut inside a wardrobe with
      movement forced to zero - the one state where what it says matters most, and the
      only counterplay in the game had no readout at all. */
@@ -7980,7 +8080,62 @@ function collapseIndex(){
   rs.forEach(r=>{n+=(r.doubt||0)*r.credibility;d+=r.credibility;});
   return d?n/d:0;
 }
+/* M57 — WHAT TONIGHT IS WORTH, BEFORE THE MORNING SAYS SO.
+
+   collapseIndex() above is a weighted mean of resident DOUBT, and doubt is written in
+   exactly one place in the loop: DOUBT.commit, from doMorning. So the score cannot move
+   while you are working. Measured: five swaps on five owners, collapseIndex 0.00 after
+   every one of them. A HUD pill printing collapseIndex alone would sit still all night
+   and reproduce the open loop it exists to close.
+
+   This resolves the pending ledger the way dawn will, without writing anything.
+
+   IN ORDER, ONTO AN ACCUMULATOR, AND CLAMPED. Three things make the obvious version
+   wrong, and all three are load-bearing:
+     - DOUBT.commit writes res.stress, and DOUBT.perceived reads stress back as an
+       ALERTNESS MULTIPLIER on the delta. Resolving each line against a pristine
+       resident therefore under-reports the number and, worse, can report DOUBT on a
+       line the morning will resolve as CERTAINTY.
+     - commit clamps to 0..100. An accumulator that runs past 100 forecasts a collapse
+       the run cannot reach.
+     - it must not write. The clone carries only the three numbers commit touches;
+       attention, notice floor, band and credibility are read from the real resident,
+       so nothing here can drift from the person.
+
+   Keyed by the resident OBJECT rather than by name, so it cannot fall out of step with
+   activeResidents() - residents do not carry their own key. */
+const _BAND_RANK={MISSED:0,DOUBT:1,CERTAINTY:2};
+function nightForecast(){
+  const rs=activeResidents();
+  if(!rs.length)return null;
+  const sim=new Map();
+  rs.forEach(r=>sim.set(r,{doubt:r.doubt||0,stress:r.stress||0,susp:r.suspicion||0}));
+  let n=0,knows=0,band='MISSED';
+  for(let i=0;i<PENDING.length;i++){
+    const p=PENDING[i],o=objectById(p.objId);
+    if(!o)continue;
+    const res=RESIDENTS[o.owner];
+    const st=res&&sim.get(res);
+    if(!st)continue;                    // the mirror of doMorning's own `if(!res)continue`
+    /* the person as they will be by the time the morning reaches THIS line */
+    const view={attention:res.attention,noticeFloor:res.noticeFloor,
+                doubtBand:res.doubtBand,seed:res.seed,credibility:res.credibility,
+                doubt:st.doubt,stress:st.stress,suspicion:st.susp};
+    const probe={kind:o.kind,spec:p.before,attach:o.attach,marked:o.marked,fresh:o.fresh};
+    const r=DOUBT.resolve(view,probe,o.spec);
+    st.doubt =clamp(st.doubt +r.doubt,     0,100);
+    st.stress=clamp(st.stress+r.stress,    0,100);
+    st.susp  =clamp(st.susp  +r.suspicion, 0,100);
+    n++;
+    if(r.band==='CERTAINTY')knows++;
+    if(_BAND_RANK[r.band]>_BAND_RANK[band])band=r.band;
+  }
+  let num=0,den=0;
+  sim.forEach((st,r)=>{num+=st.doubt*r.credibility;den+=r.credibility;});
+  return {n:n,knows:knows,band:band,ci:den?num/den:0};
+}
 function streetSuspicion(){
+
   const rs=activeResidents();
   if(!rs.length)return 0;
   let m=0;rs.forEach(r=>{m+=(r.suspicion||0);});
@@ -8789,9 +8944,12 @@ function updatePrompt(){
 /* ═════════════════════════ REPORT / DOSSIER ═════════════════════════ */
 /* Shown once per run, the first time each band actually happens to you (M11). */
 const BAND_GLOSS={
-  MISSED:'<b class="k-miss">MISSED</b> &mdash; too similar to register. It cost you '+
-    'nothing and gained you nothing, and the object is a little less fresh now, so the '+
-    'same trick works slightly less well on it next time.',
+  MISSED:'<b class="k-miss">MISSED</b> &mdash; too similar to register. It gained you '+
+    'nothing, it cost you the replica, and the object is a little less fresh now, so '+
+    'the same trick works slightly less well on it next time. '+
+    '<b>Aim lower.</b> A copy has to be wrong enough to notice and right enough to '+
+    'doubt &mdash; and the pace that wins is about '+CONST.PACE_TARGET+' a night, in '+
+    'different houses.',
   DOUBT:'<b class="k-doubt">DOUBT is the thing you are here for.</b> They noticed, could '+
     'not explain it, and blamed themselves. Enough of this and a person comes apart '+
     '&mdash; collapse enough of the street and you win.',
@@ -8804,7 +8962,9 @@ function showReport(reason,text){
   const lines=doMorning();
   let h='';
   if(text){
-    const cls=(reason==='seen'||reason==='curfew')?'rp-cert':'rp-miss';
+    /* M57: 'rp-home', not 'rp-miss'. Getting home clean and wasting a night are
+       not the same event and must not be the same colour. */
+    const cls=(reason==='seen'||reason==='curfew')?'rp-cert':'rp-home';
     h+='<div class="rp-item '+cls+'"><div class="rp-band">'+
        (reason==='seen'?'SEEN':reason==='curfew'?'CAUGHT OUT AT DAWN':'HOME BEFORE DAWN')+
        '</div><div class="rp-say">'+text+'</div></div>';
@@ -8818,7 +8978,12 @@ function showReport(reason,text){
        r.delta.toFixed(1)+' &middot; window '+r.floor.toFixed(0)+'&ndash;'+r.ceiling.toFixed(1)+'</div>';
     h+='<div class="rp-band">'+r.band+'</div>';
     if(r.band==='MISSED')
-      h+='<div class="rp-say">'+L.name+' walks past it.</div>';
+      /* M57. It read "Walt walks past it." - which in any game about not being noticed
+         is the sentence for having got away with something. Here it means the night
+         and the money went nowhere. Say the second half out loud. */
+      h+='<div class="rp-say">'+L.name+' walks past it. That is a night and a replica '+
+         'spent on nothing.</div>';
+
     else if(r.band==='DOUBT')
       h+='<div class="rp-say">'+L.name+' pauses. Looks again. Doubt +'+r.doubt.toFixed(1)+
          ' (now '+L.doubtNow.toFixed(1)+')</div>';
@@ -8828,11 +8993,18 @@ function showReport(reason,text){
     h+='</div>';
     /* The FIRST time each band happens to you, say what it means. A similarity
        percentage and a delta are meaningless until somebody tells you which
-       direction is winning (M11). Once per run, then never again. */
-    if(!GAME.glossed[r.band]){
+       direction is winning (M11).
+       M57 — EXCEPT FOR MISSED, WHICH REPEATS. The other two glosses explain a thing
+       that just happened to you and are remembered because something happened. MISSED
+       is the absence of an event; shown once on night one and never again, its lesson
+       was gone by the night it mattered. Following the objective rail produces TEN
+       consecutive MISSED mornings and, until this milestone, exactly one sentence
+       across all ten saying that was bad. */
+    if(r.band==='MISSED'||!GAME.glossed[r.band]){
       GAME.glossed[r.band]=1;
       h+='<div class="rp-gloss">'+BAND_GLOSS[r.band]+'</div>';
     }
+
   });
   (GAME.lastFractures||[]).forEach(f=>{
     h+='<div class="rp-item rp-frac"><div class="rp-band">FRACTURE &middot; DOUBT '+f.at+
@@ -8906,6 +9078,25 @@ function showDay(){
           one - the ending screen was the first time the player ever saw it. */
        '<span>Dana <b>'+WIFE.susp.toFixed(0)+'</b>/100</span>'+
        '</div>';
+    /* M57. THE PACE, WHERE THE PLAYER IS DECIDING WHAT TO DO NEXT.
+       Nothing in the game had ever said how much a night is worth. CONST knew - and
+       what CONST knew was three milestones out of date, which is its own lesson. The
+       measured curve is in CONST.PACE_CURVE; this states the target and, once there
+       is a run to compare against, how the player is actually doing.
+       The ceiling line is the other half: collapse is a MEAN, and the best household
+       on the street taken all the way to Doubt 100 still cannot clear the bar. That is
+       the single fact that turns "swap things" into "swap things EVERYWHERE". */
+    const done=(GAME.stats&&GAME.stats.swapped)|0;
+    const nights=Math.max(0,(GAME.day|0)-1);
+    const rate=nights?(done/nights):0;
+    /* M57: its OWN class. The first version borrowed .dy-hard, which m15 asserts is
+       ABSENT on a street that has installed nothing - correctly, because that row
+       means "they are reacting to you" and the pace means nothing of the kind. */
+    h+='<div class="dy-pace">THE PACE &middot; '+
+       'about <b>'+CONST.PACE_TARGET+'</b> a night, in different houses'+
+       (nights?(' &middot; you are averaging <b>'+rate.toFixed(1)+'</b>'):'')+
+       '</div>';
+
     const inst=(GAME.hardened||[]).map(function(id){
       const H=HARDEN.filter(function(x){return x.id===id;})[0];return H?H.name:id;});
     if(inst.length)
@@ -9462,7 +9653,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   doMorning,findTarget,enterFocus,exitFocus,interact,searchPlanter,useDoor,setDoor,freezeTime,watchedNow,
   updatePrompt,promptAnchor,promptWorldPos,
   showReport,showDossier,showEnding,hashStr,
-  collapseIndex,streetSuspicion,activeResidents,fracturedCount,checkEnding,
+  collapseIndex,nightForecast,streetSuspicion,activeResidents,fracturedCount,checkEnding,
   houseLight,moveSleeper,endShift,audibleNight,updateHUD,
   saveGame,loadGame,hasSave,SAVE_KEY,
   // ── M5: the night ──
@@ -9551,7 +9742,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M56'};
+  version:'M57'};
 </script>
 </body>
 </html>

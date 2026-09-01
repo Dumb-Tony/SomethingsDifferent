@@ -2091,9 +2091,21 @@ Add content by filling these; none should require touching systems code.
   and requires the sleeper traces to be bit-identical. Cheap to run, and it is the
   assertion that stops the audio layer ever quietly becoming a gameplay input.
 - **2026-08-11 — the Collapse Index is a MEAN, so SPREADING is the whole strategy.**
-  Measured over 10 nights: working one object a night reaches collapse 19.3 (loses
-  badly), two a night 37.5 (a near miss), and **four a night spread across the street
-  42.5, winning on night 5**. The threshold stays at 40 because that gradient is the
+  Measured over 10 nights, and **RE-MEASURED 2026-09-01 in M57, when all three of the
+  original figures turned out to have been wrong for three milestones** (M45 re-cut
+  the HK ladder, M50 added suspicion cooling, M53 the floorplans). The current curve,
+  from `tools/_pace.js` - N a night, each on a different resident, choosing the rung
+  that actually lands DOUBT:
+
+  | a night of | 1 | 2 | 3 | 4 | 5 |
+  |---|---|---|---|---|---|
+  | final collapse | 14.4 | 28.0 | 43.1 | 61.2 | 75.0 |
+  | crosses 40 | never | never | night 9 | night 7 | night 6 |
+
+  M12 claimed 19.3 / 37.5 / 42.5-winning-on-night-5, and described two a night as "a
+  near miss" when two a night cannot win at all. Three is a knife edge that does not
+  cross until night nine with perfect play; **four is the pace the game now states**,
+  as `CONST.PACE_TARGET`. The threshold stays at 40 because that gradient is the
   right shape. ⚠ The first version of this sweep took objects in array order, and the
   first four all belong to the Hoyts — so it worked two residents and left four at
   zero, and reported a hard ceiling of 37.5 that no amount of effort could pass. I

@@ -167,7 +167,10 @@ function el(id){return document.getElementById(id);}
     Array.prototype.forEach.call(e.classList,function(c){used[c]=1;});
   });
   /* ...plus the ones only ever added from script, which the DOM cannot show us. */
-  ['hot','warn','late','on','sh-good','sh-bad','sh-dim','rp-doubt','rp-cert','rp-miss']
+  /* M57 added rp-home (the arrival header stopped sharing a class with a wasted
+     swap) and the k-* band words now appear in the night HUD as well as the intro. */
+  ['hot','warn','late','on','sh-good','sh-bad','sh-dim','rp-doubt','rp-cert','rp-miss',
+   'rp-home','k-miss','k-doubt','k-cert']
     .forEach(function(c){used[c]=1;});
 
   var orphans=Object.keys(used).filter(function(c){return !defined[c];});
