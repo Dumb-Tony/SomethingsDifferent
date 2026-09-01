@@ -136,7 +136,31 @@ $setups = @{
   SD.CONST.FREEZE_T=45;
   SD.freezeTime();
 "@
+  # M57: the night HUD with a ledger behind it. The score used to be on the day screen
+  # only, so a player watched NOISE 0% and SEEN 0/3 all night while the number the run
+  # is scored on was somewhere they could not see until morning.
+  ledger = @"
+  SD.startHouse(); SD.beginNight();
+  SD.GAME.hasSpareKey=true; SD.useDoor(SD.frontDoor);
+  SD.GAME.bank=100000;
+  var done=0;
+  for(var i=0;i<SD.objects.length&&done<3;i++){
+    var o=SD.objects[i];
+    if(!SD.RESIDENTS[o.owner])continue;
+    SD.scanObject(o);
+    if(!SD.fabricate(o))continue;
+    var bag=SD.invFor(o.id);
+    if(!bag.length)continue;
+    SD.swapWith(o,bag.length-1); done++;
+  }
+  var t=SD.objects.filter(function(x){return SD.RESIDENTS[x.owner];})[6];
+  SD.player.position.set(t.spec._pos[0]+0.7,0,t.spec._pos[2]-1.5);
+  SD.S.yaw=Math.PI*0.86; SD.S.pitch=0.16; SD.S.dist=3.0;
+  SD.S.camP=null; SD.S.camL=null;
+  SD.S.daytime=false; SD.S.evening=false;
+"@
   lounge = @"
+
 
 
 

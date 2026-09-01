@@ -7787,7 +7787,11 @@ function fabricate(o){
   /* Loud. An alien device running off a copy of somebody's mug in their own kitchen
      at three in the morning should not be free. */
   emitNoise(o.spec._pos[0],o.spec._pos[2],CONST.FAB_NOISE,'scan');
-  hint('Printed a '+item.sim.toFixed(1)+'% match. It is in the bag &mdash; press 1.');
+  /* M57: a real em dash, not the entity. hint() writes textContent, so this line
+     had been printing the literal characters "&mdash;" on screen every time the
+     fabricator ran - which is every night of the tutorial. */
+  hint('Printed a '+item.sim.toFixed(1)+'% match. It is in the bag '+
+       String.fromCharCode(8212)+' press 1.');
   return item;
 }
 function invFor(id){return INV.filter(i=>i.forId===id);}
