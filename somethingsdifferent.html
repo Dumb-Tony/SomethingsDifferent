@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3154,6 +3154,22 @@ moon.castShadow=true;
    rather than standing on the grass. */
 moon.shadow.mapSize.set(1024,1024);
 moon.shadow.camera.near=1;moon.shadow.camera.far=48;
+/* M58 — DO NOT TOUCH THIS NUMBER. It looks like ordinary over-biasing: -0.0016 of a
+   47m frustum is 7.5cm of peter-panning, and the textbook fix is to drop bias to
+   about -0.0004 and take up the slack with normalBias. Rendered, that is a disaster
+   — docs/zl-c-v1-hall12.png is every interior wall in the game under a dense
+   diagonal crosshatch — and the reason is MeshLambertMaterial, which every surface
+   here uses. Lambert applies getShadowMask() as ONE scalar over the summed direct
+   diffuse of ALL lights, rather than per light after the N.L term the way Phong and
+   Standard do. So a wall that faces away from the moon, and therefore gets nothing
+   from it either way, still has its POINT LIGHT contribution multiplied by the
+   moon's shadow test — and any acne on it puts a stipple across light that has
+   nothing to do with the moon. normalBias makes it worse still: it pushes the
+   lookup along the surface normal, i.e. further from the light on exactly the
+   backfacing surfaces where this bites.
+   Measured the long way round, at -0.0004 / 0.026 and then again here. */
+moon.shadow.bias=-0.0016;
+moon.shadow.normalBias=0;
 /* M21 - TIGHTER, NOT BIGGER. Crisper shadows were the goal, and 2048x2048 delivered
    them and then made all twenty test suites time out at once: the harness renders in
    software (WARP), where a 2048 map over 1039 casters is crippling. A real GPU would
@@ -3161,9 +3177,13 @@ moon.shadow.camera.near=1;moon.shadow.camera.far=48;
    making. Shrinking the box does the same job for free - it has followed the player
    since M17, so +/-12 still covers the whole near field, and 24m/1024 gives finer
    texels than 32m/1024 ever did. */
-moon.shadow.camera.left=-12;moon.shadow.camera.right=12;
-moon.shadow.camera.top=12;moon.shadow.camera.bottom=-12;
-moon.shadow.bias=-0.0016;
+/* M58 — 20m, not 24m, and pushed forward. See trackShadow: the box no longer sits
+   centred on the player, so it does not have to be big enough to cover the ground
+   BEHIND the camera as well as in front of it. 20m over 1024 is 1.95cm a texel
+   against 2.34cm, and 20m is the floor the M21 suite asserts ("it still covers the
+   near field"), so this is as tight as the box is allowed to get. */
+moon.shadow.camera.left=-10;moon.shadow.camera.right=10;
+moon.shadow.camera.top=10;moon.shadow.camera.bottom=-10;
 /* M17: the shadow box is +/-16m and the street is 146m long, so before this it
    covered ONE lot of five — four houses out of five were flat-lit, and the wall
    shadow bars the interior comment calls load-bearing existed in Hoyt's house
@@ -3172,11 +3192,48 @@ moon.shadow.bias=-0.0016;
    setLighting so the two rigs keep their own sun angles. */
 const moonTarget=new THREE.Object3D();scene.add(moonTarget);moon.target=moonTarget;
 const moonOff=new THREE.Vector3(-9,15,7);
+/* M58 — WHERE THE BOX GOES, AND WHERE ITS TEXELS LAND. Two changes, both free.
+
+   (1) AHEAD, NOT AROUND. Centred on the player, roughly half of the map was spent
+       behind the camera, on ground no frame has ever contained. The camera sits at
+       most CAM_DIST behind the player, so pushing the box SHADOW_AHEAD metres along
+       the camera's own heading covers -6.8m..+13.2m instead of -10..+10: nothing in
+       frame falls out of it, and every texel that moved is now in front of you.
+       Along the camera, not the player, because the shadow map exists to serve the
+       frame and the frame belongs to the camera — you can spin the camera round a
+       standing player and the shadows must follow the look, not the feet.
+
+   (2) TEXEL SNAPPING. The box used to slide continuously, so every shadow edge in
+       the world was re-quantised against a different grid every frame: the crawling,
+       boiling edges you get from any shadow map that follows a camera. Quantising
+       the box centre to whole texels IN THE LIGHT'S OWN BASIS pins the edges to the
+       world instead, and they stop moving while you walk. Costs four dot products. */
+const SHADOW_AHEAD=3.2;
+const _msC=new THREE.Vector3(),_msDir=new THREE.Vector3(),
+      _msRight=new THREE.Vector3(),_msUp=new THREE.Vector3();
 function trackShadow(){
   if(!player)return;
-  const px=player.position.x,pz=player.position.z;
-  moonTarget.position.set(px,0,pz);moonTarget.updateMatrixWorld();
-  moon.position.set(px+moonOff.x,moonOff.y,pz+moonOff.z);
+  let px=player.position.x,pz=player.position.z;
+  camera.getWorldDirection(_msDir);
+  const fl=Math.hypot(_msDir.x,_msDir.z);
+  if(fl>1e-4){px+=(_msDir.x/fl)*SHADOW_AHEAD;pz+=(_msDir.z/fl)*SHADOW_AHEAD;}
+  /* the light's view basis: it looks from +moonOff back at the target */
+  _msDir.set(-moonOff.x,-moonOff.y,-moonOff.z).normalize();
+  _msRight.set(0,1,0).cross(_msDir);
+  if(_msRight.lengthSq()<1e-8)_msRight.set(1,0,0);
+  _msRight.normalize();
+  _msUp.copy(_msDir).cross(_msRight).normalize();
+  const sc=moon.shadow.camera;
+  const texel=(sc.right-sc.left)/moon.shadow.mapSize.x;
+  _msC.set(px,0,pz);
+  let u=_msC.dot(_msRight),v=_msC.dot(_msUp);
+  const w=_msC.dot(_msDir);
+  u=Math.round(u/texel)*texel;v=Math.round(v/texel)*texel;
+  const sx=_msRight.x*u+_msUp.x*v+_msDir.x*w,
+        sy=_msRight.y*u+_msUp.y*v+_msDir.y*w,
+        sz=_msRight.z*u+_msUp.z*v+_msDir.z*w;
+  moonTarget.position.set(sx,sy,sz);moonTarget.updateMatrixWorld();
+  moon.position.set(sx+moonOff.x,sy+moonOff.y,sz+moonOff.z);
 }
 
 // a big inverted sphere rather than scene.background, so the gradient is guaranteed
@@ -3279,6 +3336,11 @@ function setLighting(mode){
     renderer.toneMappingExposure=1.0;
     document.body.classList.remove('night');
   }
+  /* M58 — the light shafts belong to the night rig and to nothing else. A soft
+     additive cone under a sodium lamp is the street at 3am; the same cone over a
+     sunny afternoon is a smear of fog on the lens. */
+  LIGHT_MODE=(mode==='night')?'night':(mode==='day'?'day':'greybox');
+  for(let i=0;i<SHAFTS.length;i++)SHAFTS[i].visible=(LIGHT_MODE==='night');
   // a tone-mapping change needs every existing program rebuilt
   scene.traverse(o=>{
     if(!o.material)return;
@@ -3581,6 +3643,270 @@ function tiled(t,rx,ry){
   c.wrapS=c.wrapT=THREE.RepeatWrapping;c.repeat.set(rx,ry);
   return c;
 }
+
+/* ═════════════════════ CONTACT SHADOWS (M58) ══════════════════════════════
+   NOTHING IN THIS GAME TOUCHED THE GROUND. The moon's shadow map is the only
+   darkening in the world, so anything it cannot reach — every prop indoors,
+   every planter and hedge at an angle the key misses, every piece of furniture
+   under a ceiling — sat on its surface with a hard silhouette and nothing at all
+   underneath it. That is the classic reason a blockout reads as stickers hovering
+   a centimetre above the floor rather than objects standing on it, and it is
+   exactly what the rendered frames showed: docs/zl-c-base-daylight.png has a
+   planter, a bush, a hedge and a tree trunk all meeting the lawn on a clean
+   bright seam.
+
+   This is the cheap half of ambient occlusion. It is not lit, so it costs no
+   light maths; it is MULTIPLY-blended, so it darkens whatever it lands on —
+   grass, boards, tile, a rug — instead of painting one grey shape over all of
+   them; and every static patch in the world is merged into a handful of meshes,
+   so grounding the whole street is about six draw calls instead of three hundred.
+
+   NINE-SLICED, NOT A STRETCHED BLOB. A single radial gradient scaled to a 2.1m
+   sofa puts its dark core in the middle of the sofa and its falloff halfway
+   underneath, so the only part you can actually see — the edge — has already
+   faded to nothing. A nine-slice keeps the soft edge a fixed width in METRES
+   however big the thing is, which is what a contact shadow really does, and it
+   means a 9m wall gets one correct strip rather than an ellipse that dies at
+   both ends. 16 vertices and 18 triangles a patch; the scene is fill-bound in
+   WARP, not vertex-bound, so that is free. */
+const CONTACT=(function(){
+  const CORE=0.375;              // where the nine-slice cuts, in UV
+  const STRENGTH=0.54;           // what the core multiplies the surface down to
+  const tex=(function(){
+    const N=64,c=document.createElement('canvas');c.width=c.height=N;
+    const x=c.getContext('2d'),img=x.createImageData(N,N),d=img.data;
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+      const u=(i+0.5)/N,v=(j+0.5)/N;
+      // distance OUT of the core rectangle, normalised across the border
+      const dx=Math.max(0,Math.abs(u-0.5)-(0.5-CORE))/CORE;
+      const dy=Math.max(0,Math.abs(v-0.5)-(0.5-CORE))/CORE;
+      const r=Math.min(1,Math.sqrt(dx*dx+dy*dy));
+      const a=1-r*r*(3-2*r);     // smoothstep out, so the rim has no visible edge
+      const g=Math.round(255*(1-a*(1-STRENGTH)));
+      const o=(j*N+i)*4;d[o]=d[o+1]=d[o+2]=g;d[o+3]=255;
+    }
+    x.putImageData(img,0,0);
+    const t=new THREE.CanvasTexture(c);
+    /* sRGB in and sRGB out is the identity, so 0.54 in the canvas is 0.54 in the
+       framebuffer. toneMapped:false for the same reason — ACES would pull the
+       white rim down to 0.87 and tint every surface a patch touches. */
+    t.encoding=THREE.sRGBEncoding;
+    t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
+    t.minFilter=THREE.LinearFilter;t.magFilter=THREE.LinearFilter;
+    t.generateMipmaps=false;t.needsUpdate=true;
+    return t;
+  })();
+  const texProp=(function(){
+    const S=0.82,N=64,c=document.createElement('canvas');c.width=c.height=N;
+    const x=c.getContext('2d'),img=x.createImageData(N,N),d=img.data;
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+      const u=(i+0.5)/N,v=(j+0.5)/N;
+      const dx=Math.max(0,Math.abs(u-0.5)-(0.5-CORE))/CORE;
+      const dy=Math.max(0,Math.abs(v-0.5)-(0.5-CORE))/CORE;
+      const r=Math.min(1,Math.sqrt(dx*dx+dy*dy));
+      const a=1-r*r*(3-2*r);
+      const g=Math.round(255*(1-a*(1-S)));
+      const o=(j*N+i)*4;d[o]=d[o+1]=d[o+2]=g;d[o+3]=255;
+    }
+    x.putImageData(img,0,0);
+    const t=new THREE.CanvasTexture(c);
+    t.encoding=THREE.sRGBEncoding;
+    t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
+    t.minFilter=THREE.LinearFilter;t.magFilter=THREE.LinearFilter;
+    t.generateMipmaps=false;t.needsUpdate=true;
+    return t;
+  })();
+  const mtl=new THREE.MeshBasicMaterial({
+    map:tex,blending:THREE.MultiplyBlending,transparent:true,
+    depthWrite:false,fog:false,toneMapped:false,
+    polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  const mtlProp=new THREE.MeshBasicMaterial({
+    map:texProp,blending:THREE.MultiplyBlending,transparent:true,
+    depthWrite:false,fog:false,toneMapped:false,
+    polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  const US=[0,CORE,1-CORE,1];
+  const OFF=0.017;               // how far above the floor a patch is laid
+
+  /* One patch: a 4x4 grid of vertices in the XZ plane, 18 triangles. */
+  function patch(pos,uv,idx,cx,cz,y,w,d,p){
+    const xs=[cx-w/2-p,cx-w/2,cx+w/2,cx+w/2+p];
+    const zs=[cz-d/2-p,cz-d/2,cz+d/2,cz+d/2+p];
+    const b=pos.length/3;
+    for(let j=0;j<4;j++)for(let i=0;i<4;i++){pos.push(xs[i],y,zs[j]);uv.push(US[i],US[j]);}
+    for(let j=0;j<3;j++)for(let i=0;i<3;i++){
+      const a=b+j*4+i;idx.push(a,a+4,a+5,a,a+5,a+1);
+    }
+  }
+  function geom(pos,uv,idx){
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    g.setIndex(idx);g.computeBoundingSphere();return g;
+  }
+  /* How far the soft edge reaches past the thing casting it. A taller object sits
+     under a bigger slice of sky, so its patch is wider and softer — the same
+     reason a chair leg has a sharp shadow and a wardrobe a vague one. */
+  function padFor(h){return Math.min(0.30,0.085+0.115*Math.min(h,1.8));}
+
+  const chunks=[];
+  function clear(){
+    for(let i=0;i<chunks.length;i++){
+      const m=chunks[i];
+      if(m.parent)m.parent.remove(m);
+      m.geometry.dispose();
+      const k=envMeshes.indexOf(m);if(k>=0)envMeshes.splice(k,1);
+    }
+    chunks.length=0;
+  }
+  const _bb=new THREE.Box3(),_sz=new THREE.Vector3(),_ct=new THREE.Vector3();
+  function worldBox(o,out){
+    if(o.isMesh&&o.geometry){
+      if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();
+      out.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);return true;
+    }
+    out.setFromObject(o);return !out.isEmpty();
+  }
+  /* Run once, after the street exists. Deliberately generic — it reads the world
+     that got built rather than asking every builder to remember to ground itself,
+     so a tree, a wheelie bin and a kitchen counter are all handled by the same
+     four lines and nothing new can be forgotten. */
+  function build(){
+    clear();
+    scene.updateMatrixWorld(true);
+    const bins={};
+    for(let i=0;i<envMeshes.length;i++){
+      const o=envMeshes[i];
+      if(!o||o.userData.objId!==undefined||o.userData.noContact)continue;
+      if(!worldBox(o,_bb))continue;
+      if(!isFinite(_bb.min.y)||_bb.min.y<-0.06||_bb.min.y>0.22)continue; // not on a floor
+      _bb.getSize(_sz);_bb.getCenter(_ct);
+      if(_sz.y<0.12)continue;                       // a rug, a path, a road marking
+      const area=_sz.x*_sz.z;
+      if(area<0.014||area>9.5)continue;             // too small to read, or a lawn
+      /* ONE CHUNK PER LOT, ANCHORED ON THE LOT. Chunking on a bare 24m grid is the
+         obvious thing and it broke M52: a merged buffer sits at the world origin,
+         so getWorldPosition() reports (0,0,0) for it, and the house that happens to
+         be built at x=0 claimed all seven buffers as its own geometry while its
+         mirrored twin claimed none — seven unpaired meshes and a red suite. Binning
+         on the nearest lot and PARENTING the buffer to that lot's x (vertices held
+         relative to it) means the two hands each own exactly one, in the same local
+         place, so the mirror census pairs them. It culls better too. */
+      let key=0,kd=1e9;
+      for(let h=0;h<HOUSES.length;h++){
+        const dd=Math.abs(_ct.x-HOUSES[h].x);if(dd<kd){kd=dd;key=h;}
+      }
+      (bins[key]||(bins[key]=[])).push(
+        [_ct.x,_ct.z,_bb.min.y+OFF,_sz.x*0.92,_sz.z*0.92,padFor(_sz.y)]);
+    }
+    for(const k in bins){
+      const ox=HOUSES[k].x,list=bins[k],pos=[],uv=[],idx=[];
+      for(let i=0;i<list.length;i++){
+        const t=list[i];patch(pos,uv,idx,t[0]-ox,t[1],t[2],t[3],t[4],t[5]);
+      }
+      const m=new THREE.Mesh(geom(pos,uv,idx),mtl);
+      m.position.x=ox;
+      m.renderOrder=1;m.castShadow=false;m.receiveShadow=false;
+      m.userData.noContact=true;m.userData.temporal=true;
+      scene.add(m);envMeshes.push(m);chunks.push(m);
+    }
+    return chunks.length;
+  }
+  /* Anything that MOVES carries its own patch instead: props that get swapped,
+     and every person in the game. */
+  function attach(group,w,d,y,p,mat){
+    w=Math.max(w,0.03);d=Math.max(d,0.03);
+    if(p===undefined)p=Math.min(0.10,Math.max(0.012,0.30*Math.max(w,d)));
+    const pos=[],uv=[],idx=[];
+    patch(pos,uv,idx,0,0,0,w,d,p);
+    const m=new THREE.Mesh(geom(pos,uv,idx),mat||mtl);
+    m.position.y=(y===undefined?0.006:y);
+    m.renderOrder=1;m.castShadow=false;m.receiveShadow=false;
+    m.userData.noContact=true;
+    group.add(m);return m;
+  }
+  return {build:build,clear:clear,attach:attach,padFor:padFor,
+          material:mtl,materialProp:mtlProp,texture:tex,chunks:chunks};
+})();
+
+/* ═════════════════════ LIGHT SHAFTS (M58) ═════════════════════════════════
+   A sodium lamp at three in the morning is visible as a CONE, not only as a pool
+   on the tarmac — that is most of what a suburban street looks like at night, and
+   the frames had none of it: docs/zl-c-base-street.png is a lit lawn under a
+   black sky with no visible source anywhere in it.
+
+   Faked, because there is no post-processing chain to hang a real one on: an
+   open-ended cylinder, additively blended, with a vertical alpha ramp that is
+   strong at the lamp and gone by the ground. depthWrite off so it never occludes
+   anything, castShadow off so it costs the shadow pass nothing, and gated on the
+   night rig so a translucent white cone never appears over a sunny afternoon. */
+const SHAFTS=[];
+let LIGHT_MODE='greybox';
+const _shaftTex=(function(){
+  const N=64,c=document.createElement('canvas');c.width=4;c.height=N;
+  const x=c.getContext('2d'),g=x.createLinearGradient(0,0,0,N);
+  g.addColorStop(0.00,'rgba(255,255,255,1.00)');
+  g.addColorStop(0.28,'rgba(255,255,255,0.46)');
+  g.addColorStop(0.62,'rgba(255,255,255,0.16)');
+  g.addColorStop(1.00,'rgba(255,255,255,0.00)');
+  x.fillStyle=g;x.fillRect(0,0,4,N);
+  const t=new THREE.CanvasTexture(c);t.needsUpdate=true;return t;
+})();
+const _glowTex=(function(){
+  const N=64,c=document.createElement('canvas');c.width=c.height=N;
+  const x=c.getContext('2d'),g=x.createRadialGradient(N/2,N/2,0,N/2,N/2,N/2);
+  g.addColorStop(0.00,'rgba(255,255,255,1.00)');
+  g.addColorStop(0.22,'rgba(255,255,255,0.42)');
+  g.addColorStop(0.55,'rgba(255,255,255,0.09)');
+  g.addColorStop(1.00,'rgba(255,255,255,0.00)');
+  x.fillStyle=g;x.fillRect(0,0,N,N);
+  const t=new THREE.CanvasTexture(c);t.needsUpdate=true;return t;
+})();
+function shaftMaterial(hex,op){
+  return new THREE.ShaderMaterial({
+    uniforms:{uColor:{value:new THREE.Color(hex)},uOpacity:{value:op}},
+    vertexShader:[
+      'varying vec2 vUvS;varying vec3 vNS;varying vec3 vVS;',
+      'void main(){',
+      '  vUvS=uv;',
+      '  vec4 mv=modelViewMatrix*vec4(position,1.0);',
+      '  vNS=normalize(normalMatrix*normal);',
+      '  vVS=normalize(-mv.xyz);',
+      '  gl_Position=projectionMatrix*mv;',
+      '}'].join('\n'),
+    fragmentShader:[
+      'uniform vec3 uColor;uniform float uOpacity;',
+      'varying vec2 vUvS;varying vec3 vNS;varying vec3 vVS;',
+      'void main(){',
+      '  float ramp=pow(clamp(vUvS.y,0.0,1.0),2.2);',
+      '  float rim=abs(dot(normalize(vNS),normalize(vVS)));',
+      '  float a=uOpacity*2.0*ramp*pow(rim,0.7);',
+      '  gl_FragColor=vec4(uColor,a);',
+      '}'].join('\n'),
+    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
+    side:THREE.DoubleSide,fog:false});
+}
+/* x,z are LAYOUT coordinates and go through MX like everything else. */
+function lightShaft(x,yTop,z,yBot,rTop,rBot,hex,op,glowR){
+  const h=Math.max(0.2,yTop-yBot);
+  const cone=new THREE.Mesh(new THREE.CylinderGeometry(rTop,rBot,h,20,1,true),
+    shaftMaterial(hex,op));
+  cone.position.set(MX(x),yBot+h/2,z);
+  cone.renderOrder=3;cone.castShadow=false;cone.receiveShadow=false;
+  cone.userData.temporal=true;cone.userData.noContact=true;
+  cone.visible=(LIGHT_MODE==='night');
+  scene.add(cone);envMeshes.push(cone);SHAFTS.push(cone);
+  if(glowR){
+    const s=new THREE.Sprite(new THREE.SpriteMaterial({color:hex,map:_glowTex,
+      transparent:true,opacity:Math.min(1,op*4.2),blending:THREE.AdditiveBlending,
+      depthWrite:false,fog:false}));
+    s.scale.set(glowR,glowR,1);
+    s.position.set(MX(x),yTop,z);s.renderOrder=4;
+    s.userData.temporal=true;s.userData.noContact=true;
+    s.visible=(LIGHT_MODE==='night');
+    scene.add(s);envMeshes.push(s);SHAFTS.push(s);
+  }
+  return cone;
+}
 function texBoards(hue){
   return canvasTex(256,256,'boards|'+hue,(x,W,H)=>{
     const rows=6,rh=H/rows;
@@ -3718,6 +4044,7 @@ function clearWorld(){
      keyed by them, and loadGame() replays the builder before restoring state. Let
      the counter run on and every saved reference dangles. */
   _objId=0;
+  CONTACT.clear();SHAFTS.length=0;                       // M58
   envMeshes.length=0;colliders.length=0;helpers.length=0;CEIL_ZONES.length=0;
   SCENERY.length=0;WINDOWS.length=0;MARKS.length=0;HIDES.length=0;
   for(const o of objects){if(o.group)disposeProp(o.group);}
@@ -3831,6 +4158,15 @@ function respawnObject(o){
     m.position.set(0,(g.userData.size.y||0.2)+0.035,0);
     g.add(m);
   }
+  /* M58 — a prop is the one thing in this game the player looks straight at, and
+     every one of them was floating: a mug on a counter, a vase on a sideboard and a
+     keyring on a hook all met their surface on a hard bright line. Carried as a
+     CHILD rather than merged into the static pass, because respawnObject is the
+     swap: this group gets thrown away and rebuilt every time you replace something,
+     and a patch parented to it can never be left behind on the floor. */
+  const _cs=g.userData.size;
+  if(_cs&&_cs.x>0.012&&_cs.z>0.012)CONTACT.attach(g,_cs.x*0.78,_cs.z*0.78,0.006,
+    Math.min(0.045,Math.max(0.008,0.20*Math.max(_cs.x,_cs.z))),CONTACT.materialProp);
   scene.add(g);envMeshes.push(g);
   o.group=g;
 }
@@ -4044,6 +4380,10 @@ function buildHouse(def,rng){
   const lampL=practical(CONST.SODIUM,4.6,12.0,1.6);      // M43
   lampL.position.set(_p(-3.0),3.25,_p(-8.3));
   addLight(_p(-3.0),_p(-8.3),_p(5.0),1.0,lampL);
+  /* M58 — and now you can SEE it. The cone stops at the ground, so the pool it
+     lands in is the same pool litAt() has always used: crossing the path still
+     looks exactly as dangerous as it is. */
+  lightShaft(_p(-3.0),3.28,_p(-8.3),0.02,0.22,2.35,CONST.SODIUM,0.075,2.9);
 
   const keyIn=Math.floor(rng()*3);
   if(!def.yours)[[-1.9,-4.5],[1.9,-4.5],[-1.9,-6.8]].forEach((q,i)=>{
@@ -4738,6 +5078,7 @@ function streetLamp(x,z,r,i){
   bulb.position.set(MX(x),3.80,z-0.28);bulb.userData.temporal=true;scene.add(bulb);
   const L=practical(CONST.SODIUM,3.8,r*2.4,1.6);         // M43
   L.position.set(x,3.72,z-0.28);addLight(x,z-0.28,r,i,L);
+  lightShaft(x,3.76,z-0.28,0.02,0.24,2.6,CONST.SODIUM,0.070,3.0);   // M58
 }
 /* Poles and wires. A suburban street reads as one because of the things strung
    ACROSS it at roof height — the eye needs something between the ground and the
@@ -5088,6 +5429,11 @@ function buildStreet(seed){
   buildEstate(rng);
   buildHorizon();
   OX=0;MIR=1;
+  /* M58 — LAST, because it reads the world rather than being told about it. Every
+     builder above stays exactly as it was; grounding is one generic pass over what
+     they produced, so nothing new can be added to the street and forget to touch
+     the floor. */
+  CONTACT.build();
 }
 /* Street furniture between and around the lots: the poles and wires overhead, the
    trees on the verge, the hedgerow that closes the east end, and the back fence
@@ -5464,6 +5810,24 @@ function makeBlockout(){
     BODY.legH*=k;BODY.torsoH*=k;
   }
   return g;
+}
+/* M58 — THE PLAYER'S PATCH IS NOT PART OF THE PLAYER. It was a child of `player`
+   first, and that is wrong twice over. player.position.y is the DISPLAY height and
+   animBody bobs it 2cm every stride, so the patch bobbed off the boards with him
+   and rode a jump up to the ceiling; and M48 walks SD.player looking for anything
+   glaring, found a white multiply-blend material, and went red — correctly, because
+   a shadow is not something he is wearing. It lives in the world, pinned to the
+   surface his feet were last on, and grows a little as he leaves it. */
+let PLAYER_MARK=null,_markY=0;
+function playerMark(){
+  if(!player)return;
+  if(!PLAYER_MARK)PLAYER_MARK=CONTACT.attach(scene,0.34,0.26,0,0.15);
+  if(S.grounded)_markY=S.py;
+  const air=Math.max(0,S.py-_markY);
+  PLAYER_MARK.position.set(player.position.x,_markY+0.017,player.position.z);
+  const k=1+Math.min(0.55,air*0.75);          // a rising body's contact widens
+  PLAYER_MARK.scale.set(k,1,k);
+  PLAYER_MARK.visible=(S.phase==='house');
 }
 
 /* Cheap procedural walk: limb swing + body bob, cadence tracked to speedNorm so
@@ -6713,6 +7077,9 @@ function makeWalker(who,jacket){
     t.position.y=P.torsoH*0.62;t.castShadow=true;P.torso.add(t);
   }
   g.userData.parts=P;
+  /* M58 — grounded like the player is (see playerMark), except that a walker is
+     driven by its own group position and does not bob, so a child patch is safe. */
+  CONTACT.attach(g,0.34,0.26,0.012,0.15);
   return g;
 }
 /* A dog, asleep in a yard until it is not. */
@@ -9960,6 +10327,7 @@ function tick(dt){
   if(!S.menuOpen&&S.phase==='house')nightTick(wdt);
   updateCamera(dt);
   trackShadow();
+  playerMark();                                   // M58
   scanTick(dt);
   hideTick(dt);
   if(!S.menuOpen&&S.phase==='house')ambientTick(wdt);
@@ -10060,6 +10428,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   get PLAY(){return PLAY;}, get ROOM(){return ROOM;},
   buildEstate,buildFarSide,buildHead,buildRoadway,buildHorizon,dressInterior,dressLot,
   facade,parkedCar,wheelieBin,tree,streetLamp,ground,rotAABB,
+  CONTACT,SHAFTS,lightShaft,playerMark,                                 // M58
   hardenNight,ambientTick,dawnTick,carTick,carLaunch,carReset,trackShadow,skyFollow,
   UNIT_BOX,
   // - M15: difficulty + options -
