@@ -335,7 +335,7 @@ body.daylight #noise-pill,body.daylight #seen-pill,body.daylight #clock{display:
 </style>
 </head>
 <body>
-<div id="build-tag">SOMETHING'S DIFFERENT · M57 · ARDSLEY COURT</div>
+<div id="build-tag">SOMETHING'S DIFFERENT · M58 · ARDSLEY COURT</div>
 
 <div id="hud">
   <div class="pill" id="collapse-pill" style="display:none">COLLAPSE <b id="collapse-v">0.0</b><span id="collapse-fc"></span><span class="c-bar" id="collapse-bar"> / 40</span><span id="collapse-know"></span></div>
@@ -984,6 +984,21 @@ const CONST={
                             // carrying it took the frame far enough on the software
                             // renderer that m11's live render-loop check starved.
   SHINE       : 26,         // Phong shininess for those
+  /* M58 - which prop materials earn a PBR shader, as [roughness, metalness, envMapIntensity].
+     Anything NOT in this table stays Lambert on purpose: at roughness ~1.0 with no
+     metal, Standard and Lambert are within a hair of each other and Lambert is
+     cheaper, so card, paper, cloth, soil and wood have literally nothing to gain.
+     This table IS the "only these are worth it" answer, and it is four entries. */
+  /* M58. [roughness, metalness, envMapIntensity] per prop material class.
+     The review flagged glass at 1.10 as a self-illumination risk in a dark room.
+     MEASURED (tools/_dark.js), every practical zeroed: the ROOM itself reads up to
+     127/255 under moon and hemi alone - the roof deliberately casts no shadow, so
+     interiors stay readable - and metal 96, ceramic 106 and plastic 127 all sit at
+     or below that. Nothing here lights itself. The one thing that does, a picture
+     frame's photograph at 214, is MeshBasic and toneMapped:false by design: the
+     photo is EVIDENCE with a salience-1.0 axis and has to stay legible. Unchanged. */
+  STD_MTL     : {ceramic:[0.26,0.00,0.55], glass:[0.07,0.00,1.10],
+                 metal  :[0.30,0.85,0.90], plastic:[0.44,0.00,0.45]},
   // -- the fence (GDD 5.7, M18) --------------------------
   /* THE HOLE THIS FILLS. Every balance measurement ever made here set bank=1000000
      first (_balance.js, _escalate.js), so the win threshold was tuned for a player
@@ -1361,10 +1376,28 @@ function hslCss(h,s,l){return 'hsl('+(((h%360)+360)%360).toFixed(1)+','+
    cached by identity the way scene materials are. */
 function matL(c,mtl){
   const m=mtl||CUR_MTL;
+  /* M58. PROPS ARE THE BEST BUY IN THE GAME: a mug is forty pixels and a Standard
+     shader on forty pixels costs nothing measurable, while a mug that catches the
+     practical is the difference between an object and a placeholder for one. */
+  const sp=SHADE.props&&CONST.STD_MTL[m];
+  if(sp)return new THREE.MeshStandardMaterial({color:grade(c),roughness:sp[0],
+    /* metalness without an environment renders BLACK - metal has no diffuse term
+       and nothing to reflect - so the keyring's 0.85 is contingent on the env. */
+    metalness:SHADE.env?sp[1]:Math.min(sp[1],0.12),envMapIntensity:sp[2]});
   if(m&&isShiny(m))
     return new THREE.MeshPhongMaterial({color:grade(c),shininess:CONST.SHINE,
                                         specular:0x22242a});
   return new THREE.MeshLambertMaterial({color:grade(c)});
+}
+/* The textured half of matL. Half the props put their art on a canvas and build
+   `new MeshLambertMaterial({map:tex})` directly, so matL never saw them - the mug's
+   glaze, the clock face, the spice jar's glass were all still flat. */
+function matT(tex,mtl){
+  const m=mtl||CUR_MTL;
+  const sp=SHADE.props&&CONST.STD_MTL[m];
+  if(sp)return new THREE.MeshStandardMaterial({map:tex,roughness:sp[0],
+    metalness:SHADE.env?sp[1]:Math.min(sp[1],0.12),envMapIntensity:sp[2]});
+  return new THREE.MeshLambertMaterial({map:tex});
 }
 
 /* Canvas textures are cached by a key that MUST capture every spec value the draw
@@ -1426,6 +1459,236 @@ function canvasTex(w,h,key,draw){
   return t;
 }
 
+/* ═══════════════ M58 · REAL SHADING ═══════════════════════════════════════════
+   Every surface in this game was MeshLambertMaterial. Pure diffuse: no specular
+   lobe, no roughness, no micro-relief. That is THE reason a fully dressed house
+   still reads as a blockout - plaster, varnished pine and a glazed mug all return
+   the identical lambert term, so nothing in the frame tells you what anything is
+   made OF. A grade cannot fix that; only a BRDF can.
+
+   M21 priced the wholesale answer and rejected it: "every Lambert -> Standard costs
+   2.13x the frame". That number is still true and this milestone does not argue
+   with it. It spends the budget instead - Standard goes on the surfaces that buy
+   the most look per millisecond and Lambert stays everywhere roughness 1.0 is
+   already the right answer (card, paper, cloth, soil, foliage, rugs, ceilings).
+   SHADE below is the dial; tools/zl-shade-frame.js prices one setting of it.
+
+   Three parts:
+     canvasNormal()  derives a tangent-space normal map from a heightfield drawn on
+                     a canvas, using the SAME layout constants as the diffuse
+                     texture beside it, so relief lands exactly on the drawn seam.
+     stdMat()        a cached MeshStandardMaterial for world surfaces.
+     buildEnv()      one PMREM pass over a sky gradient (PMREMGenerator is r128
+                     CORE, not an addon), so "shiny" has something to reflect. */
+/* THE DIAL, AND THE ANSWER. These defaults are not a guess. Each was built as its
+   own page copy and timed against an all-Lambert control of THE SAME FILE, run
+   alternately in one session so the two numbers see the same machine weather:
+
+     night-interior pose, min of 20 synced frames (this machine, WARP)
+       SHADE all false (control)                29.4 ms   1.00x
+       as shipped below                         34.2 ms   1.16x
+       ...+ walls as MeshPhong  + normal        51.3 ms   1.73x
+       ...+ walls as MeshStandard + normal      56.1 ms   2.13x
+       ...+ every exterior surface              74.8 ms   ~2.9x
+
+   Two flags lost, for two different reasons.
+   `exterior` is BOTH unaffordable and uglier: +40 ms on the daylight street alone,
+   and the modular-arithmetic dot walks the diffuse textures use as noise turn into
+   a visible printed LATTICE once a normal map amplifies them. See
+   docs/zl-shade-full-street.png and docs/zl-shade-full-daylight.png - those two
+   frames are what killed it, not the clock.
+   `walls` is the opposite: it is the BEST-LOOKING change in this whole pass
+   (compare docs/zl-shade-final-hall12.png with docs/zl-shade-walls-hall12.png -
+   flat white card becomes plaster with tooth) and it costs 1.7-2.1x on its own.
+   Left in, off, with a cheaper 'phong' path wired up, because on a real GPU it is
+   free and only the WARP test harness cannot afford it. Turn it on the day the
+   57 suites stop being the constraint. */
+const SHADE={props:true,floors:false,paths:false,walls:false,exterior:false,env:true,nrm:true};
+
+const _normCache=new Map();
+function canvasNormal(w,h,key,draw,strength){
+  if(_normCache.has(key))return _normCache.get(key);
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  /* RAW context, not gradedCtx. This canvas is a heightfield, not colour: grading
+     it would tone-map the height and flatten the relief we are drawing. */
+  const x=c.getContext('2d');
+  x.fillStyle='#808080';x.fillRect(0,0,w,h);
+  draw(x,w,h);
+  const src=x.getImageData(0,0,w,h).data,n=w*h;
+  const Hf=new Float32Array(n);
+  for(let i=0;i<n;i++)
+    Hf[i]=(src[i*4]*0.299+src[i*4+1]*0.587+src[i*4+2]*0.114)/255;
+  /* One getImageData per UNIQUE SURFACE, not per prop - there are eight of these
+     in the whole game and they are cached by key, which is why this is affordable
+     where the same trick was not for the hundreds of spec-keyed prop canvases. */
+  const S=(strength===undefined?1:strength)*3.4;
+  const out=x.createImageData(w,h),d=out.data;
+  const at=(px,py)=>Hf[(((py%h)+h)%h)*w+(((px%w)+w)%w)];
+  for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+    /* Sobel, WRAPPED, so a tiling diffuse gets a tiling normal - an unwrapped
+       gradient leaves a bright seam at every texture repeat, which on a 52x26
+       lawn is 1352 of them. */
+    const gx=(at(px+1,py-1)+2*at(px+1,py)+at(px+1,py+1))
+            -(at(px-1,py-1)+2*at(px-1,py)+at(px-1,py+1));
+    const gy=(at(px-1,py+1)+2*at(px,py+1)+at(px+1,py+1))
+            -(at(px-1,py-1)+2*at(px,py-1)+at(px+1,py-1));
+    /* CanvasTexture has flipY, so canvas +y is texture -v: the green channel takes
+       +gy, not -gy. Get this backwards and every groove reads as a ridge. */
+    const nx=-gx*S,ny=gy*S,l=Math.sqrt(nx*nx+ny*ny+1),i=(py*w+px)*4;
+    d[i  ]=(nx/l)*127.5+127.5;
+    d[i+1]=(ny/l)*127.5+127.5;
+    d[i+2]=(1/l)*127.5+127.5;
+    d[i+3]=255;
+  }
+  x.putImageData(out,0,0);
+  const t=new THREE.CanvasTexture(c);t.needsUpdate=true;
+  _normCache.set(key,t);
+  return t;
+}
+
+/* Cached, because five houses are built from one handful of surfaces and a fresh
+   material per wall is a fresh uniform block per wall. tiled() clones its texture,
+   so map-bearing calls still miss - exactly as they already did with Lambert. */
+const _stdCache=new Map();
+function stdMat(o){
+  const key=(o.map?o.map.uuid:'-')+'|'+(o.normalMap?o.normalMap.uuid:'-')+'|'+
+            (o.color===undefined?'-':o.color)+'|'+o.roughness+'|'+(o.metalness||0)+'|'+
+            (o.ns===undefined?1:o.ns)+'|'+(o.side||0)+'|'+(o.emi===undefined?1:o.emi);
+  let m=_stdCache.get(key);
+  if(m)return m;
+  /* envMapIntensity IS A NIGHT CONTROL, not a polish detail. scene.environment
+     feeds Standard materials DIFFUSE irradiance as well as specular, so the first
+     version of this - every surface at the default 1.0 - turned the sky gradient
+     into a second ambient light and lifted the whole game half a stop. The lounge
+     stopped being dark, and in a game where standing in light is the thing that
+     gets you caught, that is not a look change, it is a rules change. Architecture
+     takes a sip of it; props, where a highlight is actually worth something, more. */
+  const p={roughness:o.roughness,metalness:o.metalness||0,
+           envMapIntensity:(o.emi===undefined?1:o.emi)};
+  if(o.map)p.map=o.map;
+  if(o.color!==undefined)p.color=grade(o.color);
+  if(o.side!==undefined)p.side=o.side;
+  if(o.normalMap&&SHADE.nrm){
+    p.normalMap=o.normalMap;
+    const s=(o.ns===undefined?1:o.ns);
+    p.normalScale=new THREE.Vector2(s,s);
+  }
+  m=new THREE.MeshStandardMaterial(p);
+  _stdCache.set(key,m);
+  return m;
+}
+
+/* SPECKLE, AND WHY IT IS NOT (i*29)%W.
+   Every diffuse texture in this file fakes noise with modular arithmetic -
+   fillRect((i*29)%W,(i*71)%H,...). That is not noise, it is a LATTICE, and at
+   alpha .05 in a colour map nobody can see it. Amplify the same walk into a normal
+   map and the lattice becomes a printed dot grid across an entire lawn: see
+   docs/zl-shade-full-street.png and docs/zl-shade-full-daylight.png, which is what
+   the first version of these heightfields looked like. mulberry32 is already the
+   project's deterministic RNG, and gives real seeded repeatable noise instead. */
+function nrmSpeck(x,W,H,n,seed,hi,lo,w,h){
+  const r=mulberry32(seed);
+  for(let i=0;i<n;i++){
+    x.fillStyle=(r()<0.60)?hi:lo;
+    x.fillRect(Math.floor(r()*W),Math.floor(r()*H),w,h===undefined?w:h);
+  }
+}
+
+/* ── THE HEIGHTFIELDS ────────────────────────────────────────────────────────
+   Each one mirrors the layout maths of its diffuse partner above (row counts,
+   seam positions, tab offsets) so the bump sits ON the line the texture draws
+   rather than a few texels away from it, which reads as a printing error. */
+function nrmBoards(){
+  return canvasNormal(256,256,'n|boards',(x,W,H)=>{
+    const rows=6,rh=H/rows;
+    for(let i=0;i<rows;i++){
+      const g=x.createLinearGradient(0,i*rh,0,i*rh+rh);
+      g.addColorStop(0.00,'#b6b6b6');g.addColorStop(0.13,'#909090');
+      g.addColorStop(0.87,'#8a8a8a');g.addColorStop(1.00,'#1c1c1c');
+      x.fillStyle=g;x.fillRect(0,i*rh,W,rh);
+      x.strokeStyle='rgba(0,0,0,.17)';x.lineWidth=1;
+      for(let k=0;k<4;k++){                       // grain, same seed as texBoards
+        const gy=i*rh+6+((i*17+k*31)%(rh-12));
+        x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy+(k%2?1:-1));x.stroke();
+      }
+      x.fillStyle='#202020';x.fillRect(((i*67)%W)-1,i*rh,2,rh);   // butt joint
+    }
+  },1.0);
+}
+function nrmPaint(){
+  return canvasNormal(128,128,'n|paint',(x,W,H)=>{
+    /* Orange peel: no structure, just tooth. The first version also drew 26
+       diagonal trowel sweeps and they read on the wall as VERTICAL STRIPES -
+       wallpaper, not plaster. Regular structure at this scale always will. */
+    nrmSpeck(x,W,H,1500,0x5eed01,'rgba(255,255,255,.34)','rgba(0,0,0,.30)',1);
+  },0.55);
+}
+function nrmTile(){
+  return canvasNormal(128,128,'n|tile',(x,W,H)=>{
+    const n=4,s=W/n;
+    x.fillStyle='#242424';x.fillRect(0,0,W,H);    // grout sits low
+    for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+      const g=x.createLinearGradient(0,j*s,0,j*s+s);
+      g.addColorStop(0.00,'#c4c4c4');g.addColorStop(0.20,'#909090');
+      g.addColorStop(0.80,'#8c8c8c');g.addColorStop(1.00,'#3a3a3a');
+      x.fillStyle=g;x.fillRect(i*s+1.5,j*s+1.5,s-3,s-3);
+    }
+  },0.8);
+}
+function nrmGrass(){
+  return canvasNormal(128,128,'n|grass',(x,W,H)=>{
+    nrmSpeck(x,W,H,1100,0x91a55,'rgba(255,255,255,.42)','rgba(0,0,0,.36)',1,2);
+  },0.75);
+}
+function nrmConcrete(){
+  return canvasNormal(128,128,'n|concrete',(x,W,H)=>{
+    nrmSpeck(x,W,H,900,0xc0c2e7,'rgba(255,255,255,.16)','rgba(0,0,0,.20)',2);
+    x.fillStyle='#1c1c1c';x.fillRect(0,H/2-1,W,3);            // expansion joint
+  },0.7);
+}
+function nrmAsphalt(){
+  return canvasNormal(128,128,'n|asphalt',(x,W,H)=>{
+    nrmSpeck(x,W,H,1600,0xa59a17,'rgba(255,255,255,.30)','rgba(0,0,0,.34)',1);
+    nrmSpeck(x,W,H,70,0x7ec40,'rgba(0,0,0,.45)','rgba(0,0,0,.45)',3,2);
+  },0.6);
+}
+function nrmSiding(){
+  return canvasNormal(128,128,'n|siding',(x,W,H)=>{
+    const rows=10,rh=H/rows;                      // ten laps, as texSiding draws
+    for(let i=0;i<rows;i++){
+      const g=x.createLinearGradient(0,i*rh,0,i*rh+rh);
+      g.addColorStop(0.00,'#aaaaaa');g.addColorStop(0.68,'#8a8a8a');
+      g.addColorStop(0.93,'#666666');g.addColorStop(1.00,'#181818');
+      x.fillStyle=g;x.fillRect(0,i*rh,W,rh);
+    }
+  },0.9);
+}
+function nrmShingle(){
+  return canvasNormal(128,128,'n|shingle',(x,W,H)=>{
+    const rows=8,rh=H/rows;
+    for(let i=0;i<rows;i++){
+      const g=x.createLinearGradient(0,i*rh,0,i*rh+rh);
+      g.addColorStop(0.00,'#a4a4a4');g.addColorStop(0.72,'#888888');
+      g.addColorStop(1.00,'#1c1c1c');
+      x.fillStyle=g;x.fillRect(0,i*rh,W,rh);
+      x.strokeStyle='#2a2a2a';x.lineWidth=2;
+      for(let t=0;t<6;t++){                       // tab cuts, offset per course
+        const tx=((i%2)?0:W/12)+t*(W/6);
+        x.beginPath();x.moveTo(tx,i*rh);x.lineTo(tx,i*rh+rh);x.stroke();
+      }
+    }
+  },0.9);
+}
+/* The four ground recipes, as data so ground() can stay one function. `n` is the
+   FUNCTION, not the texture: passing the texture would mint every normal map even
+   with SHADE.exterior off, and the A/B measurement would be a lie. */
+const SH_GRASS={n:nrmGrass,r:0.96,ns:0.85,emi:0.22},
+      /* ns was 0.55 and the front path came out as GRAVEL, not concrete - see
+         docs/zl-shade-v3-street.png. At 0.26 it is a poured slab with aggregate
+         in it, which is also the amount that survives being walked past. */
+      SH_CONC ={n:nrmConcrete,r:0.84,ns:0.26,emi:0.30},
+      SH_ASPH ={n:nrmAsphalt,r:0.72,ns:0.60,emi:0.35};
+
 const PROP_BUILD={
   cerealBox(s){
     const g=new THREE.Group(),w=0.19,d=0.07,h=s.h;
@@ -1457,7 +1720,7 @@ const PROP_BUILD={
         x.fillText('NET WT 400g',W/2,H-16);
       });
     const side=matL(hsl(s.hue,0.60,0.44));
-    const front=new THREE.MeshLambertMaterial({map:tex});
+    const front=matT(tex);
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[side,side,side,side,front,front]);
     m.position.y=h/2;g.add(m);
     return g;
@@ -1480,7 +1743,7 @@ const PROP_BUILD={
         x.textAlign='center';x.fillText(s.slogan,W/2,H/2+7);}
     });
     const body=new THREE.Mesh(new THREE.CylinderGeometry(r,r*0.88,h,22,1,false),
-      [new THREE.MeshLambertMaterial({map:tex}),matL(hsl(s.hue,0.2,0.9)),matL(hsl(s.hue,0.45,0.5))]);
+      [matT(tex),matL(hsl(s.hue,0.2,0.9)),matL(hsl(s.hue,0.45,0.5))]);
     body.position.y=h/2;g.add(body);
     const inner=new THREE.Mesh(new THREE.CircleGeometry(r*0.88,20),matL('#3a2a1e'));
     inner.rotation.x=-Math.PI/2;inner.position.y=h-0.008;g.add(inner);
@@ -1560,7 +1823,7 @@ const PROP_BUILD={
       }
     });
     const disc=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.028,36),
-      [matL(hsl(s.hue,0.35,0.40)),new THREE.MeshLambertMaterial({map:tex}),matL('#3a3644')]);
+      [matL(hsl(s.hue,0.35,0.40)),matT(tex),matL('#3a3644')]);
     disc.rotation.x=Math.PI/2;   // +Y cap now faces +Z, so the dial reads from the front
     disc.position.y=r;g.add(disc);
     const hc={black:'#26232e',gold:'#d8a93a',red:'#d64a45'}[s.hands];
@@ -1703,7 +1966,7 @@ const PROP_BUILD={
     });
     const shell=matL(hsl(s.caseHue,0.22,0.30));
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
-      [shell,shell,shell,shell,new THREE.MeshLambertMaterial({map:tex}),shell]);
+      [shell,shell,shell,shell,matT(tex),shell]);
     m.position.y=h/2+0.012;g.add(m);
     [-1,1].forEach(sx=>{
       const f=new THREE.Mesh(new THREE.CylinderGeometry(0.008,0.008,0.024,8),shell);
@@ -1769,7 +2032,7 @@ const PROP_BUILD={
         x.fillRect(pad+c*(kw+pad),y,kw,hh);
       }
     });
-    const top=new THREE.MeshLambertMaterial({map:tex});
+    const top=matT(tex);
     const side=matL(hsl(s.caseHue,0.20,0.32));
     const base=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
       [side,side,top,side,side,side]);
@@ -1815,7 +2078,7 @@ const PROP_BUILD={
     base.position.y=bh*0.03;g.add(base);
     const lab=new THREE.Mesh(
       new THREE.CylinderGeometry(r*1.02,r*1.02,bh*0.62,14,1,true,-1.05,2.10),
-      new THREE.MeshLambertMaterial({map:tex}));
+      matT(tex));
     lab.position.y=bh*0.45;g.add(lab);
     const lid=new THREE.Mesh(new THREE.CylinderGeometry(
       r*(s.lid==='cork'?0.92:1.03),r*1.03,capH,14),
@@ -1859,7 +2122,7 @@ const PROP_BUILD={
       }
     });
     const cap=new THREE.Mesh(new THREE.CylinderGeometry(capR*1.05,capR*1.12,capH,14),
-      [matL('#c9c6be'),new THREE.MeshLambertMaterial({map:tex}),matL('#b8b5ad')]);
+      [matL('#c9c6be'),matT(tex),matL('#b8b5ad')]);
     cap.position.y=bh+capH/2;g.add(cap);
     return g;
   },
@@ -1885,7 +2148,7 @@ const PROP_BUILD={
           x.bezierCurveTo(W*0.3,y+((i*13)%9)-4,W*0.7,y-((i*17)%9)+4,W,y);x.stroke();}
       }
     });
-    const topM=new THREE.MeshLambertMaterial({map:tex}),edgeM=matL(hsl(s.hue,0.38,0.36));
+    const topM=matT(tex),edgeM=matL(hsl(s.hue,0.38,0.36));
     const boxM=[edgeM,edgeM,topM,edgeM,edgeM,edgeM],cylM=[edgeM,topM,edgeM];
     const b=new THREE.Group();
     if(s.shape==='round'||s.shape==='octagon'){
@@ -1935,7 +2198,7 @@ const PROP_BUILD={
     });
     const plastic=matL(hsl(s.hue,0.18,0.86)),capM=matL(hsl(s.hue,0.55,0.40));
     const body=new THREE.Mesh(new THREE.CylinderGeometry(r*0.92,r,bodyH,16),
-      [new THREE.MeshLambertMaterial({map:tex}),plastic,plastic]);
+      [matT(tex),plastic,plastic]);
     // a cylinder's u=0 seam sits on +Z, so the label's centre would face AWAY;
     // half a turn puts the brand on the front where it can be read
     body.rotation.y=Math.PI;body.position.y=bodyH/2;g.add(body);
@@ -1985,7 +2248,7 @@ const PROP_BUILD={
       x.font='bold 10px monospace';x.fillText('BAGS',W*0.80,H*0.79+18);
     });
     const card=matL(hsl(s.hue,0.44,0.32)),lid=matL(hsl(s.hue,0.44,0.26));
-    const face=new THREE.MeshLambertMaterial({map:tex});
+    const face=matT(tex);
     const box=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[card,card,lid,lid,face,card]);
     box.position.y=h/2;g.add(box);
     const flap=new THREE.Mesh(new THREE.BoxGeometry(w*0.98,h*0.055,d*0.30),lid);
@@ -2023,7 +2286,7 @@ const PROP_BUILD={
       x.textAlign='center';x.textBaseline='middle';x.fillText(s.word,W/2,H/2+1);
     });
     const band=new THREE.Mesh(new THREE.PlaneGeometry(w*0.80,w*0.30),
-      new THREE.MeshLambertMaterial({map:tex}));
+      matT(tex));
     band.position.set(0,cy-w*0.02,t*0.62+0.001);g.add(band);
     if(s.note){                            // a paper note pinned under it
       const nt=new THREE.Mesh(new THREE.BoxGeometry(w*0.80,w*0.80,w*0.02),matL('#f2ecdc'));
@@ -2058,7 +2321,7 @@ const PROP_BUILD={
         for(let i=0;i<18;i++)dot(W*(0.26+(i%3)*0.24),74+((i/3)|0)*28,9,i%2?k:kd);
       }else{cap(W/2,142,50,14,k);cap(W/2,170,50,14,k);dot(W/2,92,15,k);dot(W/2,216,15,kd);}
     });
-    const side=matL(hsl(s.caseHue,0.18,0.22)),top=new THREE.MeshLambertMaterial({map:tex});
+    const side=matL(hsl(s.caseHue,0.18,0.22)),top=matT(tex);
     const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,L),[side,side,top,side,side,side]);
     body.position.y=ft+h/2;g.add(body);
     const ir=new THREE.Mesh(new THREE.CylinderGeometry(w*0.22,w*0.22,0.005,10),matL('#2a2733'));
@@ -2091,7 +2354,7 @@ const PROP_BUILD={
       const b=Math.max(0,1-(nx*nx+nz*nz)*0.72),pn=1-0.14*Math.abs(vy)/(t/2);
       p.setY(i,vy*(1+b*0.95));p.setX(i,vx*pn);p.setZ(i,vz*pn);}
     geo.computeVertexNormals();
-    const body=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({map:tex}));
+    const body=new THREE.Mesh(geo,matT(tex));
     body.position.y=s.puff*0.5;g.add(body);
     if(s.trim==='piping'){const pm=matL(hsl(s.hue,0.35,0.86));
       [[0,w*0.45,1],[0,-w*0.45,1],[w*0.45,0,0],[-w*0.45,0,0]].forEach(o=>{
@@ -2223,7 +2486,7 @@ const PROP_BUILD={
       if(s.shape==='round'){x.beginPath();x.arc(C,C,60,0,6.2832);x.stroke();}
       else x.strokeRect(4,4,W-8,H-8);
     });
-    const face=new THREE.MeshLambertMaterial({map:tex}),edge=matL(hsl(s.hue,0.32,0.52));
+    const face=matT(tex),edge=matL(hsl(s.hue,0.32,0.52));
     for(let i=0;i<n;i++){
       const m=s.shape==='round'
         ?new THREE.Mesh(new THREE.CylinderGeometry(w/2,w/2,t,20),[edge,face,edge])
@@ -2319,7 +2582,7 @@ const PROP_BUILD={
       else{x.globalAlpha=0.22;x.lineWidth=2;
         for(let i=0;i<X;i+=9){x.beginPath();x.moveTo(i,0);x.lineTo(i,Y);x.stroke();}x.globalAlpha=1;}
     });
-    const fm=new THREE.MeshLambertMaterial({map:tex});
+    const fm=matT(tex);
     for(let i=0;i<n;i++){
       const l=new THREE.Mesh(new THREE.BoxGeometry(W*(1-i*0.03),t,D*(1-i*0.04)),fm);
       l.position.set((((i*37)%7)-3)*0.004,t/2+i*t,(((i*61)%5)-2)*0.005);
@@ -2352,7 +2615,7 @@ const PROP_BUILD={
       for(let i=0;i<90;i++){const px=(i*29)%X,py=(i*47)%Y;
         x.beginPath();x.arc(px,py,3.2,0,6.2832);x.fill();}
     });
-    const bed=new THREE.Mesh(padGeo(0.008,0.92),new THREE.MeshLambertMaterial({map:tex}));
+    const bed=new THREE.Mesh(padGeo(0.008,0.92),matT(tex));
     bed.position.set(0,0.020,zc);bed.scale.z=zs;g.add(bed);
     const bm=matL(bc);
     for(let i=0;i<8;i++){
@@ -2389,7 +2652,7 @@ const PROP_BUILD={
     });
     const side=matL(hsl(s.hue,0.30,0.22));
     const slab=new THREE.Mesh(new THREE.BoxGeometry(w,t,d),
-      [side,side,new THREE.MeshLambertMaterial({map:tex}),side,side,side]);   // +Y face carries the word
+      [side,side,matT(tex),side,side,side]);   // +Y face carries the word
     slab.position.y=t/2;g.add(slab);
     if(s.border==='rope'){                       // the braided edging is real geometry, not just paint
       const rm=matL(hsl(s.hue,0.42,0.50)),rr=0.011;
@@ -2418,7 +2681,7 @@ const PROP_BUILD={
     });
     const edge=matL(hsl(s.plateHue,0.26,0.32));
     const plate=new THREE.Mesh(new THREE.BoxGeometry(w,h,t),
-      [edge,edge,edge,edge,new THREE.MeshLambertMaterial({map:tex}),edge]);   // +Z face reads from the street
+      [edge,edge,edge,edge,matT(tex),edge]);   // +Z face reads from the street
     plate.position.y=h/2;g.add(plate);
     const sm=matL(hsl(nh,ns,nl));
     [-1,1].forEach(sy=>{                                   // the two screws that hold it to the brick
@@ -2462,7 +2725,7 @@ const PROP_BUILD={
       });
       const pe=matL(hsl(s.hue,0.16,0.70));
       const pl=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.086,0.010),
-        [pe,pe,pe,pe,new THREE.MeshLambertMaterial({map:tex}),pe]);
+        [pe,pe,pe,pe,matT(tex),pe]);
       pl.position.set(0,by-0.17,0.046);g.add(pl);
     }
     return g;
@@ -3261,6 +3524,49 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(70,16,12),
   new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,fog:false,depthWrite:false}));
 sky.visible=false;scene.add(sky);
 
+/* ── M58. AN ENVIRONMENT, SO "SHINY" MEANS SOMETHING ─────────────────────────
+   A MeshStandardMaterial with no envMap has no ambient specular at all: a ceramic
+   mug outside the practical's reach is a flat blob again, and any metalness above
+   about 0.2 renders BLACK, because metal has no diffuse term and nothing to
+   reflect. PMREMGenerator is in the r128 CORE (it is not one of the addons this
+   project cannot vendor), so one pass over the sky gradient we already author
+   gives every Standard material a correct and correctly-COLOURED ambient - amber
+   sodium haze at night, blue sky in the afternoon - for one cubemap fetch.
+
+   Cached by source texture: exactly two PMREM generations for the life of the
+   page, not one per setLighting call (which fires on every dawn and every night).
+
+   And the env is NOT skyTex. The visible night sky is still the cool blue gradient it
+   has always been, but M43's whole argument is that this street is lit by SODIUM -
+   'a sky that never goes properly black because the whole town is throwing light at
+   it'. Reflecting the blue backdrop put a cold grey sheen on every floorboard, at
+   odds with the amber practical two feet away: see docs/zl-shade-full-lounge.png.
+   What a surface reflects out here is the town's glow, so that is what this
+   authors - dark zenith, a hot amber band at the horizon where the lamps are, dark
+   ground - and it is 4x64, which is all a PMREM needs to chew on. */
+const envNightTex=(function(){
+  const c=document.createElement('canvas');c.width=4;c.height=64;
+  const x=c.getContext('2d'),g=x.createLinearGradient(0,0,0,64);
+  g.addColorStop(0.00,'#090b12');g.addColorStop(0.40,'#1e1509');
+  g.addColorStop(0.50,'#5c3f1c');g.addColorStop(0.60,'#2a1d10');
+  g.addColorStop(1.00,'#0f0a06');
+  x.fillStyle=g;x.fillRect(0,0,4,64);
+  const t=new THREE.CanvasTexture(c);t.needsUpdate=true;return t;
+})();
+let _pmrem=null;
+const _envCache=new Map();
+function buildEnv(tex){
+  if(!SHADE.env){scene.environment=null;return;}
+  if(_envCache.has(tex)){scene.environment=_envCache.get(tex);return;}
+  if(!_pmrem){
+    _pmrem=new THREE.PMREMGenerator(renderer);
+    _pmrem.compileEquirectangularShader();
+  }
+  const t=_pmrem.fromEquirectangular(tex).texture;
+  _envCache.set(tex,t);
+  scene.environment=t;
+}
+
 function setLighting(mode){
   if(mode==='night'){
     /* Deliberately DARK. The readable bits are the practicals — the streetlight and
@@ -3294,6 +3600,7 @@ function setLighting(mode){
     scene.background=new THREE.Color('#0d0904');
     sky.material.map=skyTex;sky.material.needsUpdate=true;
     sky.visible=true;
+    buildEnv(envNightTex);       // M58: sodium haze is the night's ambient specular
     document.body.classList.remove('daylight');
     /* EXPOSURE is the real night control. sRGB output gamma lifts midtones hard, so
        simply turning the lights down leaves everything a flat grey-blue. Filmic tone
@@ -3322,6 +3629,7 @@ function setLighting(mode){
     scene.background=new THREE.Color('#7ea6cf');
     sky.material.map=skyDayTex;sky.material.needsUpdate=true;
     sky.visible=true;
+    buildEnv(skyDayTex);         // M58
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=0.86;
     document.body.classList.remove('night');
@@ -3332,6 +3640,7 @@ function setLighting(mode){
     fill.color.set('#b9c6e0');fill.intensity=0.25;fill.position.set(-6,5,-4);
     scene.fog=null;scene.background=new THREE.Color('#1b2436');
     sky.visible=false;
+    scene.environment=null;      // M58: greybox is for physics, not for mood
     renderer.toneMapping=THREE.NoToneMapping;
     renderer.toneMappingExposure=1.0;
     document.body.classList.remove('night');
@@ -3341,6 +3650,9 @@ function setLighting(mode){
      sunny afternoon is a smear of fog on the lens. */
   LIGHT_MODE=(mode==='night')?'night':(mode==='day'?'day':'greybox');
   for(let i=0;i<SHAFTS.length;i++)SHAFTS[i].visible=(LIGHT_MODE==='night');
+  /* M58/E - the rim and fill on skin and cloth follow the rig, so a person picks up
+     the sky at three in the afternoon and the sodium spill at three in the morning. */
+  setBodyLight(mode==='night'?'night':'day');
   // a tone-mapping change needs every existing program rebuilt
   scene.traverse(o=>{
     if(!o.material)return;
@@ -3369,6 +3681,9 @@ function thumbInit(size){
     const b=new THREE.DirectionalLight('#9fb0d8',0.35);b.position.set(-3,2,-2);_thumbScene.add(b);
     _thumbCam=new THREE.PerspectiveCamera(34,1,0.005,40);
   }
+  /* M58: the catalogue renders the same builders the world does, so a Standard
+     prop must find the same environment here or a metal keyring thumbnails black. */
+  _thumbScene.environment=scene.environment;
   if(!_thumbRT||_thumbRT.width!==size){
     if(_thumbRT)_thumbRT.dispose();
     _thumbRT=new THREE.WebGLRenderTarget(size,size);
@@ -3604,12 +3919,128 @@ function matShiny(hex,tex){
 function isShiny(mtl){return CONST.SHINY_MTL.indexOf(mtl)>=0;}
 const UNIT_BOX=new THREE.BoxGeometry(1,1,1);
 
+/* ── D2 · EDGE DEFINITION ────────────────────────────────────────────────────
+   The art-director note was that every prop "reads as a flat rectangle at any
+   distance", and it was right: nothing in this game has an edge. Two boxes of a
+   similar value that touch become one shape, and a sofa against a wall has no
+   silhouette at all.
+
+   Three ways to fix that were on the table. An EdgesGeometry/LineSegments overlay
+   is +1370 objects and +1370 draw calls onto a frame that already spends 14.7ms on
+   317 of them, and GL lines in WARP are emulated — that is the M21 shadow-map
+   mistake again. Bevelled geometry means abandoning the ONE shared UNIT_BOX that
+   every piece of furniture in the game instances, so it is +1370 unique buffers.
+
+   This is the third way and it costs neither. Every box() and gbox() is UNIT_BOX
+   scaled by (w,h,d), so the fragment shader can recover the box's real half-extents
+   straight out of the model matrix and know how far it is IN METRES from the
+   nearest edge of the face it is standing on. No extra mesh, no extra geometry, no
+   extra draw call, no extra texture — about a dozen ALU ops in a shader that is
+   already doing eight lights and a shadow lookup.
+
+   THE TRICK: the distance wanted is the SECOND SMALLEST of the three per-axis
+   distances to the box's faces. On any face of a box the smallest is ~0 (that
+   face's own plane), so the second smallest is exactly the in-face distance to the
+   border — correct on all six faces with no need to look at the normal at all.
+   Both varyings interpolate affinely across a face, and abs() is taken per
+   fragment rather than per vertex, which is the bit the first version got wrong:
+   0.5-abs(position) is a tent, not a plane, so interpolating it gave 0 across the
+   whole face and inked everything.
+
+   It buys two terms off one distance: a crisp INK line that gives the silhouette,
+   and a wide soft OCCLUSION that gives the form. Both band widths are clamped
+   against the box's own median half-extent so a 4cm-thick picture frame does not
+   come out uniformly black. */
+const EDGE_INK=0.40, EDGE_AO=0.13, EDGE_W=0.150;  // strength, strength, metres
+function edgeShaderPatch(shader){
+  /* THE BAND WIDTH IS PER-VERTEX. It depends only on the mesh's scale, so it is
+     computed once for each of the box's 24 vertices and rides in the spare .w of
+     the position varying instead of being recomputed for every fragment. That took
+     nine min/max/add out of the inner loop, which in a software rasteriser with
+     this much overdraw is not a rounding error.
+
+     ONE smoothstep, not two. The first version ran a narrow one for the ink line
+     and a wide one for the occlusion; the same two terms come out of a single wide
+     smoothstep by raising it to the 10th power for the ink — four multiplies
+     against a whole second smoothstep, and it measured. e^10 crosses 0.5 at about
+     8% of the band, so the ink core lands around 1.2cm on a 15cm band. */
+  shader.vertexShader=
+    'varying vec4 vEdgeP;\nvarying vec3 vEdgeH;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+    '#include <begin_vertex>\n'+
+    '  vEdgeH = vec3(length(modelMatrix[0].xyz),length(modelMatrix[1].xyz),'+
+    'length(modelMatrix[2].xyz))*0.5;\n'+
+    '  float hLo = min(min(vEdgeH.x,vEdgeH.y),vEdgeH.z);\n'+
+    '  float hHi = max(max(vEdgeH.x,vEdgeH.y),vEdgeH.z);\n'+
+    /* clamped against the box's own MEDIAN half-extent, so a 4cm picture frame and
+       a 40cm-tall hedge are not swallowed whole by their own occlusion band */
+    '  vEdgeP = vec4(position*(vEdgeH*2.0), min('+EDGE_W.toFixed(4)+
+    ', (vEdgeH.x+vEdgeH.y+vEdgeH.z-hLo-hHi)*0.40));\n');
+  shader.fragmentShader=
+    'varying vec4 vEdgeP;\nvarying vec3 vEdgeH;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
+    '#include <color_fragment>\n'+
+    /* abs() has to happen HERE. 0.5-abs(position) is a tent across a face, not a
+       plane, so taking it per-vertex and letting it interpolate gives zero
+       everywhere and inks the whole box — which is what the first attempt did.
+       position interpolates affinely; the abs of it does not. */
+    '  vec3  eD   = vEdgeH - abs(vEdgeP.xyz);\n'+
+    '  float eLo  = min(min(eD.x,eD.y),eD.z);\n'+
+    '  float eHi  = max(max(eD.x,eD.y),eD.z);\n'+
+    /* the SECOND SMALLEST of the three distances. On any face of a box the
+       smallest is ~0 (that face's own plane), so the second smallest is exactly
+       the in-face distance to the border — right on all six faces, no normal. */
+    '  float eMid = eD.x+eD.y+eD.z-eLo-eHi;\n'+
+    '  float e2 = 1.0 - smoothstep(0.0, vEdgeP.w, eMid); e2 *= e2;\n'+
+    '  float e4 = e2*e2;\n'+
+    '  diffuseColor.rgb *= 1.0 - '+EDGE_AO.toFixed(3)+'*e2'+
+    ' - '+EDGE_INK.toFixed(3)+'*e4*e4*e2;\n');
+}
+/* r128 keys the program cache on onBeforeCompile.toString(), so handing every
+   material the SAME function object means one extra program for the whole scene
+   rather than one per material. */
+function edgeify(m){
+  if(!m||m.userData.__edged)return m;
+  m.userData.__edged=1;
+  m.onBeforeCompile=edgeShaderPatch;
+  m.needsUpdate=true;
+  return m;
+}
+/* mat() is shared with cylinders, cones, spheres and torii — the trunk of a tree,
+   the wheels of a car, the rim of the turning circle — where "distance to the
+   second-nearest face of a unit box" is meaningless and would put dark blotches
+   on the poles. So the edged materials get their OWN cache, minted only through
+   box() and gbox(), the two entry points that are guaranteed UNIT_BOX. */
+const _edgeMatCache=new Map();
+function matE(hex){
+  let m=_edgeMatCache.get(hex);
+  if(!m){m=edgeify(new THREE.MeshLambertMaterial({color:grade(hex)}));
+         _edgeMatCache.set(hex,m);}
+  return m;
+}
+/* A shared textured, edged material for furniture whose colour field is too big to
+   leave flat — upholstery, hedges. Cached on the texture, so twelve hedges are one
+   material and one draw state. */
+const _texMatCache=new Map();
+function matTex(tex,rx,ry){
+  const key=tex.uuid+'|'+(rx||1)+'|'+(ry||1);
+  let m=_texMatCache.get(key);
+  if(!m){
+    m=edgeify(new THREE.MeshLambertMaterial(
+      {map:(rx||ry)?tiled(tex,rx||1,ry||1):tex}));
+    _texMatCache.set(key,m);
+  }
+  return m;
+}
+
 /* box(): the ONLY primitive-furniture entry point. opts.collide:false = decor
    (rendered + raycastable, but not solid) — 'visible' and 'solid' are
    independent sets, exactly as in chameleon3d. */
 function box(w,h,d,hex,x,y,z,opts){
   opts=opts||{};
-  const m=new THREE.Mesh(UNIT_BOX,opts.mat||mat(hex));
+  /* anything handed in through opts.mat is on a UNIT_BOX too, by construction —
+     that is how the walls and the window panes get edges as well */
+  const m=new THREE.Mesh(UNIT_BOX,opts.mat?edgeify(opts.mat):matE(hex));
   m.scale.set(w,h,d);
   x=MX(x);
   m.position.set(x,y,z);m.userData.baseColor=hex;
@@ -3907,58 +4338,286 @@ function lightShaft(x,yTop,z,yBot,rTop,rBot,hex,op,glowR){
   }
   return cone;
 }
+/* ── D1 · PROCEDURAL SURFACE DETAIL ──────────────────────────────────────────
+   Every one of these textures was a flat colour field plus a scatter of 2px dots
+   at 5% black, which at play distance is a flat colour field. They are built ONCE
+   at world-build time and cached by key, so the budget here is generous — a few
+   thousand canvas fills apiece is nothing next to a single frame in WARP.
+
+   TWO RULES, both load-bearing:
+   · NO getImageData. canvasTex says why: a per-spec read-back round trip blew the
+     whole 200s test budget. Everything here is drawn with fills and strokes.
+   · NO CanvasGradient. gradedCtx grades `fillStyle` STRINGS on their way in; a
+     gradient is an object and slips past ungraded, so its stops would sit outside
+     the tone curve the entire rest of the game lives inside. Where a ramp is
+     wanted it is drawn as a stack of solid bands, which stays in the graded path
+     and is exact. */
+function _rnd(seed){
+  let s=(seed>>>0)||1;
+  return function(){s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};
+}
+function _seed(str){
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+  return h>>>0;
+}
+/* Shift a hex by lightness/saturation and hand back a css string, so a texture can
+   derive its own shadow and highlight from the one colour the call site names. */
+function _shade(hex,dl,ds){
+  const c=new THREE.Color(hex),h={};c.getHSL(h);
+  return hslCss(h.h*360,Math.max(0,Math.min(1,h.s+(ds||0))),
+                Math.max(0,Math.min(1,h.l+dl)));
+}
+/* SOFT VALUE NOISE WITHOUT A GRADIENT AND WITHOUT A PIXEL READ.
+   A tiny greyscale canvas blown up through the browser's own bilinear filter IS a
+   smooth noise field, for the price of one drawImage. Composited MULTIPLY from
+   near-white so it can only ever take light away: a graded surface can never be
+   pushed back up above the tone curve by its own texture. The (n+1)th row and
+   column repeat the first and the destination rect is offset by half a cell, so
+   sample n lands exactly on the far edge and the field TILES. */
+function _noiseTile(n,lo,hi,seed){
+  const c=document.createElement('canvas');c.width=n+1;c.height=n+1;
+  const g=c.getContext('2d'),r=_rnd(seed),v=[];
+  for(let y=0;y<n;y++){v.push([]);for(let xx=0;xx<n;xx++)v[y].push(lo+(hi-lo)*r());}
+  for(let y=0;y<=n;y++)for(let xx=0;xx<=n;xx++){
+    const q=Math.max(0,Math.min(255,Math.round(v[y%n][xx%n]*255)));
+    g.fillStyle='rgb('+q+','+q+','+q+')';g.fillRect(xx,y,1,1);
+  }
+  return c;
+}
+function mottle(x,W,H,n,lo,hi,seed,alpha,op){
+  const t=_noiseTile(n,lo,hi,seed);
+  x.save();
+  x.globalAlpha=alpha;x.globalCompositeOperation=op||'multiply';
+  x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';
+  x.drawImage(t,0,0,n+1,n+1,-W/(2*n),-H/(2*n),W*(n+1)/n,H*(n+1)/n);
+  x.restore();
+}
+/* Speckle that wraps. Two values, never one — a single dirty layer reads as fog. */
+function grain(x,W,H,n,seed,dark,light){
+  const r=_rnd(seed);
+  for(let i=0;i<n;i++){
+    const px=r()*W,py=r()*H,s=r()<0.85?1:2;
+    x.fillStyle=(i%3)?dark:light;
+    x.fillRect(px,py,s,s);
+  }
+}
+/* A soft dark smudge, built as concentric squares rather than a radial gradient
+   (see the no-gradient rule). Drawn nine times so it wraps on both axes. */
+function smudge(x,W,H,cx,cy,rad,a,steps){
+  steps=steps||5;
+  for(let k=steps;k>0;k--){
+    const rr=rad*k/steps;
+    x.fillStyle='rgba(0,0,0,'+(a/steps).toFixed(4)+')';
+    for(let ox=-1;ox<=1;ox++)for(let oy=-1;oy<=1;oy++)
+      x.fillRect(cx-rr+ox*W,cy-rr+oy*H,rr*2,rr*2);
+  }
+}
+
 function texBoards(hue){
   return canvasTex(256,256,'boards|'+hue,(x,W,H)=>{
-    const rows=6,rh=H/rows;
+    const sd=_seed('boards'+hue),r=_rnd(sd),rows=6,rh=H/rows;
     for(let i=0;i<rows;i++){
-      x.fillStyle=hslCss(hue,0.32,0.30+((i*37)%11)/140);
+      /* Each plank is its OWN piece of timber. The old version varied lightness by
+         a fixed 11-step modulo and there are six rows, so three pairs matched. */
+      const l=0.29+r()*0.075,s=0.28+r()*0.10;
+      x.fillStyle=hslCss(hue+(r()-0.5)*7,s,l);
       x.fillRect(0,i*rh,W,rh);
-      x.strokeStyle='rgba(0,0,0,.34)';x.lineWidth=2;
-      x.beginPath();x.moveTo(0,i*rh+rh-1);x.lineTo(W,i*rh+rh-1);x.stroke();
-      x.strokeStyle='rgba(0,0,0,.09)';x.lineWidth=1;
-      for(let g=0;g<4;g++){
-        const gy=i*rh+6+((i*17+g*31)%(rh-12));
-        x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy+(g%2?1:-1));x.stroke();
+      /* butt joints: two or three a course, staggered, each a dark slot with a lit
+         lip on the near side so the plank has a thickness */
+      const joints=2+((i+sd)%2);
+      for(let j=0;j<joints;j++){
+        const jx=(sd*(i+3)*37+j*W/joints+r()*W*0.28)%W;
+        x.fillStyle='rgba(0,0,0,.40)';x.fillRect(jx,i*rh,2,rh);
+        x.fillStyle='rgba(255,247,232,.07)';x.fillRect(jx+2,i*rh,1,rh);
       }
-      const seam=((i*67)%W);
-      x.strokeStyle='rgba(0,0,0,.26)';x.lineWidth=2;
-      x.beginPath();x.moveTo(seam,i*rh);x.lineTo(seam,i*rh+rh);x.stroke();
+      for(let g=0;g<9;g++){                       // grain: long shallow curves
+        const gy=i*rh+2+r()*(rh-4),amp=(r()-0.5)*2.4;
+        x.strokeStyle='rgba(0,0,0,'+(0.04+r()*0.09).toFixed(3)+')';
+        x.lineWidth=r()<0.3?1.5:1;
+        x.beginPath();x.moveTo(0,gy);
+        x.quadraticCurveTo(W*0.5,gy+amp,W,gy);x.stroke();
+      }
+      if(r()<0.55){                               // a knot, sometimes
+        const kx=r()*W,ky=i*rh+rh*0.5;
+        for(let k=3;k>0;k--){
+          x.fillStyle='rgba(0,0,0,'+(0.10*k/3).toFixed(3)+')';
+          x.beginPath();x.ellipse(kx,ky,3.2*k/3,2.0*k/3,0.4,0,6.284);x.fill();
+        }
+      }
+      x.fillStyle='rgba(0,0,0,.46)';x.fillRect(0,i*rh+rh-2,W,2);      // course slot
+      x.fillStyle='rgba(255,243,222,.055)';x.fillRect(0,i*rh+rh,W,1); // lit lip
     }
+    /* the varnish is not even, and neither is the dust in a house at 3am */
+    mottle(x,W,H,5,0.88,1.00,sd+11,0.55);
+    mottle(x,W,H,14,0.93,1.00,sd+22,0.42);
+    grain(x,W,H,1100,sd+33,'rgba(0,0,0,.055)','rgba(255,248,232,.05)');
   });
 }
+/* Painted plaster. Two octaves of unevenness, roller laps, tooth and the odd
+   scuff — a wall you can see the whole of has to be more than one value or the
+   room has no depth. Tiles on both axes: the ceiling repeats 3x3. */
 function texPaint(hue,sat,light){
   return canvasTex(128,128,'paint|'+hue+'|'+sat+'|'+light,(x,W,H)=>{
+    const sd=_seed('paint'+hue+'|'+sat+'|'+light),r=_rnd(sd);
     x.fillStyle=hslCss(hue,sat,light);x.fillRect(0,0,W,H);
-    x.fillStyle='rgba(0,0,0,.05)';
-    for(let i=0;i<260;i++)x.fillRect((i*53)%W,(i*97)%H,2,2);
+    mottle(x,W,H,4 ,0.945,1.00,sd    ,0.55);
+    mottle(x,W,H,11,0.935,1.00,sd+101,0.60);
+    mottle(x,W,H,30,0.950,1.00,sd+202,0.55);
+    for(let i=0;i<13;i++){                        // roller lap marks
+      const px=r()*W,w=1+r()*3.5;
+      x.fillStyle='rgba(0,0,0,'+(0.010+r()*0.022).toFixed(3)+')';
+      x.fillRect(px,0,w,H);
+      x.fillStyle='rgba(255,252,244,.020)';x.fillRect(px+w,0,1,H);
+    }
+    grain(x,W,H,760,sd+303,'rgba(0,0,0,.055)','rgba(255,252,246,.045)');
+    for(let i=0;i<4;i++)                          // scuffs, hooks, knocks
+      smudge(x,W,H,r()*W,r()*H,5+r()*9,0.11,4);
   });
 }
+/* Kitchen tile: a real grout CHANNEL — recessed dark with a lit lip on one side —
+   plus per-tile value drift and a fired speckle. Four flat squares with a 1px
+   stroke round them was reading as lino. */
 function texTile(hueA,hueB){
   return canvasTex(128,128,'tile|'+hueA+'|'+hueB,(x,W,H)=>{
-    const n=4,s=W/n;
+    const sd=_seed('tile'+hueA+'|'+hueB),r=_rnd(sd),n=4,s=W/n;
+    x.fillStyle=hslCss((hueA+hueB)/2,0.06,0.42);x.fillRect(0,0,W,H);   // grout bed
     for(let i=0;i<n;i++)for(let j=0;j<n;j++){
-      x.fillStyle=hslCss((i+j)%2?hueA:hueB,0.14,(i+j)%2?0.78:0.70);
-      x.fillRect(i*s,j*s,s,s);
-      x.strokeStyle='rgba(0,0,0,.14)';x.lineWidth=1;x.strokeRect(i*s+.5,j*s+.5,s-1,s-1);
+      const even=(i+j)%2,jit=(r()-0.5)*0.045;
+      x.fillStyle=hslCss(even?hueA:hueB,0.14+(r()-0.5)*0.05,(even?0.78:0.70)+jit);
+      x.fillRect(i*s+1.5,j*s+1.5,s-3,s-3);
+      x.fillStyle='rgba(255,255,255,.10)';                   // lit top/left lip
+      x.fillRect(i*s+1.5,j*s+1.5,s-3,1);x.fillRect(i*s+1.5,j*s+1.5,1,s-3);
+      x.fillStyle='rgba(0,0,0,.16)';                         // shaded bottom/right
+      x.fillRect(i*s+1.5,j*s+s-2.5,s-3,1);x.fillRect(i*s+s-2.5,j*s+1.5,1,s-3);
+      for(let k=0;k<26;k++){                                 // fired speckle
+        x.fillStyle=(k%2)?'rgba(0,0,0,.06)':'rgba(255,255,255,.07)';
+        x.fillRect(i*s+2+r()*(s-5),j*s+2+r()*(s-5),1,1);
+      }
     }
+    mottle(x,W,H,8,0.94,1.00,sd+7,0.40);
+    for(let i=0;i<3;i++) smudge(x,W,H,r()*W,r()*H,7+r()*7,0.09,4);
   });
 }
+/* Lawn. Mown in patches, dry in spots, and made of blades rather than of one
+   green. It tiles 52x26 across the big lawn, so all the structure here is small:
+   anything the size of the tile would read as wallpaper at that repeat. */
 function texGrass(){
   return canvasTex(128,128,'grass',(x,W,H)=>{
-    x.fillStyle='#3d5a33';x.fillRect(0,0,W,H);
-    for(let i=0;i<900;i++){
-      const px=(i*37)%W,py=(i*61)%H;
-      x.fillStyle=(i%3?'rgba(90,130,70,.5)':'rgba(40,70,40,.55)');
-      x.fillRect(px,py,1,2);
+    const sd=_seed('grass'),r=_rnd(sd);
+    x.fillStyle="#374f2e";x.fillRect(0,0,W,H);
+    mottle(x,W,H,4 ,0.74,1.10,sd   ,0.85);
+    mottle(x,W,H,12,0.84,1.06,sd+31,0.70);
+    const BL=["rgba(88,126,68,.50)","rgba(68,104,54,.55)","rgba(46,76,42,.65)",
+              "rgba(104,136,78,.34)","rgba(32,54,32,.62)"];
+    for(let i=0;i<2200;i++){
+      const px=r()*W,py=r()*H,len=1+((i%5)===0?2:1);
+      x.fillStyle=BL[i%5];
+      x.fillRect(px,py,r()<0.5?2:1,len);
+    }
+    for(let i=0;i<9;i++) smudge(x,W,H,r()*W,r()*H,6+r()*10,0.13,4);   // clumps
+    for(let i=0;i<5;i++){                                             // dry spots
+      const px=r()*W,py=r()*H,rr=4+r()*7;
+      x.fillStyle="rgba(178,166,112,.075)";
+      for(let ox=-1;ox<=1;ox++)for(let oy=-1;oy<=1;oy++)
+        x.fillRect(px-rr+ox*W,py-rr+oy*H,rr*2,rr*2);
     }
   });
 }
+/* Poured concrete. Aggregate at three sizes, a broom finish, and a real expansion
+   joint: a dark groove with a lit lip and staining either side, not a 2px rule
+   through the middle of the tile. */
 function texConcrete(){
   return canvasTex(128,128,'concrete',(x,W,H)=>{
+    const sd=_seed('concrete'),r=_rnd(sd);
     x.fillStyle='#7d7a72';x.fillRect(0,0,W,H);
-    for(let i=0;i<500;i++){x.fillStyle='rgba(0,0,0,.05)';x.fillRect((i*29)%W,(i*71)%H,2,2);}
-    x.strokeStyle='rgba(0,0,0,.28)';x.lineWidth=2;
-    x.beginPath();x.moveTo(0,H/2);x.lineTo(W,H/2);x.stroke();
+    mottle(x,W,H,4 ,0.86,1.00,sd   ,0.70);
+    mottle(x,W,H,13,0.92,1.00,sd+17,0.50);
+    for(let i=0;i<64;i++){                              // broom striations
+      const py=r()*H;
+      x.fillStyle='rgba(0,0,0,'+(0.010+r()*0.022).toFixed(3)+')';
+      x.fillRect(0,py,W,1);
+      x.fillStyle="rgba(255,252,244,.012)";x.fillRect(0,py+1,W,1);
+    }
+    grain(x,W,H,900,sd+29,"rgba(0,0,0,.085)","rgba(255,252,240,.045)");
+    for(let i=0;i<70;i++){                              // exposed aggregate
+      const px=r()*W,py=r()*H,s=2+r()*2;
+      x.fillStyle='rgba(0,0,0,.10)';x.fillRect(px,py,s,s*0.7);
+      x.fillStyle="rgba(255,250,236,.05)";x.fillRect(px,py-1,s*0.8,1);
+    }
+    const jy=H/2;                                       // the slab joint
+    x.fillStyle='rgba(0,0,0,.10)';x.fillRect(0,jy-5,W,4);x.fillRect(0,jy+3,W,4);
+    x.fillStyle='rgba(0,0,0,.34)';x.fillRect(0,jy-1,W,3);
+    x.fillStyle='rgba(255,250,238,.09)';x.fillRect(0,jy+2,W,1);
+    for(let i=0;i<4;i++) smudge(x,W,H,r()*W,r()*H,6+r()*9,0.11,4);
+  });
+}
+/* Woven pile, for the rugs. These were texPaint at repeat 2x2 — a lilac sheet of
+   paper on the floor. A rug maps ONCE across its plane now (see rug()), so it can
+   carry a border and a worn middle the way an actual rug does. */
+function texRug(hue){
+  return canvasTex(192,128,'rug|'+hue,(x,W,H)=>{
+    const sd=_seed('rug'+hue),r=_rnd(sd);
+    x.fillStyle=hslCss(hue,0.30,0.34);x.fillRect(0,0,W,H);
+    for(let i=0;i<W;i+=3){                              // warp
+      x.fillStyle='rgba(0,0,0,'+(0.05+r()*0.07).toFixed(3)+')';x.fillRect(i,0,1,H);
+    }
+    for(let i=0;i<H;i+=3){                              // weft
+      x.fillStyle='rgba(255,250,240,'+(0.03+r()*0.05).toFixed(3)+')';
+      x.fillRect(0,i,W,1);
+    }
+    const B=10;                                          // border bands
+    x.fillStyle=hslCss(hue+22,0.34,0.26);
+    x.fillRect(0,0,W,B);x.fillRect(0,H-B,W,B);x.fillRect(0,0,B,H);x.fillRect(W-B,0,B,H);
+    x.fillStyle=hslCss(hue-14,0.26,0.46);
+    x.fillRect(B-3,B-3,W-2*B+6,2);x.fillRect(B-3,H-B+1,W-2*B+6,2);
+    x.fillRect(B-3,B-3,2,H-2*B+6);x.fillRect(W-B+1,B-3,2,H-2*B+6);
+    x.fillStyle='rgba(0,0,0,.22)';                       // the pile turns at the edge
+    x.fillRect(0,0,W,2);x.fillRect(0,H-2,W,2);x.fillRect(0,0,2,H);x.fillRect(W-2,0,2,H);
+    mottle(x,W,H,6,0.90,1.00,sd+5,0.55);                 // trodden
+    smudge(x,W,H,W*0.5,H*0.5,26,0.10,5);
+    grain(x,W,H,900,sd+9,'rgba(0,0,0,.05)','rgba(255,248,236,.05)');
+  });
+}
+/* Upholstery. The sofa is the largest single field of colour in the lounge and it
+   was one value — 2.2m of undifferentiated lilac. A slub weave costs one shared
+   texture and makes it read as cloth at play distance. */
+function texWeave(hex){
+  return canvasTex(128,128,'weave|'+hex,(x,W,H)=>{
+    const sd=_seed('weave'+hex),r=_rnd(sd);
+    x.fillStyle=hex;x.fillRect(0,0,W,H);
+    for(let i=0;i<W;i+=2){
+      x.fillStyle='rgba(0,0,0,'+(0.035+r()*0.055).toFixed(3)+')';x.fillRect(i,0,1,H);
+    }
+    for(let i=0;i<H;i+=2){
+      x.fillStyle='rgba(255,250,242,'+(0.028+r()*0.045).toFixed(3)+')';
+      x.fillRect(0,i,W,1);
+    }
+    for(let i=0;i<160;i++){                             // slubs in the yarn
+      const px=r()*W,py=r()*H;
+      x.fillStyle=r()<0.5?'rgba(0,0,0,.10)':'rgba(255,250,240,.09)';
+      x.fillRect(px,py,r()<0.5?3:1,r()<0.5?1:3);
+    }
+    mottle(x,W,H,5 ,0.90,1.00,sd  ,0.55);
+    mottle(x,W,H,16,0.94,1.00,sd+3,0.45);
+    grain(x,W,H,700,sd+6,'rgba(0,0,0,.05)','rgba(255,250,240,.05)');
+  });
+}
+/* Foliage. Hedges were 2.6m x 0.8m slabs of one green in broad daylight. */
+function texFoliage(hex){
+  return canvasTex(128,128,'foliage|'+hex,(x,W,H)=>{
+    const sd=_seed('foliage'+hex),r=_rnd(sd);
+    x.fillStyle=hex;x.fillRect(0,0,W,H);
+    mottle(x,W,H,5 ,0.78,1.05,sd   ,0.80);
+    mottle(x,W,H,14,0.86,1.04,sd+13,0.60);
+    const lo=_shade(hex,-0.10,0.03),hi=_shade(hex,0.11,-0.02),mid=_shade(hex,0.04,0);
+    for(let i=0;i<1500;i++){
+      const px=r()*W,py=r()*H,w=2+r()*3,h=1+r()*2;
+      x.fillStyle=(i%7===0)?hi:((i%3)?mid:lo);
+      x.fillRect(px,py,w,h);
+    }
+    for(let i=0;i<12;i++) smudge(x,W,H,r()*W,r()*H,7+r()*11,0.12,4);  // shaded pockets
+    grain(x,W,H,600,sd+21,'rgba(0,0,0,.09)','rgba(226,244,190,.07)');
   });
 }
 /* A window: recessed pane + frame. Panes are dark and faintly moonlit — the house
@@ -3978,7 +4637,16 @@ function windowPane(x,y,z,w,h,axis){
   const fr=matL('#d8d2c6');
   /* Glass. The only surface in the game the moon is allowed to glint off, and now
      the only one you can see anything through. */
-  const pane=new THREE.MeshPhongMaterial(
+  /* M58. Phong's specular only fires where a light happens to mirror; real glass
+     reflects the SKY, which is what a window is for. Standard at roughness 0.05
+     against the PMREM sodium haze lays a soft amber sheet over every pane, so a
+     dark window reads as glass rather than as a hole - and opacity, transparency
+     and depthWrite are unchanged, so the sight rules through WINDOWS are untouched. */
+  const pane=SHADE.props
+    ?new THREE.MeshStandardMaterial(
+      {color:grade('#22344f'),emissive:'#16233a',roughness:0.05,metalness:0.0,
+       envMapIntensity:1.6,transparent:true,opacity:0.30,depthWrite:false})
+    :new THREE.MeshPhongMaterial(
     {color:grade('#22344f'),emissive:'#16233a',shininess:96,specular:0x6a7c9a,
      transparent:true,opacity:0.30,depthWrite:false});
   const t=0.06;
@@ -4119,7 +4787,7 @@ function buildGreybox(){
   box(2.4,0.92,0.62,'#8f8a7a', 3.1,0.46,-2.9,{tag:'counter'});   // 0.92 counter
   box(1.0,2.00,0.60,'#6f6a78', 3.9,1.00, 2.4,{tag:'wardrobe'});  // 2.00 wardrobe
   // a two-hop route: stool -> table proves cumulative mounting works
-  box(2.0,0.42,0.85,'#7a6f80',-3.2,0.21, 2.4,{tag:'couch'});     // 0.42 couch
+  box(2.0,0.42,0.85,"#7a6f80",-3.2,0.21, 2.4,{tag:"couch"});     // 0.42 couch
 
   // decor: rendered + raycastable, NOT solid (proves the two sets are independent)
   box(0.5,0.5,0.5,'#c2b28a',0,0.25,0,{collide:false,tag:'decor'});
@@ -4211,20 +4879,33 @@ function buildHouse(def,rng){
   CEIL_ZONES.push({minX:-HW+OX,maxX:HW+OX,minZ:-HD,maxZ:HD,y:H});
 
   // ── ground: lawn outside, boards inside, tile in the kitchen ──
-  const surf=(w,d,x,z,y,tex,rot)=>{
+  const surf=(w,d,x,z,y,tex,rot,sh)=>{
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
-      new THREE.MeshLambertMaterial({map:tex}));
+      sh?stdMat({map:tex,normalMap:sh.n,roughness:sh.r,ns:sh.ns,emi:sh.emi})
+        :new THREE.MeshLambertMaterial({map:tex}));
     m.rotation.x=(rot===undefined?-Math.PI/2:rot);
     m.position.set(MX(x),y,z);m.receiveShadow=true;
     scene.add(m);envMeshes.push(m);return m;
   };
   surf(YARD.maxX-YARD.minX,YARD.maxZ-YARD.minZ,0,(YARD.minZ+YARD.maxZ)/2,0.001,
-       tiled(texGrass(),9,5));
-  surf(HW*2,HD*2,0,0,0.002,tiled(texBoards(P.floor),7,6));
+       tiled(texGrass(),9,5),undefined,
+       SHADE.exterior&&{n:tiled(nrmGrass(),9,5),r:SH_GRASS.r,ns:SH_GRASS.ns,emi:SH_GRASS.emi});
+  /* THE FLOORBOARDS ARE THE SINGLE BIGGEST WIN IN THE BUILDING. 0.42 is varnish:
+     the pendant and the moon through the window now lay a STREAK down the boards
+     instead of a flat wash, and the normal map puts the butt joints in relief, so
+     the floor reads as laid rather than as printed on a plane. */
+  surf(HW*2,HD*2,0,0,0.002,tiled(texBoards(P.floor),7,6),undefined,
+       SHADE.floors&&{n:tiled(nrmBoards(),7,6),r:0.62,ns:0.34,emi:0.18});
   surf(HW,HD-_p(-1.6),-HW/2,(_p(-1.6)+HD)/2,0.004,
-       tiled(texTile(P.tile[0],P.tile[1]),5,5));       // kitchen tile
+       tiled(texTile(P.tile[0],P.tile[1]),5,5),undefined,
+       SHADE.floors&&{n:tiled(nrmTile(),5,5),r:0.34,ns:0.45,emi:0.35});   // glazed
   const ceil=new THREE.Mesh(new THREE.PlaneGeometry(HW*2,HD*2),
-    new THREE.MeshLambertMaterial({map:tiled(texPaint(P.ceil,0.10,0.80),3,3)}));
+    /* The ceiling gets roughness and NO normal map: it is a big fill, it is almost
+       never the thing you are looking at, and matt emulsion overhead has no tooth
+       worth paying a second texture fetch for. */
+    SHADE.walls
+      ?stdMat({map:tiled(texPaint(P.ceil,0.10,0.80),3,3),roughness:0.97,emi:0.30})
+      :new THREE.MeshLambertMaterial({map:tiled(texPaint(P.ceil,0.10,0.80),3,3)}));
   ceil.rotation.x=Math.PI/2;ceil.position.set(OX,H,0);scene.add(ceil);envMeshes.push(ceil);
   /* Roof + ceiling deliberately do NOT cast shadow. Physically the moon would be
      blocked entirely and the interior would be a black box; letting it leak keeps
@@ -4242,7 +4923,24 @@ function buildHouse(def,rng){
   box(0.45,1.05,0.45,'#514038',_p(-3.2),H+0.75,_p(1.4),{collide:false,cast:false,tag:'chimney'});
 
   // ── shell: front (south) wall has the door gap; the rest is closed ──
-  const wallMat=new THREE.MeshLambertMaterial({map:tiled(texPaint(P.wallHue,0.16,0.62),3,1)});
+  /* THREE WAYS TO PAY FOR A TEXTURED WALL, and the measured price of each on the
+     night-interior pose (all-Lambert control = 1.00x, min-of-20 with a sync):
+        false   Lambert, no normal map possible in r128 at all       1.00x
+        'std'   MeshStandardMaterial + normal map                    2.13x
+        'phong' MeshPhongMaterial + normal map, specular ~black      see below
+     Phong is the interesting one: it is the only material class BELOW Standard that
+     supports normalMap at all, and with specular crushed to near-black it is a
+     lambert term plus a perturbed normal, which is exactly and only what a matt
+     emulsion wall needs. */
+  const wallTex=tiled(texPaint(P.wallHue,0.16,0.62),3,1);
+  const wallMat=
+    SHADE.walls==='phong'
+      ?new THREE.MeshPhongMaterial({map:wallTex,normalMap:tiled(nrmPaint(),6,2),
+          normalScale:new THREE.Vector2(0.45,0.45),shininess:2,specular:0x090807})
+    :SHADE.walls
+      ?stdMat({map:wallTex,normalMap:tiled(nrmPaint(),6,2),
+               roughness:0.94,ns:0.45,emi:0.45})
+      :new THREE.MeshLambertMaterial({map:wallTex});
   const WCOL=P.wall,WOPT={mat:wallMat};
   wallSeg(-HW,-HD,-_p(0.55),-HD,WCOL,WOPT); wallSeg(_p(0.55),-HD,HW,-HD,WCOL,WOPT);
   wallSeg(-HW,-HD,-HW, HD,WCOL,WOPT);   wallSeg(HW,-HD,HW,HD,WCOL,WOPT);
@@ -4355,11 +5053,17 @@ function buildHouse(def,rng){
   box(0.10,0.62,YARD.maxZ-YARD.minZ-0.2,'#5b4b34',YARD.minX,0.31,(fy+YARD.maxZ)/2,{tag:'fence'});
   box(0.10,0.62,YARD.maxZ-YARD.minZ-0.2,'#5b4b34',YARD.maxX,0.31,(fy+YARD.maxZ)/2,{tag:'fence'});
   const pathM=new THREE.Mesh(new THREE.PlaneGeometry(_p(1.4),_p(5.4)),
-    new THREE.MeshLambertMaterial({map:tiled(texConcrete(),1,4)}));
+    /* The front path is the one piece of ground the streetlight actually rakes,
+       so aggregate relief is worth more here than anywhere - and it is the surface
+       you have to decide whether to cross. */
+    SHADE.paths
+      ?stdMat({map:tiled(texConcrete(),1,4),normalMap:tiled(nrmConcrete(),1,4),
+               roughness:SH_CONC.r,ns:SH_CONC.ns,emi:SH_CONC.emi})
+      :new THREE.MeshLambertMaterial({map:tiled(texConcrete(),1,4)}));
   pathM.rotation.x=-Math.PI/2;pathM.position.set(OX,0.006,_p(-6.2));
   pathM.receiveShadow=true;scene.add(pathM);envMeshes.push(pathM);
-  box(_p(2.6),0.75,0.7,'#2f4a2c',_p(-3.4),0.375,_p(-4.1),{tag:'hedge'});
-  box(_p(2.6),0.75,0.7,'#2f4a2c',_p( 3.4),0.375,_p(-4.1),{tag:'hedge'});
+  box(_p(2.6),0.75,0.7,"#2f4a2c",_p(-3.4),0.375,_p(-4.1),{tag:"hedge",mat:matTex(texFoliage("#2f4a2c"),3,1)});
+  box(_p(2.6),0.75,0.7,"#2f4a2c",_p( 3.4),0.375,_p(-4.1),{tag:"hedge",mat:matTex(texFoliage("#2f4a2c"),3,1)});
   /* The two by the path, because the path is where the streetlight is and where the
      man with the torch walks. Somewhere to be when he comes round the corner. */
   addHide(_p(-3.4),0.45,_p(-4.1)+0.75,'behind the hedge',
@@ -4465,12 +5169,12 @@ function buildHouse(def,rng){
      — so it sealed the lounge, and with it the bedroom behind it, exactly the fault
      M13 was created to fix. m13-tests caught it on the first run; nothing else did,
      because every other test teleports the player. */
-  box(2.20,0.44,0.90,'#5d5170',3.90,0.22,-0.65,{tag:'sofa'});
-  box(2.20,0.52,0.22,'#655878',3.90,0.48,-1.10,{collide:false,tag:'sofaback'});
+  box(2.20,0.44,0.90,"#5d5170",3.90,0.22,-0.65,{tag:"sofa"});
+  box(2.20,0.52,0.22,"#655878",3.90,0.48,-1.10,{collide:false,tag:"sofaback"});
   addHide(3.90,0.50,-1.45,'behind the sofa',
           'Behind the sofa, breathing carefully. E to come out.');
-  box(0.24,0.46,0.86,'#655878',3.90-1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
-  box(0.24,0.46,0.86,'#655878',3.90+1.10,0.45,-0.63,{collide:false,tag:'sofaarm'});
+  box(0.24,0.46,0.86,"#655878",3.90-1.10,0.45,-0.63,{collide:false,tag:"sofaarm"});
+  box(0.24,0.46,0.86,"#655878",3.90+1.10,0.45,-0.63,{collide:false,tag:"sofaarm"});
   box(1.10,0.42,0.62,'#7a6248',3.90,0.21,0.30,{tag:'coffeetable'});
   /* A television. Three houses have had a remote control on the coffee table since
      M12 and the day screen has offered "Watch television" since M6. */
@@ -4511,9 +5215,9 @@ function buildHouse(def,rng){
   box(1.75,0.32,1.95,'#6d5238',4.03,0.16,BEDZ,{tag:'bedframe'});
   addHide(4.03,0.30,BEDZ-1.25,'under the bed',
           'Under the bed, with the dust and one shoe. E to come out.');
-  box(1.70,0.22,1.90,'#cfd4e2',4.03,0.43,BEDZ,{tag:'mattress'});
+  box(1.70,0.22,1.90,"#cfd4e2",4.03,0.43,BEDZ,{tag:"mattress"});
   box(1.86,0.86,0.09,'#5b4b34',4.03,0.72,ZN-0.06,{collide:false,tag:'headboard'});
-  box(1.72,0.10,0.94,'#4e5a80',4.03,0.58,BEDZ-0.44,{collide:false,tag:'duvet'});
+  box(1.72,0.10,0.94,"#4e5a80",4.03,0.58,BEDZ-0.44,{collide:false,tag:"duvet"});
   [[3.60],[4.46]].forEach(q=>
     box(0.52,0.10,0.26,'#eef1f7',q[0],0.57,ZN-0.34,{collide:false,tag:'pillow'}));
   box(0.44,0.55,0.40,'#6d5238',2.86,0.275,ZN-0.22,{tag:'nightstand'});
@@ -4767,7 +5471,7 @@ function dressInterior(def,P){
   const tidy=keeper.noticeFloor<=16;
   const rug=(w,d,x,z,hue)=>{
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
-      new THREE.MeshLambertMaterial({map:tiled(texPaint(hue,0.30,0.34),2,2)}));
+      new THREE.MeshLambertMaterial({map:texRug(hue)}));
     m.rotation.x=-Math.PI/2;m.position.set(MX(x),0.012,z);m.receiveShadow=true;
     scene.add(m);envMeshes.push(m);return m;
   };
@@ -4789,7 +5493,7 @@ function dressInterior(def,P){
     const d=[axis==='x'?0.04:w,h,axis==='x'?w:0.04];
     box(d[0],d[1],d[2],'#4a382e',x,y,z,{collide:false,cast:false,tag:'frame'});
     const inner=new THREE.Mesh(UNIT_BOX,
-      new THREE.MeshLambertMaterial({map:texPaint(hue,0.34,0.42)}));
+      edgeify(new THREE.MeshLambertMaterial({map:texPaint(hue,0.34,0.42)})));
     inner.scale.set(axis==='x'?0.05:w*0.86,h*0.86,axis==='x'?w*0.86:0.05);
     inner.position.set(MX(x),y,z);scene.add(inner);envMeshes.push(inner);
     scenery(x,y,z,'a picture on the wall',
@@ -4869,7 +5573,7 @@ function dressLot(def,P){
   const YMIN=_p(-9.0);                                   // the fence line
   // ── the driveway, down the east side of the lot, and what is parked on it ──
   const dvx=HW-1.9;
-  ground(3.0,7.4,MX(dvx),-HD-4.2,0.007,texConcrete(),2,4);
+  ground(3.0,7.4,MX(dvx),-HD-4.2,0.007,texConcrete(),2,4,SHADE.paths&&SH_CONC);
   if(dr()<0.75)parkedCar(MX(dvx),-HD-3.6,MIR*Math.PI/2+(dr()-0.5)*0.06,
                          carPaint(dr),dr);
   // ── bins by the gate: lined up, or not ──
@@ -4928,47 +5632,98 @@ const ST={
   paveW:CONST.ST_PAVE_W, farZ:CONST.ST_FAR_Z,
   cx:CONST.CDS_X, cr:CONST.CDS_R, eastX:CONST.ST_EAST_X,
 };
+/* Road. Aggregate at three sizes, a wet-patch mottle and the odd pothole repair,
+   because a cul-de-sac under a sodium lamp is the one surface the light actually
+   grazes and it was 1400 single pixels on a flat #2e2f35. */
 function texAsphalt(){
   return canvasTex(128,128,'asphalt',(x,W,H)=>{
+    const sd=_seed('asphalt'),r=_rnd(sd);
     x.fillStyle='#2e2f35';x.fillRect(0,0,W,H);
-    for(let i=0;i<1400;i++){
-      const v=(i%7)*4;
-      x.fillStyle='rgba('+(60+v)+','+(62+v)+','+(70+v)+',.5)';
-      x.fillRect((i*37)%W,(i*79)%H,1,1);
+    mottle(x,W,H,4 ,0.82,1.00,sd   ,0.70);
+    mottle(x,W,H,12,0.90,1.00,sd+9 ,0.55);
+    for(let i=0;i<1600;i++){                       // fine grit, lit from above
+      const px=r()*W,py=r()*H,v=Math.floor(56+r()*46);
+      x.fillStyle='rgba('+v+','+(v+2)+','+(v+9)+',.55)';
+      x.fillRect(px,py,1,1);
     }
-    for(let i=0;i<70;i++){x.fillStyle='rgba(20,20,24,.5)';x.fillRect((i*53)%W,(i*29)%H,3,2);}
+    for(let i=0;i<200;i++){                        // coarse aggregate
+      const px=r()*W,py=r()*H,s=1+r()*2.2;
+      x.fillStyle='rgba(126,130,142,.28)';x.fillRect(px,py,s,s*0.8);
+      x.fillStyle='rgba(14,14,18,.45)';x.fillRect(px,py+s*0.8,s,1);   // its own shadow
+    }
+    for(let i=0;i<10;i++) smudge(x,W,H,r()*W,r()*H,7+r()*12,0.16,4);  // old repairs
   });
 }
+/* Roof. Per-tab value jitter, a real shadow under every course and granules on the
+   felt. Roofs are half the silhouette of this street from the pavement. */
 function texShingle(hue){
   return canvasTex(128,128,'shingle|'+hue,(x,W,H)=>{
-    const rows=8,rh=H/rows;
+    const sd=_seed('shingle'+hue),r=_rnd(sd),rows=8,rh=H/rows;
+    x.fillStyle=hslCss(hue,0.16,0.17);x.fillRect(0,0,W,H);
     for(let i=0;i<rows;i++){
-      x.fillStyle=hslCss(hue,0.16,0.20+((i*29)%9)/120);
-      x.fillRect(0,i*rh,W,rh);
-      x.strokeStyle='rgba(0,0,0,.42)';x.lineWidth=2;
-      x.beginPath();x.moveTo(0,i*rh+rh-1);x.lineTo(W,i*rh+rh-1);x.stroke();
-      for(let t=0;t<6;t++){
-        const tx=((i%2)?0:W/12)+t*(W/6);
-        x.beginPath();x.moveTo(tx,i*rh);x.lineTo(tx,i*rh+rh);x.stroke();
+      const off=(i%2)?0:W/12;
+      for(let t=0;t<6;t++){                        // each tab its own weathering
+        const tx=off+t*(W/6);
+        x.fillStyle=hslCss(hue+(r()-0.5)*8,0.14+r()*0.06,0.19+r()*0.075);
+        x.fillRect(tx,i*rh,W/6,rh);
+        x.fillStyle='rgba(0,0,0,.30)';x.fillRect(tx,i*rh,1.5,rh);   // the keyway
       }
+      x.fillStyle='rgba(0,0,0,.50)';x.fillRect(0,i*rh+rh-2,W,2);    // course shadow
+      x.fillStyle='rgba(255,246,228,.055)';x.fillRect(0,i*rh+rh,W,1);
     }
+    grain(x,W,H,1300,sd+4,'rgba(0,0,0,.10)','rgba(226,214,190,.07)'); // granules
+    mottle(x,W,H,6,0.86,1.00,sd+8,0.60);
+    for(let i=0;i<6;i++) smudge(x,W,H,r()*W,r()*H,6+r()*10,0.14,4);
   });
 }
+/* Weatherboard. THE biggest field of colour in the game — the whole front of a
+   house — and it was ten flat bands with a 1px rule between them. Each lap now
+   throws a shadow onto the board below it and catches light on its own top edge,
+   which is the only thing that makes lapped siding read as lapped rather than as
+   a striped rectangle. Boards drift in value along their length and the butt
+   joints fall in different places on each course. */
 function texSiding(hue,light){
   return canvasTex(128,128,'siding|'+hue+'|'+light,(x,W,H)=>{
-    for(let i=0;i<10;i++){
-      x.fillStyle=hslCss(hue,0.13,light+((i*31)%7)/260);
-      x.fillRect(0,i*(H/10),W,H/10);
-      x.strokeStyle='rgba(0,0,0,.22)';x.lineWidth=1;
-      x.beginPath();x.moveTo(0,(i+1)*(H/10)-0.5);x.lineTo(W,(i+1)*(H/10)-0.5);x.stroke();
+    const sd=_seed('siding'+hue+'|'+light),r=_rnd(sd),rows=10,rh=H/rows;
+    for(let i=0;i<rows;i++){
+      const y0=i*rh,base=light+(r()-0.5)*0.030;
+      x.fillStyle=hslCss(hue,0.13,base);
+      x.fillRect(0,y0,W,rh);
+      /* value drift ALONG the board — six panels of it, so no two boards of the
+         same house are the same colour end to end */
+      for(let p=0;p<6;p++){
+        x.fillStyle=hslCss(hue+(r()-0.5)*5,0.13,base+(r()-0.5)*0.022);
+        x.fillRect(p*W/6,y0+1,W/6,rh-2);
+      }
+      /* the lap: the board below is in this board's shadow at its top, and this
+         board's own bottom lip catches the sky */
+      x.fillStyle='rgba(0,0,0,.34)';x.fillRect(0,y0,W,1.6);
+      x.fillStyle='rgba(0,0,0,.16)';x.fillRect(0,y0+1.6,W,1.6);
+      x.fillStyle='rgba(255,250,236,.10)';x.fillRect(0,y0+rh-1.4,W,1.4);
+      if(r()<0.7){                                   // a butt joint, staggered
+        const jx=r()*W;
+        x.fillStyle='rgba(0,0,0,.26)';x.fillRect(jx,y0+1.5,1.5,rh-2.5);
+        x.fillStyle='rgba(255,250,236,.07)';x.fillRect(jx+1.5,y0+1.5,1,rh-2.5);
+      }
+      for(let g=0;g<5;g++){                          // sawn grain
+        const gy=y0+2.5+r()*(rh-4);
+        x.fillStyle='rgba(0,0,0,'+(0.020+r()*0.030).toFixed(3)+')';
+        x.fillRect(0,gy,W,1);
+      }
     }
+    mottle(x,W,H,5 ,0.92,1.00,sd   ,0.50);           // weathering
+    mottle(x,W,H,15,0.95,1.00,sd+6 ,0.40);
+    grain(x,W,H,700,sd+12,'rgba(0,0,0,.045)','rgba(255,252,242,.040)');
   });
 }
 /* A plane on the ground. Every outdoor surface is one of these — authored in world
    coordinates, never through box(), so it costs one draw call and no collider. */
-function ground(w,d,x,z,y,tex,rx,ry){
+function ground(w,d,x,z,y,tex,rx,ry,sh){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
-    new THREE.MeshLambertMaterial({map:tiled(tex,rx,ry)}));
+    sh
+      ?stdMat({map:tiled(tex,rx,ry),normalMap:tiled(sh.n(),rx,ry),
+               roughness:sh.r,ns:sh.ns,emi:sh.emi})
+      :new THREE.MeshLambertMaterial({map:tiled(tex,rx,ry)}));
   m.rotation.x=-Math.PI/2;m.position.set(x,y,z);
   m.receiveShadow=true;scene.add(m);envMeshes.push(m);return m;
 }
@@ -4977,7 +5732,7 @@ function ground(w,d,x,z,y,tex,rx,ry){
    is an XZ AABB, which cannot express a yaw — so rotated things get their visual
    from a group and ONE bounding collider from rotAABB() below. */
 function gbox(g,w,h,d,hex,x,y,z,tex){
-  const m=new THREE.Mesh(UNIT_BOX,tex?new THREE.MeshLambertMaterial({map:tex}):mat(hex));
+  const m=new THREE.Mesh(UNIT_BOX,tex?edgeify(new THREE.MeshLambertMaterial({map:tex})):matE(hex));
   m.scale.set(w,h,d);m.position.set(x,y,z);
   m.castShadow=true;m.receiveShadow=true;g.add(m);return m;
 }
@@ -5105,8 +5860,13 @@ function wireSpan(x1,x2,z,y,sag){
 function facade(x,z,yaw,w,d,pal,rng){
   const g=new THREE.Group(),H=2.75+rng()*0.5;
   const wallT=texSiding(pal.hue,pal.light),roofT=texShingle(pal.roof);
-  gbox(g,w,H,d,null,0,H/2,0,tiled(wallT,Math.round(w/1.6),2));
-  const rf=gbox(g,w+0.5,0.26,d+0.5,null,0,H+0.13,0,tiled(roofT,Math.round(w/1.4),2));
+  /* The far side of the street is a large share of the frame from any front garden
+     and it is all one texture, so lap shadows on the siding are cheap variety. */
+  const wrx=Math.round(w/1.6),rrx=Math.round(w/1.4);
+  gbox(g,w,H,d,null,0,H/2,0,tiled(wallT,wrx,2),
+       SHADE.exterior&&{n:tiled(nrmSiding(),wrx,2),r:0.88,ns:0.70,emi:0.30});
+  const rf=gbox(g,w+0.5,0.26,d+0.5,null,0,H+0.13,0,tiled(roofT,rrx,2),
+       SHADE.exterior&&{n:tiled(nrmShingle(),rrx,2),r:0.92,ns:0.90,emi:0.25});
   gbox(g,w*0.62,0.70,d*0.34,null,0,H+0.46,0,tiled(roofT,4,1));    // ridge
   gbox(g,0.44,1.00,0.44,'#514038',w*0.28,H+0.72,d*0.10);          // chimney
   gbox(g,1.02,2.06,0.10,pal.door,-w*0.16,1.03,d/2+0.02);          // front door
@@ -5162,7 +5922,7 @@ function buildFarSide(rng){
     const fz=ST.farZ+0.1;
     box(w+1.4,0.44,0.16,'#8a8478',x,0.22,fz+1.55,{tag:'lowwall'});
     ground(1.3,2.0,x-w*0.16,fz+0.9,0.007,texConcrete(),1,2);
-    if(rng()<0.6)box(2.6,0.80,0.66,'#2f4a2c',x+w*0.30,0.40,fz+1.20,{tag:'hedge'});
+    if(rng()<0.6)box(2.6,0.80,0.66,"#2f4a2c",x+w*0.30,0.40,fz+1.20,{tag:"hedge",mat:matTex(texFoliage("#2f4a2c"),3,1)});
     wheelieBin(x-w*0.44,fz+1.05,rng()*360,0.4);
     if(rng()<0.55){
       ground(2.8,3.4,x+w*0.32,fz+1.7,0.008,texConcrete(),2,2);     // driveway
@@ -5200,7 +5960,7 @@ function buildHead(rng){
 function buildRoadway(){
   const w=ST.eastX-(ST.cx-ST.cr-2);
   const cxm=(ST.eastX+(ST.cx-ST.cr-2))/2;
-  ground(w,ST.roadW,cxm,ST.roadZ,0.004,texAsphalt(),Math.round(w/6),1);
+  ground(w,ST.roadW,cxm,ST.roadZ,0.004,texAsphalt(),Math.round(w/6),1,SHADE.exterior&&SH_ASPH);
   // the turning circle: one disc, one kerb ring
   const circ=new THREE.Mesh(new THREE.CircleGeometry(ST.cr,26),
     new THREE.MeshLambertMaterial({map:tiled(texAsphalt(),6,6)}));
@@ -5215,7 +5975,7 @@ function buildRoadway(){
   [[ST.kerbN,1],[ST.kerbS,-1]].forEach(k=>{
     const z=k[0],s=k[1];
     box(w,0.13,0.18,'#a6a08f',cxm,0.065,z,{tag:'kerb'});
-    ground(w,ST.paveW,cxm,z+s*ST.paveW/2,0.006,texConcrete(),Math.round(w/2.2),1);
+    ground(w,ST.paveW,cxm,z+s*ST.paveW/2,0.006,texConcrete(),Math.round(w/2.2),1,SHADE.exterior&&SH_CONC);
   });
   // storm drains, and the joint lines that make a road read as laid rather than painted
   for(let x=ST.cx+ST.cr+8;x<ST.eastX;x+=17.4){
@@ -5421,7 +6181,7 @@ function buildStreet(seed){
   carReset(seed===undefined?7:seed);
   // the ground everything else sits on. Before M17 there was no ground mesh at all
   // between two lots, or behind any of them: 31m of the street was void.
-  ground(230,120,0,-14,0,texGrass(),52,26);
+  ground(230,120,0,-14,0,texGrass(),52,26,SHADE.exterior&&SH_GRASS);
   buildRoadway();
   HOUSES.forEach(h=>buildHouse(h,rng));
   buildFarSide(rng);
@@ -5496,6 +6256,10 @@ function bed(resId,x,z){
 }
 /* A sleeping body: torso under a duvet, head on the pillow. The torso pivots up
    when they stir, so "sat up in the dark listening" is one rotation, not an anim. */
+/* Seven sleepers used to share one duvet colour, so seven bedrooms photographed as
+   the same bedroom. Seeded off the id on its OWN stream, so personLook's draw — and
+   therefore everybody's face and wardrobe — is bit-for-bit what it was. */
+const BEDDING=['#8c93b4','#9aa08c','#b0a2a6','#8f9aa8','#a8a08e','#94a3ad','#a0968c'];
 function makeSleeper(resId){
   /* M17 — the body now lies with its HEAD AT +Z, which does two things at once.
      The bed's head end moved to the north wall (there is a headboard there now, and
@@ -5507,23 +6271,50 @@ function makeSleeper(resId){
      Head at +z makes the existing angles raise it, which is what "sat up in the
      dark listening" was always supposed to look like. */
   const look=personLook(resId||'sleeper');
+  const rb=mulberry32((hashStr('bed|'+(resId||'sleeper'))>>>0)||7);
+  const duv=BEDDING[Math.floor(rb()*BEDDING.length)];
   const g=new THREE.Group();
   const torso=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.26,0.95),mat('#8c93b4'));
-  body.position.set(0,0.13,0.32);body.castShadow=true;torso.add(body);
+  /* M58/E. THE SLEEPER WAS A SLAB, A LID AND A CONE — a crate with a face on the
+     end of it, and you stand over one of these for most of every night. What says
+     "there is a person under this duvet" is the SHOULDER RIDGE and the line of an
+     arm, and each of them is one mesh. The duvet mounds now (narrower on top than
+     at the mattress) instead of being a rectangular block, so the light actually
+     rolls across it. */
+  const chest=new THREE.Mesh(taperBox(0.44,0.54,0.25,0.60,0.66),bodyMat(duv,false));
+  chest.position.set(0,0.125,0.42);chest.castShadow=true;torso.add(chest);
+  const shoulder=new THREE.Mesh(taperBox(0.46,0.56,0.11,0.20,0.26),
+    bodyMat(shadeHex(duv,0.06),false));
+  shoulder.position.set(0,0.235,0.66);shoulder.castShadow=true;torso.add(shoulder);
+  /* One forearm, lying along the body under the covers. It is the fold that stops
+     the duvet reading as a lid. */
+  const arm=new THREE.Mesh(taperBox(0.095,0.115,0.075,0.42,0.46),
+    bodyMat(shadeHex(duv,-0.13),false));
+  arm.position.set(0.155,0.225,0.40);torso.add(arm);
   /* M22: the same head, hair and skin they wear in the afternoon. You spend the
      whole night standing over these people; before this they were a beige sphere. */
-  const head=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.24,0.21),mat(look.skin));
-  head.position.set(0,0.16,0.86);head.castShadow=true;torso.add(head);
+  const head=new THREE.Mesh(taperBox(0.20,0.175,0.24,0.215,0.19),bodyMat(look.skin,true));
+  head.position.set(0,0.16,0.86);torso.add(head);
   if(look.style!=='bald'){
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.21,0.09,0.22),mat(look.hair));
-    cap.position.set(0,0.26,0.87);torso.add(cap);
+    const hm=bodyMat(look.hair,false);
+    const cap=new THREE.Mesh(taperBox(0.185,0.215,0.10,0.20,0.235),hm);
+    cap.position.set(0,0.255,0.865);torso.add(cap);
+    /* Hair spreads on a pillow. It is also the only thing that tells you which way
+       up a head is when you are looking down at it from two metres. */
+    const spread=new THREE.Mesh(taperBox(0.26,0.30,0.055,0.24,0.27),hm);
+    spread.position.set(0,0.055,0.90);torso.add(spread);
   }
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.06,7),mat(look.skin));
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.06,7),bodyMat(look.skin,true));
   nose.rotation.x=-Math.PI/2;nose.position.set(0,0.17,0.97);torso.add(nose);
   torso.position.set(0,0,0);g.add(torso);
-  const legs=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.20,0.95),mat(look.legs));
+  const legs=new THREE.Mesh(taperBox(0.36,0.46,0.20,0.92,0.98),bodyMat(duv,false));
   legs.position.set(0,0.10,-0.42);legs.castShadow=true;g.add(legs);
+  /* Two feet tenting the bottom of the duvet. Free, and it is the detail that makes
+     a bed look occupied from the doorway rather than made. */
+  [-1,1].forEach(function(sx){
+    const f=new THREE.Mesh(taperBox(0.11,0.14,0.13,0.16,0.20),bodyMat(shadeHex(duv,0.04),false));
+    f.position.set(sx*0.095,0.145,-0.80);g.add(f);
+  });
   g.userData.torso=torso;g.userData.head=head;
   return g;
 }
@@ -5691,7 +6482,10 @@ const STEVE_LOOK={
   h:1.02,build:1.04,
   skin:'#d9b189',hair:'#241d16',style:'crop',
   top:'#2c3340',legs:'#23212b',shoe:'#1b1a22',
-  belly:false
+  belly:false,
+  /* He stands up straight, plants square and keeps his arms in - the one body in
+     this game whose posture is a choice rather than a draw. */
+  stoop:0.03,stance:1.0,hang:0.035,nape:1.15,sleeve:'long',hat:false
 };
 function personLook(id){
   const r=mulberry32((hashStr('look|'+id)>>>0)||3);
@@ -5702,87 +6496,352 @@ function personLook(id){
     skin:pick(SKIN),hair:pick(HAIR),
     style:['crop','part','bun','bald','long'][Math.floor(r()*5)],
     top:pick(TOPS),legs:pick(LEGS),shoe:pick(SHOE),
-    belly:r()<0.35
+    belly:r()<0.35,
+    /* M58/E. POSTURE IS A SILHOUETTE, and the afternoon has a crowd in it. A crowd
+       of identical rectangles is worse than one rectangle, and the cheapest thing
+       that separates two people at thirty pixels is not their shirt - it is how far
+       forward they carry their head, how wide they plant their feet and how far
+       their arms hang off their ribs. All three are free. */
+    stoop:r()*0.17,            // how far forward they carry the head
+    stance:0.90+r()*0.34,      // how wide they stand
+    hang:0.015+r()*0.055,      // how far the arms hang off the ribs
+    nape:0.70+r()*0.80,        // how far the hair comes down the neck
+    /* A long sleeve and a bare forearm are two different silhouettes at the elbow,
+       and a cap is a third head. Both are one draw of the same stream, appended at
+       the END so every earlier draw - face, wardrobe, height - is bit-for-bit the
+       one this street has had since M22. */
+    sleeve:r()<0.45?'long':'short',
+    hat:r()<0.22
   };
 }
+/* ══════════════ M58/E — SKIN AND CLOTH ARE NOT THE SAME AS A WALL ═════════════
+   Every surface in this game is a MeshLambertMaterial: one diffuse term, computed
+   per-vertex, with no view dependence at all. On a box that means each face is ONE
+   value edge to edge, and a person is a stack of solid rectangles. Measured on the
+   baseline frames, that is exactly what goes wrong: in docs/zl-E-base-hall12.png the
+   player is a single black rectangle with no arms, no shoulder and no legs in it,
+   and in docs/zl-E-base-daylight.png the two neighbours are paper cut-outs.
+
+   Two terms fix it and they cost NOTHING measurable: they are injected into the
+   stock Lambert program with onBeforeCompile, so there is no extra draw call, no
+   extra mesh, and exactly one extra shader program in the whole build.
+
+     HEMISPHERIC FILL — sky colour from above, bounce colour from below, MULTIPLIED
+       BY THE SURFACE'S OWN ALBEDO. An upward-facing plane (the top of a shoulder,
+       the crown of the head, the top of a shoe) lifts; a downward one (under the
+       jaw, the underside of a sleeve, the sole shadow) sinks. That is FORM on a
+       flat box. Because it is multiplied by albedo, M48's near-black jacket stays a
+       near-black jacket — it just stops being a hole in the picture.
+
+     FRESNEL RIM — on a box this is not a soft glow. It is a sliver on precisely the
+       faces that are nearly edge-on to the camera, which are precisely the faces at
+       the silhouette. It draws a light edge around a body, so a person standing in
+       an unlit corridor still separates from the wall behind them. This is the
+       answer to "M48 made him dark, does he now just disappear?" He is still dark.
+       He now has an outline.
+   Applied to PEOPLE ONLY. The environment keeps its plain Lambert, so this cannot
+   fight whatever the lighting and material passes are doing to the world. */
+const BODY_U={
+  uBRim :{value:new THREE.Color('#8fb0d8')},
+  uBRimI:{value:0.34},
+  uBRimP:{value:4.4},
+  uBSky :{value:new THREE.Color('#5d7b9c')},
+  uBGnd :{value:new THREE.Color('#33220f')},
+  uBFill:{value:0.19}
+};
+/* BOTH TERMS ARE COMPUTED PER VERTEX, and the reason is measured, not stylistic.
+   The first version did the fresnel and the hemisphere per FRAGMENT - three
+   normalizes, a pow and a mix on every body pixel - and tools/zl-E-gpu.js priced a
+   frame at 33.5 ms against a 15.5 ms baseline, WITH SHADOWS OFF. On a real GPU that
+   is nothing; in WARP, which is what the 57 suites and every screenshot run through,
+   it is the difference between 65 fps and 30. Lambert already lights per vertex, so
+   doing this per vertex too is consistent with the material it is bolted to, looks
+   the same on a low-poly body (a box face has four corners and no curvature to lose)
+   and leaves ONE multiply-add per fragment. */
+const BODY_VARY='varying vec3 vBFillK;varying vec3 vBRimC;\n';
+const BODY_UNI ='uniform vec3 uBRim;uniform float uBRimI;uniform float uBRimP;\n'+
+                'uniform vec3 uBSky;uniform vec3 uBGnd;uniform float uBFill;\n'+
+                'uniform float uBSkin;\n';
+const BODY_VERT=[
+'{',
+'  vec3 wn=normalize(mat3(modelMatrix)*objectNormal);',
+'  /* hemispheric fill: sky from above, bounce from below. Multiplied by the',
+'     surface albedo in the fragment stage, so a dark jacket stays dark. */',
+'  vBFillK=mix(uBGnd,uBSky,0.5+0.5*wn.y)*uBFill*(1.0+uBSkin*0.55);',
+'  /* fresnel: on a flat-faced body this lights the faces that are nearly edge-on,',
+'     which are exactly the faces at the silhouette. */',
+'  float fres=1.0-abs(dot(normalize(transformedNormal),normalize(-mvPosition.xyz)));',
+'  fres=clamp(fres,0.0,1.0);',
+'  fres=pow(fres,uBRimP);',
+'  /* ...killed on downward faces so the undersides of arms do not glow */',
+'  fres*=0.30+0.70*clamp(wn.y*0.65+0.72,0.0,1.0);',
+'  vBRimC=uBRim*(fres*uBRimI*(1.0+uBSkin*0.30));',
+'}'].join('\n');
+const BODY_FRAG='gl_FragColor.rgb+=diffuseColor.rgb*vBFillK+vBRimC;';
+function bodyFx(m,skin){
+  const su={value:skin?1:0};
+  m.onBeforeCompile=function(sh){
+    sh.uniforms.uBRim=BODY_U.uBRim;   sh.uniforms.uBRimI=BODY_U.uBRimI;
+    sh.uniforms.uBRimP=BODY_U.uBRimP; sh.uniforms.uBSky =BODY_U.uBSky;
+    sh.uniforms.uBGnd =BODY_U.uBGnd;  sh.uniforms.uBFill=BODY_U.uBFill;
+    sh.uniforms.uBSkin=su;
+    /* r128 chunk names. objectNormal and transformedNormal are both live after
+       defaultnormal_vertex; mvPosition is declared by project_vertex and is still
+       in scope at fog_vertex, which is the last include in main(). */
+    sh.vertexShader=sh.vertexShader
+      .replace('#include <common>','#include <common>\n'+BODY_VARY+BODY_UNI)
+      .replace('#include <fog_vertex>','#include <fog_vertex>\n'+BODY_VERT);
+    sh.fragmentShader=sh.fragmentShader
+      .replace('#include <common>','#include <common>\n'+BODY_VARY)
+      .replace('#include <tonemapping_fragment>',
+               BODY_FRAG+'\n#include <tonemapping_fragment>');
+  };
+  /* One key for every body material: the injected source is identical and the
+     skin/cloth difference rides a uniform, so the whole cast shares one program. */
+  m.customProgramCacheKey=function(){return 'sdbody';};
+  return m;
+}
+const _bodyMatCache=new Map();
+function bodyMat(hex,skin){
+  const k=hex+(skin?'|s':'|c');
+  let m=_bodyMatCache.get(k);
+  if(!m){m=bodyFx(new THREE.MeshLambertMaterial({color:grade(hex)}),!!skin);
+         _bodyMatCache.set(k,m);}
+  return m;
+}
+/* Lighten (k>0) or darken (k<0) a hex by a fraction. A sleeve one value step below
+   the shirt it is attached to is the cheapest silhouette in the file. */
+function shadeHex(hex,k){
+  const c=new THREE.Color(hex);
+  if(k>=0){c.r+=(1-c.r)*k;c.g+=(1-c.g)*k;c.b+=(1-c.b)*k;}
+  else{const s=1+k;c.r*=s;c.g*=s;c.b*=s;}
+  return '#'+c.getHexString();
+}
+/* Day and night want different edges. At 3am the rim is the sky's cold spill and it
+   is doing real work; at three in the afternoon it is a whisper that keeps a person
+   off the lawn behind them. */
+function setBodyLight(mode){
+  if(mode==='day'){
+    BODY_U.uBRim.value.set('#d4e4f8'); BODY_U.uBRimI.value=0.10;
+    BODY_U.uBSky.value.set('#9fbcdc'); BODY_U.uBGnd.value.set('#5a5340');
+    BODY_U.uBFill.value=0.16; BODY_U.uBRimP.value=4.8;
+  }else if(mode==='evening'){
+    BODY_U.uBRim.value.set('#9ab2d6'); BODY_U.uBRimI.value=0.14;
+    BODY_U.uBSky.value.set('#6e7c96'); BODY_U.uBGnd.value.set('#3a2c1e');
+    BODY_U.uBFill.value=0.19; BODY_U.uBRimP.value=4.6;
+  }else{
+    BODY_U.uBRim.value.set('#8fb0d8'); BODY_U.uBRimI.value=0.17;
+    BODY_U.uBSky.value.set('#5d7b9c'); BODY_U.uBGnd.value.set('#33220f');
+    BODY_U.uBFill.value=0.19; BODY_U.uBRimP.value=4.4;
+  }
+}
+/* A TAPERED BOX. BoxGeometry cannot narrow at one end, and "narrows at one end" is
+   most of what a shoulder, a jaw, a thigh and a shin actually are — the whole reason
+   the old bodies read as stacked crates. A four-sided cylinder turned 45 degrees is
+   a box with two different widths for the same eight corners; toNonIndexed keeps the
+   faces flat so it still shades like a box and not like a barrel. */
+const _taperCache=new Map();
+function taperBox(wTop,wBot,h,dTop,dBot){
+  const key=[wTop,wBot,h,dTop,dBot].map(function(v){return v.toFixed(4);}).join(',');
+  let g=_taperCache.get(key);
+  if(g)return g;
+  g=new THREE.CylinderGeometry(0.70711,0.70711,1,4,1);
+  g.rotateY(Math.PI/4);                     // corners -> axis-aligned faces, +-0.5
+  g=g.toNonIndexed();
+  const a=g.attributes.position.array;
+  for(let i=0;i<a.length;i+=3){
+    const top=a[i+1]>0;
+    a[i  ]*=top?wTop:wBot;
+    a[i+1]*=h;
+    a[i+2]*=top?dTop:dBot;
+  }
+  g.attributes.position.needsUpdate=true;
+  g.computeVertexNormals();
+  _taperCache.set(key,g);
+  return g;
+}
+
 /* Returns {group, parts} — parts carries the SAME names animBody has driven since
-   M1 (legL/legR/armL/armR/torso/head/nose), so the walk cycle is untouched. */
+   M1 (legL/legR/armL/armR/torso/head/nose), so the walk cycle is untouched.
+
+   M58/E — WHAT ACTUALLY READS AT THIRTY PIXELS.
+   A neighbour's head is 36x28 pixels at the framing this game uses, so facial detail
+   is not the answer; SILHOUETTE and VALUE are. Four things were costing the read,
+   measured off the baseline frames:
+
+     1. THE BACK OF THE HEAD WAS BARE SKIN. You look at Steve from behind for the
+        entire game, and in zl-E-base-hall12.png the brightest object in a dark frame
+        is his occiput: a tan box with a lid on it. Hair wraps the skull now.
+     2. THE ARMS WERE THE SAME COLOUR AS THE TORSO, so the upper body was one
+        rectangle at any distance. Sleeves are a value step darker and the arms hang
+        off the ribs instead of being welded to them.
+     3. THE SHOULDER WAS A SQUARE CORNER. The neck-to-shoulder slope is the most
+        recognisable line on a human being and this body did not have one; there is a
+        trapezius yoke and a deltoid now, and both are tapered.
+     4. THE COLLAR WAS SKIN-COLOURED, which sat the head on a bright tan plinth. It
+        is cloth. And the head is a GROUP, so folkTick's nod takes the nose, the eyes
+        and the hair with it instead of leaving the face hanging in the air. */
 function makePerson(look){
   look=look||personLook('nobody');
   const H=CONST.CH_H*look.h,g=new THREE.Group();
   const legH=H*0.47,torsoH=H*0.30,neckH=H*0.035,headR=H*0.074;
   const sw=0.20*look.build;                       // half shoulder width
-  const M=c=>mat(c);
+  const stance=look.stance===undefined?1:look.stance;
+  const hang  =look.hang  ===undefined?0.06:look.hang;
+  const nape  =look.nape  ===undefined?1:look.nape;
+  const M =c=>bodyMat(c,false);
+  const SK=c=>bodyMat(c,true);
+  const cloth =look.top,
+        sleeve=shadeHex(look.top,-0.34),
+        yokeC =shadeHex(look.top,-0.06),
+        deltC =shadeHex(shadeHex(look.top,-0.22), 0.06),
+        sole  =shadeHex(look.shoe,0.18);
+  const wWaist=sw*1.70*(look.belly?1.16:1.0), dWaist=look.belly?0.275:0.225;
   /* Legs and arms hinge from their TOP, which is what makes the swing read as a
      hinge rather than a slide (inherited from the M1 blockout). */
   const mkLeg=sx=>{
     const l=new THREE.Group();
-    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.145,legH*0.55,0.17),M(look.legs));
-    thigh.position.y=-legH*0.275;l.add(thigh);
+    const thigh=new THREE.Mesh(taperBox(0.152,0.128,legH*0.55,0.182,0.152),M(look.legs));
+    thigh.userData.bulk=1;thigh.position.y=-legH*0.275;l.add(thigh);
     /* The shin stops ABOVE the sole. At 0.48/-0.79 its bottom sat at -1.03*legH,
        i.e. 2.5cm below the shoe, and the player walked around with their feet
        through the floor - caught by m1's feet-at-y=0 assertion, which has been
        guarding that since the first milestone. */
-    const shin=new THREE.Mesh(new THREE.BoxGeometry(0.125,legH*0.38,0.15),M(look.legs));
-    shin.position.y=-legH*0.74;l.add(shin);
-    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.07,0.26),M(look.shoe));
-    foot.position.set(0,-legH+0.035,0.045);l.add(foot);
-    l.position.set(sx*0.115,legH,0);g.add(l);
+    const shin=new THREE.Mesh(taperBox(0.124,0.100,legH*0.38,0.150,0.126),M(look.legs));
+    shin.userData.bulk=1;shin.position.y=-legH*0.74;l.add(shin);
+    /* A SHOE IS LONGER THAN THE LEG IS WIDE, and it has a sole a value above the
+       upper. Both are silhouette: at the bottom of a thirty-pixel figure the only
+       thing that says "standing on the floor" rather than "floating above it" is a
+       foot that sticks out in front of the shin and catches the ground bounce. */
+    const up=new THREE.Mesh(taperBox(0.120,0.132,0.064,0.240,0.268),M(look.shoe));
+    up.position.set(0,-legH+0.064,0.038);l.add(up);
+    const so=new THREE.Mesh(new THREE.BoxGeometry(0.142,0.032,0.298),M(sole));
+    so.userData.bulk=1;so.position.set(0,-legH+0.016,0.046);l.add(so);
+    l.position.set(sx*0.115*stance,legH,0);g.add(l);
     return l;
   };
   const legL=mkLeg(-1),legR=mkLeg(1);
   const torso=new THREE.Group();torso.position.y=legH;g.add(torso);
-  const chest=new THREE.Mesh(new THREE.BoxGeometry(sw*2,torsoH*0.62,0.24),M(look.top));
-  chest.position.y=torsoH*0.68;torso.add(chest);
-  const waist=new THREE.Mesh(new THREE.BoxGeometry(sw*2*(look.belly?1.06:0.9),
-    torsoH*0.42,look.belly?0.27:0.22),M(look.top));
-  waist.position.y=torsoH*0.24;torso.add(waist);
-  const collar=new THREE.Mesh(new THREE.BoxGeometry(sw*1.5,0.045,0.25),M(look.skin));
-  collar.position.y=torsoH+0.01;torso.add(collar);
-  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.048,0.054,neckH,8),M(look.skin));
-  neck.position.y=torsoH+neckH*0.5;torso.add(neck);
-  /* The head is a slightly squashed box rather than a sphere: a sphere reads as a
-     ball on a stick at any distance, and the flat planes catch the key light. */
-  const head=new THREE.Mesh(new THREE.BoxGeometry(headR*1.7,headR*2.05,headR*1.8),
-    M(look.skin));
-  head.position.y=torsoH+neckH+headR;torso.add(head);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*0.20,headR*0.5,7),M(look.skin));
+  /* THE SPINE CARRIES THE POSTURE, and it has to be its own group: torso.rotation.x
+     is DRIVEN every frame — animBody leans the player with it, folkTick stoops a
+     fretting neighbour with it — so a per-person slouch baked into the torso is
+     erased on the next tick. A stooped man and an upright one read as two different
+     people from across a street. Two identical rectangles do not, and the afternoon
+     has a crowd in it. */
+  const spine=new THREE.Group();
+  spine.position.y=torsoH*0.38;spine.rotation.x=look.stoop||0;torso.add(spine);
+
+  const waist=new THREE.Mesh(taperBox(wWaist,sw*1.62,torsoH*0.42,dWaist,dWaist*0.90),
+    M(cloth));
+  waist.userData.bulk=1;waist.position.y=torsoH*0.21;torso.add(waist);
+  const chest=new THREE.Mesh(taperBox(sw*2.06,wWaist,torsoH*0.44,0.250,dWaist),M(cloth));
+  chest.userData.bulk=1;chest.position.y=torsoH*0.26;spine.add(chest);
+  /* THE TRAPEZIUS. The line from the ear down to the point of the shoulder, which
+     the old torso replaced with a right angle and a neck coming out of the middle
+     of a flat lid. */
+  const yoke=new THREE.Mesh(taperBox(sw*1.32,sw*2.06,torsoH*0.16,0.206,0.250),M(yokeC));
+  yoke.userData.bulk=1;yoke.position.y=torsoH*0.56;spine.add(yoke);
+  const collar=new THREE.Mesh(new THREE.BoxGeometry(sw*1.36,0.05,0.215),
+    M(shadeHex(cloth,0.13)));
+  collar.position.y=torsoH*0.638;spine.add(collar);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.046,0.055,neckH,6),SK(look.skin));
+  neck.position.y=torsoH*0.64+neckH*0.5;spine.add(neck);
+
+  /* THE HEAD IS A GROUP, pivoting at the top of the neck. folkTick nods P.head, and
+     while the head was a bare Mesh that nod moved the skull and left the nose, both
+     eyes and the hair floating where they were. */
+  const head=new THREE.Group();
+  head.position.set(0,torsoH*0.64+neckH,(look.stoop||0)*0.13);
+  spine.add(head);
+  /* A jaw is narrower than a cranium. One tapered box and the head stops being a
+     die with a face painted on it. */
+  const skull=new THREE.Mesh(taperBox(headR*1.72,headR*1.46,headR*2.05,
+                                      headR*1.84,headR*1.62),SK(look.skin));
+  skull.userData.bulk=1;skull.position.y=headR;head.add(skull);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(headR*0.20,headR*0.5,7),SK(look.skin));
   nose.rotation.x=Math.PI/2;
-  nose.position.set(0,head.position.y-headR*0.05,headR*0.92);torso.add(nose);
+  nose.position.set(0,headR*0.95,headR*0.86);head.add(nose);
   [-1,1].forEach(sx=>{
     const eye=new THREE.Mesh(new THREE.BoxGeometry(headR*0.20,headR*0.16,0.02),
       mat('#241f1a'));
-    eye.position.set(sx*headR*0.36,head.position.y+headR*0.20,headR*0.90);torso.add(eye);
+    eye.position.set(sx*headR*0.36,headR*1.20,headR*0.84);head.add(eye);
   });
   if(look.style!=='bald'){
     const hm=M(look.hair);
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(headR*1.78,headR*0.72,headR*1.88),hm);
-    cap.position.y=head.position.y+headR*0.78;torso.add(cap);
+    const cap=new THREE.Mesh(taperBox(headR*1.74,headR*1.92,headR*0.86,
+                                      headR*1.86,headR*2.06),hm);
+    cap.position.y=headR*1.76;head.add(cap);
+    /* THE BACK OF THE HEAD. This is a from-behind game — every minute of every night
+       is spent looking at the back of Steve Marek's skull — and until now that was
+       bare skin: the brightest surface in a dark frame, and the one shape that made
+       him read as a mannequin. Hair has a back on it. */
+    const nh=headR*1.24*nape;
+    const bk=new THREE.Mesh(new THREE.BoxGeometry(headR*1.64,nh,headR*0.44),hm);
+    bk.position.set(0,headR*1.55-nh*0.5,-headR*0.80);head.add(bk);
     if(look.style==='part'){
       const f=new THREE.Mesh(new THREE.BoxGeometry(headR*1.0,headR*0.30,0.03),hm);
-      f.position.set(-headR*0.34,head.position.y+headR*0.50,headR*0.93);torso.add(f);
+      f.position.set(-headR*0.34,headR*1.50,headR*0.94);head.add(f);
     }else if(look.style==='bun'){
-      const b=new THREE.Mesh(new THREE.SphereGeometry(headR*0.42,9,7),hm);
-      b.position.set(0,head.position.y+headR*0.86,-headR*1.05);torso.add(b);
+      const b=new THREE.Mesh(new THREE.SphereGeometry(headR*0.44,9,7),hm);
+      b.position.set(0,headR*1.92,-headR*1.02);head.add(b);
     }else if(look.style==='long'){
-      const b=new THREE.Mesh(new THREE.BoxGeometry(headR*1.8,headR*1.5,headR*0.5),hm);
-      b.position.set(0,head.position.y-headR*0.10,-headR*0.86);torso.add(b);
+      const b=new THREE.Mesh(taperBox(headR*1.86,headR*1.60,headR*1.70,
+                                      headR*0.60,headR*0.48),hm);
+      b.position.set(0,headR*0.90,-headR*0.76);head.add(b);
     }
+  }
+  if(look.hat){
+    /* A CAP. At thirty pixels a hat is not decoration, it is a DIFFERENT HEAD, and it
+       is the only silhouette change that survives a whole street being one species.
+       One in five of them, and never the man doing the burgling. */
+    const hc=M(shadeHex(look.legs,0.09));
+    const crown=new THREE.Mesh(taperBox(headR*1.68,headR*1.88,headR*0.66,
+                                        headR*1.76,headR*2.00),hc);
+    crown.position.y=headR*1.90;head.add(crown);
+    const peak=new THREE.Mesh(new THREE.BoxGeometry(headR*1.34,0.022,headR*0.86),hc);
+    peak.position.set(0,headR*1.62,headR*1.24);peak.rotation.x=0.13;head.add(peak);
   }
   const mkArm=sx=>{
     const a=new THREE.Group();
-    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.10,torsoH*0.46,0.12),M(look.top));
-    upper.position.y=-torsoH*0.23;a.add(upper);
-    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.09,torsoH*0.42,0.10),M(look.skin));
-    fore.position.y=-torsoH*0.66;a.add(fore);
-    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.09,0.075),M(look.skin));
-    hand.position.y=-torsoH*0.92;a.add(hand);
-    a.position.set(sx*(sw+0.055),torsoH*0.92,0);torso.add(a);
+    /* SLEEVES ARE A VALUE STEP BELOW THE SHIRT. This is the cheapest change in the
+       file and the biggest: at the same value as the chest, the arms and the torso
+       were a single rectangle, and a rectangle is not a person. */
+    const upper=new THREE.Mesh(taperBox(0.110,0.094,torsoH*0.46,0.130,0.106),M(sleeve));
+    upper.userData.bulk=1;upper.position.y=-torsoH*0.23;a.add(upper);
+    /* A LONG SLEEVE OR A BARE FOREARM. The first version gave everybody bare arms,
+       and on the man in the dark jacket that put two white blocks at his sides in
+       every night frame - the second-brightest thing on a body M48 spent a whole
+       milestone making dark. He wears a jacket. */
+    const fore=new THREE.Mesh(taperBox(0.094,0.078,torsoH*0.42,0.106,0.088),
+      look.sleeve==='long'?M(shadeHex(sleeve,-0.06)):SK(look.skin));
+    fore.position.set(-sx*hang*0.30,-torsoH*0.66,0);a.add(fore);
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.082,0.095,0.070),SK(look.skin));
+    hand.position.set(-sx*hang*0.50,-torsoH*0.92,0);a.add(hand);
+    a.position.set(sx*(sw+0.050),torsoH*0.54,0);
+    a.rotation.z=sx*hang;                 // arms hang off the ribs, not welded to them
+    spine.add(a);
+    /* THE DELTOID RIDES THE ARM, not the chest. Bolted to the torso it read as an
+       epaulette: measured on docs/zl-E-c-v2-freeze.png, a wedge floating off each
+       shoulder with a notch of daylight between it and the sleeve. On the arm group
+       it is simply the top of the arm - welded to the sleeve through the whole
+       swing, and it is the thing that rounds off the square corner the old torso
+       had where a shoulder should be. */
+    const del=new THREE.Mesh(taperBox(0.138,0.124,0.108,0.160,0.144),M(deltC));
+    del.position.set(0,0.012,0);
+    del.rotation.z=-sx*0.14;
+    a.add(del);
     return a;
   };
   const armL=mkArm(-1),armR=mkArm(1);
-  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-  return {group:g,parts:{legL,legR,armL,armR,torso,head,nose,
+  /* SHADOW CASTERS ARE THE EXPENSIVE THING IN THIS BUILD - M21 lost twenty suites
+     to a shadow map, and a person went from 21 meshes to 28 here. Every one of them
+     used to cast. Only the twelve that actually carry the body’s outline do now:
+     thighs, shins, soles, waist, chest, yoke, skull and the two upper arms. A nose,
+     an eyeball, a collar and a shoelace add nothing to a shadow at two metres and
+     the depth pass has to draw each of them. Measured: this build casts FEWER
+     shadows per person than the one it replaces. */
+  g.traverse(o=>{if(o.isMesh){o.receiveShadow=true;o.castShadow=!!o.userData.bulk;}});
+  return {group:g,parts:{legL,legR,armL,armR,torso,spine,head,nose,
                          legH:legH,torsoH:torsoH,H:H}};
 }
 
@@ -5801,7 +6860,10 @@ function makeBlockout(){
   // normalize to exactly CH_H with the feet at 0, so the mesh can never drift out
   // of sync with the constant every camera number derives from (same trick as the
   // Chameleon project's adoptBody).
-  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  /* M58/E: makePerson has already decided which meshes cast (the eleven that carry
+     the outline). Turning it back on for all of them here would put the depth-pass
+     cost straight back. */
+  g.traverse(o=>{if(o.isMesh){o.receiveShadow=true;}});
   const bb=new THREE.Box3().setFromObject(g);
   const meshH=bb.max.y-bb.min.y;
   if(meshH>0.01){
@@ -7072,9 +8134,17 @@ function makeWalker(who,jacket){
   const built=makePerson(personLook(who||'somebody'));
   const g=built.group,P=built.parts;
   if(jacket){
-    const t=new THREE.Mesh(new THREE.BoxGeometry(0.44,P.torsoH*0.54,0.30),
-      new THREE.MeshLambertMaterial({color:jacket,emissive:jacket,emissiveIntensity:0.22}));
-    t.position.y=P.torsoH*0.62;t.castShadow=true;P.torso.add(t);
+    /* M58/E. The hi-vis hangs on the SPINE, so it stoops with the man wearing it,
+       and it is tapered and yoked like the torso underneath instead of being a flat
+       crate strapped to his chest - a tabard has shoulders. */
+    const host=P.spine||P.torso, y0=P.spine?P.torsoH*0.24:P.torsoH*0.62;
+    const vm=new THREE.MeshLambertMaterial({color:jacket,emissive:jacket,
+                                            emissiveIntensity:0.22});
+    bodyFx(vm,false);
+    const t=new THREE.Mesh(taperBox(0.46,0.40,P.torsoH*0.54,0.32,0.28),vm);
+    t.userData.bulk=1;t.position.y=y0;t.castShadow=true;host.add(t);
+    const sh=new THREE.Mesh(taperBox(0.30,0.47,P.torsoH*0.15,0.24,0.32),vm);
+    sh.position.y=y0+P.torsoH*0.34;host.add(sh);
   }
   g.userData.parts=P;
   /* M58 — grounded like the player is (see playerMark), except that a walker is
@@ -8282,6 +9352,7 @@ function startEvening(){
      lamps are on, and the point is that this is the one room in the game that is
      supposed to feel safe. */
   setLighting('day');
+  setBodyLight('evening');   // M58/E: warm room, cold window - the edge is dimmer indoors
   renderer.toneMappingExposure=0.62;
   postProfile('evening');   // M58: lamplit, but it is YOUR lounge — softer than a stranger's hall
   scene.fog=new THREE.FogExp2('#101522',0.020);
@@ -10450,8 +11521,11 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   WINDOWS,sightBlocked,
   // - M22: people -
   makePerson,personLook,folkTick,SKIN,HAIR,TOPS,STEVE_LOOK,
+  /* M58/E */ bodyMat,bodyFx,BODY_U,setBodyLight,taperBox,shadeHex,BEDDING,
   // - M21: the look -
   grade,gradeCss,matShiny,isShiny,mulberry32,
+  /* M58 */ SHADE,stdMat,canvasNormal,buildEnv,matT,
+  nrmBoards,nrmPaint,nrmTile,nrmGrass,nrmConcrete,nrmAsphalt,nrmSiding,nrmShingle,
   get GRADE_ON(){return GRADE_ON;},
   /* The tests need to prove the world is graded and a prop is not, which means
      flipping the switch by hand. Returns the PREVIOUS value so a caller can put it
@@ -10472,6 +11546,9 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
   PROP_KINDS,RESIDENTS,DOUBT,
   // ── M3: prop geometry + thumbnails ──
   buildProp,disposeProp,propThumb,thumbToCanvas,propMontage,canvasTex,hsl,kindFrame,
+  texPaint,texBoards,texTile,texGrass,texConcrete,texRug,texWeave,texFoliage,
+  texSiding,texShingle,texAsphalt,edgeify,matE,matTex,mottle,tiled,
+
   /* dev console: __SD.montage() appends the verification montage to the page */
   montage(perKind,size,seed){
     const c=propMontage(perKind,size,seed);
@@ -10488,7 +11565,7 @@ window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
     keys.forEach(k=>S.keys[k]=false);
   },
   renderer,scene,camera,
-  version:'M57'};
+  version:'M58'};
 </script>
 </body>
 </html>

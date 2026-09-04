@@ -90,7 +90,13 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
   var cereal=SD.buildProp('cerealBox',SD.SPEC.randomSpec('cerealBox',SD.mulberry32(9)));
   function shiny(g){
     var n=0;g.traverse(function(o){
-      if(o.isMesh&&o.material&&o.material.type==='MeshPhongMaterial')n++;});
+      if(!o.isMesh||!o.material)return;
+      /* M58: "can this catch a highlight" stopped being the same question as "is this
+         Phong". Glass and metal props are MeshStandardMaterial now and carry their own
+         specular lobe, so counting Phong alone reports 0 for a keyring that visibly
+         glints. Count both classes. */
+      var t=o.material.type;
+      if(t==='MeshPhongMaterial'||t==='MeshStandardMaterial')n++;});
     return n;
   }
   ok('GLASS CAN GLINT',shiny(frame)>0,shiny(frame)+' specular parts');
@@ -106,10 +112,11 @@ SD.stopLoop();SD.startHouse();SD.S.menuOpen=false;
     var m=o.material;(Array.isArray(m)?m:[m]).forEach(function(x){
       if(x)types[x.type]=(types[x.type]||0)+1;});
   });
-  var phong=types['MeshPhongMaterial']||0,lam=types['MeshLambertMaterial']||0;
-  info('street materials: Lambert '+lam+'  Phong '+phong);
-  ok('SPECULAR IS THE EXCEPTION, NOT THE RULE',phong>0&&phong<lam*0.35,
-     phong+' of '+(phong+lam)+' — a wholesale swap was measured at 2.13-2.60x frame');
+  var phong=types['MeshPhongMaterial']||0,lam=types['MeshLambertMaterial']||0,
+      std=types['MeshStandardMaterial']||0,spec=phong+std;
+  info('street materials: Lambert '+lam+'  Phong '+phong+'  Standard '+std);
+  ok('SPECULAR IS THE EXCEPTION, NOT THE RULE',spec>0&&spec<lam*0.35,
+     spec+' of '+(spec+lam)+' — a wholesale swap was measured at 2.13-2.60x frame');
 })();
 
 /* ── 4. THE BIG SURFACES ACTUALLY MOVED ─────────────────────────────────────

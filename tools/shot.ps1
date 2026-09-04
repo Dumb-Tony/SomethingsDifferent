@@ -162,7 +162,21 @@ $setups = @{
   SD.S.camP=null; SD.S.camL=null;
   SD.S.daytime=false; SD.S.evening=false;
 "@
+  # M58 check the pbr judge flagged: glass props carry envMapIntensity 1.10, the
+  # highest in the table. In an UNLIT room a self-lit jar would give away an object
+  # that should be invisible. Every practical is zeroed; only moon and hemi remain.
+  glassdark = @"
+  SD.startHouse(); SD.beginNight(); SD.GAME.hasSpareKey=true;
+  SD.scene.traverse(function(l){ if(l.isPointLight||l.isSpotLight) l.intensity=0; });
+  var g=SD.objects.filter(function(o){var k=SD.PROP_KINDS[o.kind];return k&&k.mtl==='glass'&&SD.RESIDENTS[o.owner];})[0]
+       ||SD.objects.filter(function(o){return SD.RESIDENTS[o.owner];})[0];
+  var h=SD.houseById(g.house||'hoyt'); if(h&&h._door)SD.useDoor(h._door);
+  SD.player.position.set(g.spec._pos[0]+0.4,0,g.spec._pos[2]-1.3); SD.player.rotation.y=Math.PI;
+  SD.S.yaw=Math.PI*0.9; SD.S.pitch=0.22; SD.S.dist=2.2; SD.S.camP=null; SD.S.camL=null;
+  SD.S.daytime=false; SD.S.evening=false;
+"@
   lounge = @"
+
 
 
 
