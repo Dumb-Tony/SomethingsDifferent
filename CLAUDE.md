@@ -1376,3 +1376,100 @@ Ten nights each, spread across residents:
 able to aim, and aiming is what the shop is for, currently unreadable until `hkTier` 2 on
 about night 5. m57 §8 pins those numbers and goes red if anybody makes the printed loop
 winnable without coming back to rewrite the claim.
+
+## M58 — the look pass
+
+Asked for in these words: *"make it look incredible. i want shading, different textures,
+lighting and shadows."* Five directions explored in parallel on isolated copies, each
+rendered before-and-after from the same camera poses, each priced, and each judged by an
+art director who had not done the work and had to look at the frames. All five came back
+**take-with-cuts**, and the cuts were the valuable part.
+
+### What was true first
+
+`tools/_gpu.js`, on the machine the tests run on (headless Chrome, ANGLE/D3D11 WARP):
+a frame cost **14.68 ms**, shadows were 5.1 ms of it — and **a post-processing pass was
+free.** Scene-to-target plus a composite measured 10.38 ms, *faster* than rendering direct
+to the canvas, because in WARP the swapchain present costs more than an offscreen target
+and a blit. So post was affordable, and more shadow casters were the expensive thing. Also
+true: 43 Lambert materials, 3 Phong, 21 Basic, **zero Standard**. Everything was flat
+diffuse — no specular, no roughness, no normal maps — and `texPaint()`, the wall texture
+the player looks at more than anything, was a flat fill plus 260 two-pixel dots.
+
+### The five, and what each judge cut
+
+**Post.** Hand-written: one scene target, a bright-pass, a half/quarter-res blur ladder,
+one composite. Bloom on the practicals, a filmic grade, restrained vignette, animated
+grain, edge-only aberration, four profiles driven from `setLighting`. 14.98 → 11.58 ms.
+The load-bearing line is `rt.texture.encoding = THREE.sRGBEncoding`: r128 takes output
+encoding from the target's texture and does not condition tone mapping on the target, so
+without it the scene lands linear and the game renders milky (channel mean 41.7 against
+83.9). **Cut:** the whole stack stands down in focus mode — bloom had turned the keyring
+into a blob on the one screen whose job is *is this the same object?* M21's rule, grade
+the world and never the evidence.
+
+**Light.** Contact patches under everything — objects sat on a bright seam and read as
+pasted over the ground. The shadow box from ±12 to ±10 with look-ahead and texel
+snapping: shadow pass 14.9 → 8.5 ms, net about −6. Light shafts on the streetlamps.
+**Cut:** the explorer's cone had uniform alpha and its silhouette drew two straight lines
+across the tree and the lawn — a plastic sheet. The judge replaced it with a shader that
+fades alpha by |dot(N,V)|, which is both the physical answer and the one that removes the
+edge. And a weaker, tighter contact patch for hand-sized props, because the furniture one
+smudged the keyring on the focus screen.
+
+**Surface.** An edge shader on every `UNIT_BOX` mesh — 1257 of them, zero strays onto
+other geometry — so a cabinet has a lit top, a dark front and a drawn contact line. Every
+canvas texture rewritten: plaster mottle, board grain, blade texture on the lawn, foliage
+hedges, a woven rug. +1.1 ms. **Cut:** `texWeave` from all seven call sites — rendered,
+the edged fabric read better without it. Also the judge's finding worth keeping:
+`startHouse()` went 201 → 376 ms from the richer canvases. A level load; the number to
+watch.
+
+**PBR.** `MeshStandardMaterial` with an authored sodium environment map — on props only.
+The keyring goes from a blown-out white silhouette to a grey metal ring with a warm
+specular rim. **Cut, and this is the important one:** floors and paths stay Lambert. The
+explorer reported "the dark corner stays black." The judge measured it: shadowed floor
+median luminance **5.7 → 49.8, an 8.7× lift**; hall light-to-dark ratio 30:1 → 3.8:1; a
+person's cast shadow on the floor effectively erased. Cause: per-vertex against per-pixel
+lighting on a 4-vertex floor plane under a night rig tuned for the former. It cannot be
+dialled out with `envMapIntensity` (measured at 0.00, still 44.3). It destroys the read
+the entire stealth game runs on. Off.
+
+**People.** Tapered torso, shoulder slope, real sleeves, shoes, hair that wraps the
+skull, and nine fewer shadow casters. **Cut:** the submitted hair cap *widened toward the
+crown while the skull widened faster*, leaving 6 mm of bare skin in a band around every
+head — the exact defect it set out to remove, reintroduced smaller, as a pale stripe at
+the hairline in every night interior. And the fresnel rim halved: on a flat-faced box
+there is no curvature for it to fall off with, so at 0.34 it was a cel outline.
+
+### Integrating five copies of one file
+
+Each build was made against the same baseline, so each was a patch; applied in
+sequence with a gate before each. Two things bit. **`patch` said "Reversed (or
+previously applied) patch detected! Skipping"** and my gate only searched for the word
+*fail* — so the first dry-run reported zero failures for patches that had applied
+nothing. Same shape as the harness false-pass in M55. Cause: hunk #1 of every agent's
+patch was the **UTF-8 BOM** their copies had dropped, already removed by the first patch
+in. Three real conflicts remained: two were dead code under the judge's dials, one was a
+single insert placed by hand.
+
+### The one review concern that turned out to be a false lead
+
+Glass props at `envMapIntensity` 1.10 were flagged as a self-illumination risk. Measured
+with every practical zeroed (`tools/_dark.js`): the **room itself reads 127** under moon
+and hemi — the roof deliberately casts no shadow — and every prop class sits at or below
+it. Nothing lights itself. The one thing that does, a photograph at 214, is `MeshBasic`
+and `toneMapped:false` by design: it is evidence with a salience-1.0 axis. I had already
+changed glass to 0.60 on the judge's say-so; the number did not move, which is how I found
+the real cause. Reverted.
+
+### Counted, not timed
+
+Two judges independently found the stopwatch worthless while other Chrome processes ran
+(the same build measured 10 ms and 26 ms in consecutive runs). Deterministic:
+
+      before   317 draws   7,324 tris   12 programs   1,370 meshes   1,053 casters
+      after    342 draws  12,224 tris   24 programs   2,131 meshes   1,044 casters
+
+and a **4.3 ms** min-of-24 frame with `gl.finish()` on both sides, against 14.7 before
+the pass. The look got cheaper.
