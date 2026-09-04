@@ -16,3 +16,8 @@ dist/
 _prev.html
 _smoketest*.html
 _shot-*.html
+_look-*.html
+docs/zl-*.png
+tools/zl-*
+tools/qq-*
+docs/qq-*

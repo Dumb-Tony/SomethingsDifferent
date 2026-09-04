@@ -8,7 +8,10 @@ param(
   [string]$Out   = "",
   [int]$W = 1280,
   [int]$H = 760,
-  [int]$Port = 0
+  [int]$Port = 0,
+  # M58: which build to photograph. Defaults to the real game; point it at a
+  # variant copy to compare two looks from the identical camera pose.
+  [string]$Game = "somethingsdifferent.html"
 )
 # M56 - ONE PORT AND ONE SCRATCH FILE PER RUN, for the same reason smoketest.ps1
 # got them: both were fixed constants, so a run that timed out left a server
@@ -387,7 +390,9 @@ if (-not $setups.ContainsKey($Scene)) {
 $inject = "<script>`n(function(){var SD=window.__SD; if(!SD) return;`n" +
           $setups[$Scene] + "`n})();`n</script>`n</body>"
 
-$html = Get-Content (Join-Path $root "somethingsdifferent.html") -Raw -Encoding UTF8
+$gameFile = Join-Path $root $Game
+if (-not (Test-Path $gameFile)) { Write-Host "Game not found: $gameFile" -ForegroundColor Red; exit 2 }
+$html = Get-Content $gameFile -Raw -Encoding UTF8
 $html = $html -replace '</body>', $inject
 $scratchName = "_shot-$PID.html"
 $scratch = Join-Path $root $scratchName
