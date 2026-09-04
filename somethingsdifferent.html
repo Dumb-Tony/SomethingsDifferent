@@ -930,6 +930,14 @@ const CONST={
   NIGHT_EXPOSURE: 0.86,
   NIGHT_HEMI  : 0.17,
   NIGHT_MOON  : 0.22,
+
+  /* M58 — the post stack. Switchable here so a suite that wants unfiltered pixels
+     (or a machine that hates the extra targets) can turn the whole thing off with
+     one flag, and so setPost() has something to restore to. POST_MSAA asks for a
+     multisampled scene target: routing through a plain render target is what throws
+     renderer antialias:true away. */
+  POST_ON     : true,
+  POST_MSAA   : true,
   /* ── THE FABRICATOR (M39) ────────────────────────────────────────────────
      MEASURED, on the live build: buying anything requires a prior scan, and the
      shops are a DAYTIME action - so the loop was scan tonight, buy tomorrow midday,
@@ -2772,6 +2780,365 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color('#1b2436');
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.05,200);
 
+/* ═══════════════════════ POST-PROCESSING (M58) ═══════════════════════════════
+   Hand-rolled, because the EffectComposer addons are not vendored and there is no
+   build step. Four small pieces: one render target the size of the drawing buffer,
+   an ortho camera, one full-screen quad whose material is swapped per pass, and a
+   ladder of half- and quarter-res targets for the bloom.
+
+   WHY IT IS AFFORDABLE, measured against this build in tools/zl-post-gpu.js, on the
+   machine the tests run on (software GL, ANGLE/D3D11 WARP):
+
+                                          run 1      run 2      run 3
+       BEFORE  scene straight to the canvas    12.07 ms   15.55 ms   13.10 ms
+       AFTER   full stack, 4x MSAA target      12.10 ms   10.98 ms   13.02 ms
+
+   Three runs, and one of them says the post version is FASTER. That is not a
+   mistake, and it is the same effect tools/_gpu.js found: in WARP the swapchain
+   present costs more than an offscreen target plus a blit, so routing the frame
+   through a render target buys back about what the composite spends. The honest
+   reading is that the stack is free to within the noise floor - certainly under
+   1 ms, and nowhere near the 22 ms ceiling. Shadows are still the expensive thing
+   (about 3.6 ms of the frame) and this milestone adds no casters, no lights and no
+   draw calls to the scene pass.
+
+   Do NOT trust a WARP timing taken without gl.finish() on both sides of the loop.
+   WebGL queues; three separate versions of the pricing script reported that
+   skipping the bloom chain SAVED time, because they were measuring how fast the
+   driver accepts commands. See the note at the top of tools/zl-post-gpu.js.
+
+   THE ONE REAL COST would have been MSAA. A plain WebGLRenderTarget has no
+   multisampling, so routing the scene through one throws renderer antialias:true
+   away, and this is a game of thin lamp posts and roof lines against a flat sky.
+   POST.msaa asks for a WebGLMultisampleRenderTarget where WebGL2 offers one, and it
+   measured at -0.80, -0.27 and +1.22 ms across the three runs - free as well, on
+   this renderer. It stays a flag, because a real GPU will price it differently.
+
+   COLOUR SPACE. r128 picks the output encoding from the render target's texture
+   (`outputEncoding: null!==A ? v(A.texture) : t.outputEncoding`), and tone mapping
+   is NOT conditioned on the target at all. So with rt.texture.encoding=sRGBEncoding
+   the scene lands in the target already ACES-tonemapped and sRGB-encoded — byte for
+   byte what the canvas would have held. Every shader below therefore grades in
+   DISPLAY space, and none of them re-encodes on the way out (a ShaderMaterial only
+   gets the encodings chunk if its source asks for it, and none of these do).       */
+
+const POST_VS=
+  'varying vec2 vUv;\n'+
+  'void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}';
+
+/* BRIGHT PASS. Downsamples full->half with a 4-tap box (a single tap crawls badly
+   on the 12-centimetre sphere that is a streetlight bulb) and keeps only what is
+   over threshold, with a soft knee so a surface drifting past the line fades in
+   instead of popping. */
+const POST_BRIGHT_FS=
+  'uniform sampler2D tDiffuse;\n'+
+  'uniform vec2 uTexel;\n'+
+  'uniform float uThresh;\n'+
+  'uniform float uKnee;\n'+
+  'varying vec2 vUv;\n'+
+  'void main(){\n'+
+  '  vec3 c=0.25*(texture2D(tDiffuse,vUv+vec2(-0.5,-0.5)*uTexel).rgb+\n'+
+  '               texture2D(tDiffuse,vUv+vec2( 0.5,-0.5)*uTexel).rgb+\n'+
+  '               texture2D(tDiffuse,vUv+vec2(-0.5, 0.5)*uTexel).rgb+\n'+
+  '               texture2D(tDiffuse,vUv+vec2( 0.5, 0.5)*uTexel).rgb);\n'+
+  '  float l=max(c.r,max(c.g,c.b));\n'+
+  '  float s=clamp((l-uThresh+uKnee)/(2.0*uKnee),0.0,1.0);\n'+
+  '  float w=max(l-uThresh,uKnee*s*s*0.5)/max(l,0.0001);\n'+
+  '  gl_FragColor=vec4(c*max(w,0.0),1.0);\n'+
+  '}';
+
+/* SEPARABLE GAUSSIAN — 5 linear-filtered taps standing in for 9. */
+const POST_BLUR_FS=
+  'uniform sampler2D tDiffuse;\n'+
+  'uniform vec2 uDir;\n'+
+  'varying vec2 vUv;\n'+
+  'void main(){\n'+
+  '  vec3 s=texture2D(tDiffuse,vUv).rgb*0.2270270;\n'+
+  '  s+=(texture2D(tDiffuse,vUv+uDir*1.3846154).rgb+\n'+
+  '      texture2D(tDiffuse,vUv-uDir*1.3846154).rgb)*0.3162162;\n'+
+  '  s+=(texture2D(tDiffuse,vUv+uDir*3.2307692).rgb+\n'+
+  '      texture2D(tDiffuse,vUv-uDir*3.2307692).rgb)*0.0702703;\n'+
+  '  gl_FragColor=vec4(s,1.0);\n'+
+  '}';
+
+/* COMPOSITE. Aberration, bloom, grade, vignette, grain — in that order, because
+   the grade has to see the bloom (a haloed bulb should go warm like everything
+   else bright) and the grain has to be last so the vignette does not scale it
+   away in the corners, which is exactly where film grain is loudest. */
+const POST_COMP_FS=
+  'uniform sampler2D tDiffuse;\n'+
+  'uniform sampler2D tBloomA;\n'+
+  'uniform sampler2D tBloomB;\n'+
+  'uniform vec2 uRes;\n'+
+  'uniform vec2 uNoise;\n'+
+  'uniform float uBloom;\n'+
+  'uniform float uAber;\n'+
+  'uniform float uContrast;\n'+
+  'uniform float uSat;\n'+
+  'uniform float uLift;\n'+
+  'uniform float uWarm;\n'+
+  'uniform float uVig;\n'+
+  'uniform float uVigSoft;\n'+
+  'uniform float uGrain;\n'+
+  'uniform float uDesat;\n'+
+  'uniform float uShoulder;\n'+
+  'uniform vec3 uShadow;\n'+
+  'uniform vec3 uHigh;\n'+
+  'varying vec2 vUv;\n'+
+  'float luma(vec3 c){return dot(c,vec3(0.2126,0.7152,0.0722));}\n'+
+  'void main(){\n'+
+  '  vec2 d=vUv-0.5;\n'+
+  '  float r2=dot(d,d);\n'+
+  /* r^4 falloff: the middle half of the frame is numerically untouched, so a face
+     in a doorway or a label on a box never fringes. Only the corners split. */
+  '  vec3 c;\n'+
+  '  if(uAber>0.00001){\n'+
+  '    float k=uAber*r2*r2*16.0;\n'+
+  '    c.r=texture2D(tDiffuse,vUv-d*k).r;\n'+
+  '    c.g=texture2D(tDiffuse,vUv).g;\n'+
+  '    c.b=texture2D(tDiffuse,vUv+d*k).b;\n'+
+  '  }else{\n'+
+  '    c=texture2D(tDiffuse,vUv).rgb;\n'+
+  '  }\n'+
+  '  if(uBloom>0.0001){\n'+
+  '    vec3 b=texture2D(tBloomA,vUv).rgb*0.65+texture2D(tBloomB,vUv).rgb*0.85;\n'+
+  '    c+=b*uBloom;\n'+
+  '  }\n'+
+  '  float y=luma(c);\n'+
+  /* Two masked mixes rather than one curve, so lifting the shadows can never
+     touch a highlight and warming the highlights can never tint a shadow. */
+  '  float sh=1.0-smoothstep(0.0,0.42,y);\n'+
+  '  c=mix(c,vec3(y),uDesat*sh);\n'+
+  '  c+=uShadow*(uLift*sh);\n'+
+  '  float hi=smoothstep(0.30,0.95,y);\n'+
+  '  c=mix(c,c*uHigh,uWarm*hi);\n'+
+  '  c=mix(c,c*c*(3.0-2.0*c),uContrast);\n'+
+  '  c=mix(vec3(luma(c)),c,uSat);\n'+
+  '  vec3 ov=max(c-uShoulder,0.0);\n'+
+  '  c=min(c,vec3(uShoulder))+ov/(1.0+ov/max(1.0-uShoulder,0.001));\n'+
+  '  float v=1.0-uVig*smoothstep(uVigSoft,1.05,length(d)*1.4142);\n'+
+  '  c*=v;\n'+
+  /* uNoise is re-rolled from Math.random() every frame, so the grain can never
+     freeze into a static dirty-lens pattern. Weighted into the shadows. */
+  '  float g=fract(sin(dot(vUv*uRes+uNoise*512.0,vec2(12.9898,78.233)))*43758.5453);\n'+
+  '  c+=(g-0.5)*uGrain*(1.0-0.55*clamp(y,0.0,1.0));\n'+
+  '  gl_FragColor=vec4(clamp(c,0.0,1.0),1.0);\n'+
+  '}';
+
+const POST={
+  on:CONST.POST_ON,
+  /* Ask for a multisampled scene target where WebGL2 gives one. Routing through a
+     plain WebGLRenderTarget silently discards renderer antialias:true, and this is
+     a game of thin lamp posts and roof lines against a flat sky. */
+  msaa:CONST.POST_MSAA,
+  /* Seeded from the night profile purely so the object is complete before the
+     first setLighting() call; postProfile() overwrites every one of them. */
+  bloom:0.68, thresh:0.62, knee:0.16,
+  vig:0.34, vigSoft:0.38,
+  grain:0.034, aber:0.0000,
+  sat:1.10, contrast:0.34,
+  lift:0.105, warm:0.52, desat:0.36, shoulder:0.78,
+  shadow:new THREE.Color('#3a63ad'),   // where the darks are pulled
+  high:new THREE.Color('#ffd39a'),     // where the brights are pushed
+  _profile:'greybox',
+  _ex:0,               // 0 in the world, 1 with an object held up to your face
+  _ready:false,_w:0,_h:0,
+  _rt:null,_hA:null,_hB:null,_qA:null,_qB:null,
+  _scene:null,_cam:null,_quad:null,_bright:null,_blur:null,_comp:null
+};
+
+/* THE PROFILES. One set of numbers cannot serve both rigs.
+
+   THRESHOLD. At night a lit window lands near 0.87 and an unlit wall near 0.20, so
+   0.62 catches the practicals and nothing else. At three in the afternoon a white
+   gable is ALREADY 0.85 - the same threshold would bloom the entire street. So
+   daylight blooms from 0.86, at less than half the strength, with a third of the
+   grain: the afternoon is meant to be the relief from the night, not more of it.
+
+   AND IT WAS TUNED DOWN ONCE, off the frames. The first pass ran night at
+   bloom 0.85 / threshold 0.52 and it looked spectacular on a wide shot and wrong up
+   close: the sodium pool on the lawn and the concrete path both crossed the line, so
+   the glow stopped coming from the LAMP and started coming from everything the lamp
+   was hitting. Compare docs/zl-post-v2-watchman.png (blown, the grass in the pool is
+   a flat yellow wash) with docs/zl-post-v3-watchman.png (the bulb glows, the grass
+   keeps its texture). 0.68/0.62 plus the highlight shoulder is that fix. */
+const POST_PROFILES={
+  night  :{bloom:0.68,thresh:0.62,knee:0.16,vig:0.34,vigSoft:0.38,grain:0.034,
+           aber:0.0000,sat:1.10,contrast:0.34,lift:0.105,warm:0.52,desat:0.36,shoulder:0.78,
+           shadow:'#3a63ad',high:'#ffd39a'},
+  day    :{bloom:0.30,thresh:0.86,knee:0.10,vig:0.26,vigSoft:0.40,grain:0.012,
+           aber:0.0000,sat:1.05,contrast:0.14,lift:0.022,warm:0.18,desat:0.08,shoulder:0.90,
+           shadow:'#6f86b4',high:'#fff0d8'},
+  /* Dinnertime indoors at exposure 0.62 (startEvening). It is lit by lamps, so it
+     wants the night's bloom, but it is the one room that is supposed to feel safe,
+     so it gets less vignette and less grain than a stranger's hallway. */
+  evening:{bloom:0.54,thresh:0.58,knee:0.16,vig:0.30,vigSoft:0.40,grain:0.018,
+           aber:0.0000,sat:1.07,contrast:0.18,lift:0.050,warm:0.42,desat:0.14,shoulder:0.80,
+           shadow:'#44648f',high:'#ffdcb2'},
+  /* Greybox is a diagnostic rig. Grading a diagnostic is how you end up debugging
+     the grade. Everything off except a whisper of vignette. */
+  greybox:{bloom:0.00,thresh:0.99,knee:0.05,vig:0.16,vigSoft:0.50,grain:0.006,
+           aber:0.0000,sat:1.00,contrast:0.00,lift:0.000,warm:0.00,desat:0.00,shoulder:1.00,
+           shadow:'#6f86b4',high:'#ffffff'}
+};
+function postProfile(name){
+  const p=POST_PROFILES[name]||POST_PROFILES.greybox;
+  POST.bloom=p.bloom;POST.thresh=p.thresh;POST.knee=p.knee;
+  POST.vig=p.vig;POST.vigSoft=p.vigSoft;POST.grain=p.grain;POST.aber=p.aber;
+  POST.sat=p.sat;POST.contrast=p.contrast;POST.lift=p.lift;POST.warm=p.warm;
+  POST.desat=p.desat;POST.shoulder=p.shoulder;
+  POST.shadow.set(p.shadow);POST.high.set(p.high);
+  POST._profile=name;
+  return POST;
+}
+function setPost(v){const was=POST.on;POST.on=!!v;return was;}
+
+function _postRT(w,h,depth,ms){
+  const opt={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
+             format:THREE.RGBAFormat,type:THREE.UnsignedByteType,
+             wrapS:THREE.ClampToEdgeWrapping,wrapT:THREE.ClampToEdgeWrapping,
+             depthBuffer:!!depth,stencilBuffer:false};
+  let rt;
+  if(ms&&depth&&renderer.capabilities.isWebGL2&&THREE.WebGLMultisampleRenderTarget){
+    rt=new THREE.WebGLMultisampleRenderTarget(w,h,opt);
+    rt.samples=4;
+  }else{
+    rt=new THREE.WebGLRenderTarget(w,h,opt);
+  }
+  /* THE LOAD-BEARING LINE. Without it r128 writes the scene into the target in
+     LINEAR, the composite then reads linear bytes as if they were sRGB, and the
+     whole game comes out bleached and milky. */
+  if(depth)rt.texture.encoding=THREE.sRGBEncoding;
+  rt.texture.generateMipmaps=false;
+  return rt;
+}
+function buildPost(){
+  if(POST._ready)return;
+  POST._cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  POST._scene=new THREE.Scene();
+  const mk=function(fs,uni){
+    const m=new THREE.ShaderMaterial({uniforms:uni,vertexShader:POST_VS,
+      fragmentShader:fs,depthTest:false,depthWrite:false});
+    m.toneMapped=false;   // these write final pixels; never grade them twice
+    return m;
+  };
+  POST._bright=mk(POST_BRIGHT_FS,{
+    tDiffuse:{value:null},uTexel:{value:new THREE.Vector2()},
+    uThresh:{value:0.60},uKnee:{value:0.16}});
+  POST._blur=mk(POST_BLUR_FS,{
+    tDiffuse:{value:null},uDir:{value:new THREE.Vector2()}});
+  POST._comp=mk(POST_COMP_FS,{
+    tDiffuse:{value:null},tBloomA:{value:null},tBloomB:{value:null},
+    uRes:{value:new THREE.Vector2()},uNoise:{value:new THREE.Vector2()},
+    uBloom:{value:0.62},uAber:{value:0.003},uContrast:{value:0.20},
+    uSat:{value:1.08},uLift:{value:0.06},uWarm:{value:0.40},
+    uVig:{value:0.46},uVigSoft:{value:0.30},uGrain:{value:0.032},
+    uDesat:{value:0.34},uShoulder:{value:0.78},
+    uShadow:{value:new THREE.Color('#3f63a0')},
+    uHigh:{value:new THREE.Color('#ffd9a8')}});
+  POST._quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),POST._comp);
+  POST._quad.frustumCulled=false;
+  POST._scene.add(POST._quad);
+  POST._ready=true;
+  resizePost();
+}
+function resizePost(){
+  const w=Math.max(2,renderer.domElement.width),
+        h=Math.max(2,renderer.domElement.height);
+  if(POST._w===w&&POST._h===h&&POST._rt)return;
+  [POST._rt,POST._hA,POST._hB,POST._qA,POST._qB].forEach(function(rt){
+    if(rt)rt.dispose();
+  });
+  const hw=Math.max(1,w>>1),hh=Math.max(1,h>>1),
+        qw=Math.max(1,w>>2),qh=Math.max(1,h>>2);
+  POST._rt=_postRT(w,h,true,POST.msaa);
+  POST._hA=_postRT(hw,hh,false,false);
+  POST._hB=_postRT(hw,hh,false,false);
+  POST._qA=_postRT(qw,qh,false,false);
+  POST._qB=_postRT(qw,qh,false,false);
+  POST._w=w;POST._h=h;
+}
+
+/* ONE FRAME. Replaces renderer.render(scene,camera) in loop(). Everything the
+   player reads — HUD, objective card, collapse pill, screens — is DOM sitting on
+   top of the canvas, so none of it is graded, vignetted or grained. That is a
+   feature, not a limitation: the frame can go as filmic as it likes and the text
+   stays crisp on top of it. */
+function renderPost(dt){
+  if(!POST.on){renderer.setRenderTarget(null);renderer.render(scene,camera);return;}
+  if(!POST._ready)buildPost();
+  if(renderer.domElement.width!==POST._w||renderer.domElement.height!==POST._h)
+    resizePost();
+
+  renderer.setRenderTarget(POST._rt);
+  renderer.render(scene,camera);
+
+  /* GRADE THE WORLD, NEVER THE EVIDENCE - M21's rule, and the focus screen is
+     nothing but evidence. Rendered graded, the keyring at docs/zl-post-v3-focus.png
+     bloomed into a soft blob: the hole in the ring filled in and the four keys
+     merged into one shape. On the one screen in the game whose entire job is
+     "is this the same object?", that is not atmosphere, it is a lie. So the whole
+     stack stands down while you are holding something up, over about a tenth of a
+     second, and a light vignette is all that survives. Compare against the
+     ungraded docs/zl-post-base-focus.png: that is the target, not a stylised
+     version of it. */
+  const want=S.focus?1:0;
+  POST._ex+=(want-POST._ex)*Math.min(1,(dt||0.016)*10);
+  const k=1-POST._ex;
+  const bloom=POST.bloom*k, grain=POST.grain*k, aber=POST.aber*k,
+        desat=POST.desat*k, contrast=POST.contrast*k,
+        warm=POST.warm*k,   lift=POST.lift*k,
+        sat=1+(POST.sat-1)*k,
+        shoulder=1-(1-POST.shoulder)*k,
+        vig=POST.vig*(0.35+0.65*k);
+
+  const q=POST._quad;
+  if(bloom>0.0001){
+    q.material=POST._bright;
+    POST._bright.uniforms.tDiffuse.value=POST._rt.texture;
+    POST._bright.uniforms.uTexel.value.set(1/POST._w,1/POST._h);
+    POST._bright.uniforms.uThresh.value=POST.thresh;
+    POST._bright.uniforms.uKnee.value=POST.knee;
+    renderer.setRenderTarget(POST._hA);renderer.render(POST._scene,POST._cam);
+
+    q.material=POST._blur;
+    const bu=POST._blur.uniforms;
+    /* TIGHT HALO at half res. uDir is in UV, so 2.0/width is one full-res pixel
+       either side of a half-res texel; the 3.23 tap reaches ~6.5 real pixels. */
+    bu.tDiffuse.value=POST._hA.texture;
+    bu.uDir.value.set(2.0/POST._w,0);
+    renderer.setRenderTarget(POST._hB);renderer.render(POST._scene,POST._cam);
+    bu.tDiffuse.value=POST._hB.texture;
+    bu.uDir.value.set(0,2.0/POST._h);
+    renderer.setRenderTarget(POST._hA);renderer.render(POST._scene,POST._cam);
+    /* WIDE HALO at quarter res, fed from the tight one. Two mips added together
+       is what stops a bloom reading like a sticker: the near glow has an edge,
+       the far one does not. A quarter-res pass is 1/16 the fill — nearly free. */
+    bu.tDiffuse.value=POST._hA.texture;
+    bu.uDir.value.set(4.4/POST._w,0);
+    renderer.setRenderTarget(POST._qA);renderer.render(POST._scene,POST._cam);
+    bu.tDiffuse.value=POST._qA.texture;
+    bu.uDir.value.set(0,4.4/POST._h);
+    renderer.setRenderTarget(POST._qB);renderer.render(POST._scene,POST._cam);
+  }
+
+  q.material=POST._comp;
+  const u=POST._comp.uniforms;
+  u.tDiffuse.value=POST._rt.texture;
+  u.tBloomA.value=POST._hA.texture;
+  u.tBloomB.value=POST._qB.texture;
+  u.uRes.value.set(POST._w,POST._h);
+  u.uNoise.value.set(Math.random(),Math.random());
+  u.uBloom.value=bloom;u.uAber.value=aber;
+  u.uContrast.value=contrast;u.uSat.value=sat;
+  u.uLift.value=lift;u.uWarm.value=warm;
+  u.uVig.value=vig;u.uVigSoft.value=POST.vigSoft;u.uGrain.value=grain;
+  u.uDesat.value=desat;u.uShoulder.value=shoulder;
+  u.uShadow.value.copy(POST.shadow);u.uHigh.value.copy(POST.high);
+  renderer.setRenderTarget(null);
+  renderer.render(POST._scene,POST._cam);
+}
+
 /* ── LIGHTING ────────────────────────────────────────────────────────────────
    Two rigs. GREYBOX is flat and neutral so geometry reads while tuning physics.
    NIGHT is the game: a cold moon key, deep blue ambient, warm practicals, fog,
@@ -2918,6 +3285,9 @@ function setLighting(mode){
     if(Array.isArray(o.material))o.material.forEach(m=>{m.needsUpdate=true;});
     else o.material.needsUpdate=true;
   });
+  /* M58: the grade travels with the rig. One bloom threshold cannot serve both —
+     0.60 catches a lit window at night and the whole sky at three in the afternoon. */
+  postProfile(mode);
 }
 
 /* ═════════════════════════ THUMBNAILS ═════════════════════════
@@ -7546,6 +7916,7 @@ function startEvening(){
      supposed to feel safe. */
   setLighting('day');
   renderer.toneMappingExposure=0.62;
+  postProfile('evening');   // M58: lamplit, but it is YOUR lounge — softer than a stranger's hall
   scene.fog=new THREE.FogExp2('#101522',0.020);
   scene.background=new THREE.Color('#1a2130');
   var home=HOUSES.filter(function(h){return h.yours;})[0];
@@ -9564,11 +9935,11 @@ function loop(t){
     // idle/title backdrop — never gate the render loop on readiness, or a failed
     // asset means a black screen instead of a degraded but visible one
     camera.position.set(0,2.6,7.2);camera.lookAt(0,1.0,0);
-    renderer.render(scene,camera);requestAnimationFrame(loop);return;
+    renderPost(dt);requestAnimationFrame(loop);return;
   }
   tick(dt);
   updateHUD(dt);
-  renderer.render(scene,camera);
+  renderPost(dt);
   requestAnimationFrame(loop);
 }
 
@@ -9644,6 +10015,8 @@ addEventListener('resize',()=>{
    Keep it: pure PHYS + live state is exactly what milestone 2's Doubt histogram
    will need too. */
 window.__SD={S,CONST,PHYS,colliders,envMeshes,helpers,
+  // — M58: the post stack —
+  POST,POST_PROFILES,postProfile,setPost,renderPost,buildPost,resizePost,
   get player(){return player;},
   startGreybox,toTitle,buildGreybox,mulberry32,tick,
   stopLoop(){loopOn=false;},
