@@ -61,7 +61,13 @@ var h=SD.houseById('hoyt');
     if(!m||!m.isMesh||!m.material)return;
     if(m.userData&&m.userData.collider)return;
     var c=m.material;
-    if(c.transparent&&c.opacity<0.9&&c.type==='MeshPhongMaterial')panes.push(m);
+    /* M58: the pane is MeshStandardMaterial now - roughness 0.05 against the PMREM
+       sodium haze, so a dark window reads as glass rather than as a hole. Opacity,
+       transparency and depthWrite are unchanged, so the sight rule this suite exists
+       for is untouched. The claim is 'real transparent glass, not a painted card',
+       and a transparent Standard pane at 0.30 satisfies it. Count both classes. */
+    if(c.transparent&&c.opacity<0.9&&
+       (c.type==='MeshPhongMaterial'||c.type==='MeshStandardMaterial'))panes.push(m);
     if(c.type==='MeshBasicMaterial'&&c.color&&c.color.getHexString()==='0d1626')cards.push(m);
   });
   ok('THE PANES ARE TRANSPARENT',panes.length>0,panes.length+' glass surfaces');
